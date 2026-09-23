@@ -9,6 +9,7 @@ import publicRoutes from './routes/public.js';
 import identityRoutes from './routes/identity.js';
 import qualificationRoutes from './routes/qualification.js';
 import adminRoutes from './routes/admin.js';
+import matchRoutes from './routes/matches.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -17,10 +18,11 @@ app.use(compression());
 app.use(express.json({limit:'256kb'}));
 if(config.env!=='production') app.use(cors({origin:config.appOrigin,credentials:true}));
 
-app.get('/api/health',(_req,res)=>res.json({ok:true,service:'somali-cup-api',version:'0.2.0-identity-qualification'}));
+app.get('/api/health',(_req,res)=>res.json({ok:true,service:'somali-cup-api',version:'0.3.0-match-engine'}));
 app.use('/api/public',publicRoutes);
 app.use('/api/identity',identityRoutes);
 app.use('/api/qualification',qualificationRoutes);
+app.use('/api/matches',matchRoutes);
 app.use('/api/admin',adminRoutes);
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
