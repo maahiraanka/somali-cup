@@ -8,4 +8,16 @@ for(const c of cities) await pool.query('INSERT INTO cities(name,country,code,ti
 await pool.query("INSERT INTO seasons(id,name,status,starts_at) VALUES (1,'Somali Cup 2027','QUALIFICATION','2027-01-01') ON DUPLICATE KEY UPDATE name=VALUES(name),status='QUALIFICATION'");
 const [all]=await pool.query('SELECT id,tier FROM cities WHERE is_active=1');
 for(const city of all){const target=city.tier==='PREMIER'?500:city.tier==='CHAMPIONSHIP'?300:150;await pool.query(`INSERT INTO season_cities(season_id,city_id,status,qualification_total,qualification_target,sort_order,is_open) VALUES (1,?,'QUALIFYING',0,?,100,1) ON DUPLICATE KEY UPDATE qualification_target=VALUES(qualification_target),is_open=1`,[city.id,target]);}
-await pool.end(); console.log('seeded Somali Cup v0.2 cities + qualification');
+
+const [[mel]]=await pool.query("SELECT id FROM cities WHERE code='MEL' LIMIT 1");
+const [[lon]]=await pool.query("SELECT id FROM cities WHERE code='LON' LIMIT 1");
+if(mel&&lon){
+  await pool.query(`
+    INSERT INTO matches(public_id,season_id,round_code,home_city_id,away_city_id,starts_at,lobby_opens_at,status)
+    VALUES ('sc2027mellondonqf000000001',1,'QUARTERFINAL',?,?, '2027-06-12 09:30:00','2027-06-12 09:00:00','LOBBY')
+    ON DUPLICATE KEY UPDATE home_city_id=VALUES(home_city_id),away_city_id=VALUES(away_city_id),round_code=VALUES(round_code)`,
+    [mel.id,lon.id]
+  );
+}
+await pool.end(); console.log('seeded Somali Cup v0.3 qualification + demo match');
+
