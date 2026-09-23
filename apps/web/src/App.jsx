@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, ChevronRight, Flag, Globe2, LockKeyhole, MapPin, ShieldCheck, Trophy, Users, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, ChevronRight, Flag, Globe2, Link2, LockKeyhole, MapPin, Play, Radio, Share2, ShieldCheck, Trophy, UserPlus, Users, X, Zap } from 'lucide-react';
 
 const demoStandings=[
   {rank:1,code:'MEL',name:'Melbourne',country:'Australia',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:418,progress_pct:83.6,is_open:1},
@@ -13,6 +13,13 @@ const demoStandings=[
   {rank:9,code:'PER',name:'Perth',country:'Australia',tier:'CHAMPIONSHIP',status:'QUALIFYING',qualification_target:300,verified_supporters:149,progress_pct:49.7,is_open:1},
   {rank:10,code:'BHM',name:'Birmingham',country:'United Kingdom',tier:'CHAMPIONSHIP',status:'QUALIFYING',qualification_target:300,verified_supporters:141,progress_pct:47,is_open:1},
 ];
+const demoMatches=[{
+  publicId:'sc2027mellondonqf000000001',seasonName:'Somali Cup 2027',roundCode:'QUARTERFINAL',status:'LOBBY',
+  startsAt:'2027-06-12T09:30:00.000Z',lobbyOpensAt:'2027-06-12T09:00:00.000Z',scoreVersion:0,
+  home:{code:'MEL',name:'Melbourne',country:'Australia',score:0},
+  away:{code:'LON',name:'London',country:'United Kingdom',score:0}
+}];
+
 const flag=(country)=>({Australia:'🇦🇺','United Kingdom':'🇬🇧',Canada:'🇨🇦',Kenya:'🇰🇪','United States':'🇺🇸',Somalia:'🇸🇴',Sweden:'🇸🇪',Norway:'🇳🇴','United Arab Emirates':'🇦🇪'})[country]||'🌍';
 const fmt=n=>Number(n||0).toLocaleString();
 
@@ -36,10 +43,12 @@ export default function App(){
   const [adminOpen,setAdminOpen]=useState(false);
   const [adminKey,setAdminKey]=useState('');
   const [notice,setNotice]=useState('');
+  const [matches,setMatches]=useState(demoMatches);
 
   const refresh=async()=>{
     try{const d=await api('/api/qualification'); if(d?.standings?.length){setStandings(d.standings);setSeason(d.season||season)}}catch{}
     try{const m=await api('/api/identity/me');setMe(m)}catch{}
+    try{const md=await api('/api/matches');if(md?.matches?.length)setMatches(md.matches)}catch{}
   };
   useEffect(()=>{refresh()},[]);
   const topCity=standings[0];
@@ -50,7 +59,7 @@ export default function App(){
   return <div className="app">
     <header className="topbar">
       <button className="brandBtn" onClick={()=>setView('home')}><div className="mark">SC</div><div><b>SOMALI CUP</b><small>Different cities. One people.</small></div></button>
-      <nav className="nav"><button className={view==='home'?'active':''} onClick={()=>setView('home')}>Home</button><button className={view==='qualification'?'active':''} onClick={()=>setView('qualification')}>Qualification</button><button onClick={()=>setAdminOpen(true)}>Admin preview</button></nav>
+      <nav className="nav"><button className={view==='home'?'active':''} onClick={()=>setView('home')}>Home</button><button className={view==='qualification'?'active':''} onClick={()=>setView('qualification')}>Qualification</button><button className={view==='matches'?'active':''} onClick={()=>setView('matches')}>Matches</button><button onClick={()=>setAdminOpen(true)}>Admin preview</button></nav>
       <div className="identity">{me?<><div className="avatar">{(me.user.nickname||me.user.displayName||'?')[0]}</div><div><b>{me.user.nickname||me.user.displayName}</b><small>{me.membership?.name||'Supporter'}</small></div></>:<button className="joinTop" onClick={()=>setShowJoin(true)}>Represent your city</button>}</div>
     </header>
 
@@ -77,6 +86,7 @@ export default function App(){
       </>}
 
       {view==='qualification' && <Qualification standings={standings} season={season} openCity={openCity} onJoin={()=>setShowJoin(true)} />}
+      {view==='matches' && <MatchEngine matches={matches} me={me} onNeedIdentity={()=>setShowJoin(true)} />}
       {view==='city' && selectedCity && <CityPage city={standings.find(c=>c.code===selectedCity.code)||selectedCity} onBack={()=>setView('qualification')} onJoin={()=>setShowJoin(true)} me={me}/>} 
     </main>
 
@@ -100,6 +110,75 @@ function CityPage({city,onBack,onJoin,me}){const mine=me?.membership?.code===cit
   <div className="cityProgress"><div><b>{Number(city.progress_pct||0).toFixed(1)}% complete</b><span>{fmt(city.verified_supporters)} / {fmt(city.qualification_target)}</span></div><Progress value={city.progress_pct}/></div>
   <div className="cityGrid"><article><Users/><h3>Represent {city.name}</h3><p>Your verified city membership is what moves this number. You can only represent one city in the active season.</p>{mine?<div className="mine"><CheckCircle2/> You already represent {city.name}</div>:<button onClick={onJoin}>Join {city.name}</button>}</article><article><Globe2/><h3>What happens next</h3><p>When qualification closes, qualified cities move into tournament fixtures. Your existing city identity then carries into the match engine.</p></article><article><LockKeyhole/><h3>Protected scoring</h3><p>This phase deliberately separates verified supporters from raw traffic so later match scoring can inherit the same integrity model.</p></article></div>
 </>}
+
+
+function MatchEngine({matches,me,onNeedIdentity}){
+  const [selected,setSelected]=useState(matches[0]||null);
+  const [live,setLive]=useState(null);
+  const [mine,setMine]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [msg,setMsg]=useState('');
+  useEffect(()=>{if(!selected&&matches[0])setSelected(matches[0])},[matches,selected]);
+  const load=async(match=selected)=>{
+    if(!match) return;
+    try{const d=await api(`/api/matches/${match.publicId}/live`);setLive(d)}catch{setLive({match,counts:{homeActive:0,awayActive:0,registered:0,total:0},activity:[]})}
+    if(me){try{const d=await api(`/api/matches/${match.publicId}/me`);setMine(d.participation)}catch{setMine(null)}}else setMine(null);
+  };
+  useEffect(()=>{load()},[selected?.publicId,Boolean(me)]);
+  const match=live?.match||selected;
+  const join=async()=>{
+    if(!me){onNeedIdentity();return}
+    setBusy(true);setMsg('');
+    try{
+      const inviteToken=new URLSearchParams(window.location.search).get('invite')||'';
+      const d=await api(`/api/matches/${match.publicId}/join`,{method:'POST',body:JSON.stringify({inviteToken})});
+      setMine(d.participation);setMsg(d.created?'Place reserved.':'You were already registered.');await load(match);
+    }catch(e){setMsg(e.message.replaceAll('_',' '))}finally{setBusy(false)}
+  };
+  const activate=async()=>{
+    setBusy(true);setMsg('');
+    try{const d=await api(`/api/matches/${match.publicId}/activate`,{method:'POST',body:'{}'});setMsg(d.goalAdded?'GOAL — your verified entry moved the score.':'You already scored in this match.');await load(match)}catch(e){setMsg(e.message.replaceAll('_',' '))}finally{setBusy(false)}
+  };
+  const copyLink=async()=>{
+    if(!mine?.share_token&&!mine?.shareToken)return;
+    const token=mine.share_token||mine.shareToken;
+    const url=`${window.location.origin}/?match=${match.publicId}&invite=${token}`;
+    try{await navigator.clipboard.writeText(url);setMsg('Personal match link copied.')}catch{setMsg(url)}
+  };
+  if(!match)return <div className="pagehead"><div><div className="eyebrow">MATCH ENGINE</div><h1>No fixtures yet.</h1><p>Admin creates the first fixture when the tournament schedule is ready.</p></div></div>;
+  const home=match.home||{code:match.home_code,name:match.home_name,country:'',score:match.home_score||0};
+  const away=match.away||{code:match.away_code,name:match.away_name,country:'',score:match.away_score||0};
+  return <>
+    <div className="pagehead"><div><div className="eyebrow"><Radio size={15}/> V0.3 · AUTHORITATIVE MATCH ENGINE</div><h1>One real person. One goal.</h1><p>Assists recognise who brought people into the match without double-counting the city score.</p></div></div>
+    <div className="matchLayout">
+      <aside className="fixtureList">
+        <div className="fixtureHead">Fixtures</div>
+        {matches.map(m=><button key={m.publicId} className={selected?.publicId===m.publicId?'selected':''} onClick={()=>{setSelected(m);setLive(null);setMine(null)}}><span className={`matchState ${String(m.status).toLowerCase()}`}>{m.status}</span><b>{m.home?.name||m.home_name} <em>vs</em> {m.away?.name||m.away_name}</b><small>{m.roundCode||m.round_code}</small></button>)}
+      </aside>
+      <section className="matchPanel">
+        <div className="matchTopline"><span className={`matchState ${String(match.status).toLowerCase()}`}>{match.status}</span><span>{match.roundCode||match.round_code}</span></div>
+        <div className="scoreStage">
+          <div className="scoreCity"><CityBadge city={home} large/><h2>{home.name}</h2><small>{home.country}</small></div>
+          <div className="scoreCore"><span>{match.status==='LIVE'?'LIVE':'MATCH'}</span><strong>{fmt(home.score)} <i>–</i> {fmt(away.score)}</strong><small>Score version {match.scoreVersion||0}</small></div>
+          <div className="scoreCity"><CityBadge city={away} large/><h2>{away.name}</h2><small>{away.country}</small></div>
+        </div>
+        <div className="matchIntegrity">
+          <div><ShieldCheck/><span><b>Goal rule</b><small>Each verified participant can score once per match.</small></span></div>
+          <div><UserPlus/><span><b>Assist rule</b><small>If someone enters through your same-city link, you receive an assist. No extra score is added.</small></span></div>
+          <div><Zap/><span><b>Retry safe</b><small>Repeated activate requests return the existing result instead of scoring twice.</small></span></div>
+        </div>
+        <div className="matchActionCard">
+          {!me&&<><h3>Represent your city first.</h3><p>Your verified season identity decides which side you can play for.</p><button className="modalPrimary" onClick={onNeedIdentity}>Create supporter identity</button></>}
+          {me&&!mine&&<><h3>{match.status==='LIVE'?'Enter the live match.':'Reserve your place in the lobby.'}</h3><p>You can only join if your verified city is one of the two cities in this fixture.</p><button className="modalPrimary" disabled={busy} onClick={join}>{busy?'Working…':'Join this match'}</button></>}
+          {mine&&mine.status==='REGISTERED'&&<><h3>Your place is reserved.</h3><p>Generation {mine.generation}. When the match is LIVE, activate once to score your city's goal.</p><div className="matchButtons">{match.status==='LIVE'&&<button className="modalPrimary" disabled={busy} onClick={activate}><Play size={17}/> Enter live & score</button>}<button className="ghostBtn" onClick={copyLink}><Share2 size={16}/> Copy my match link</button></div></>}
+          {mine&&mine.status==='ACTIVE'&&<><h3>You're active in the match.</h3><p>Your goal is already counted. Now your job is to create assists by bringing verified supporters from your city.</p><div className="personalMatchStats"><div><b>1</b><span>GOAL</span></div><div><b>{mine.assists??mine.direct_joins??0}</b><span>ASSISTS</span></div><div><b>{mine.downstream_joins??0}</b><span>BRANCH</span></div></div><button className="modalPrimary" onClick={copyLink}><Link2 size={17}/> Copy personal match link</button></>}
+          {msg&&<div className="matchMsg">{msg}</div>}
+        </div>
+        <div className="liveStrip"><div><b>{fmt(live?.counts?.homeActive||0)}</b><span>{home.code} active</span></div><div><b>{fmt(live?.counts?.registered||0)}</b><span>waiting in lobby</span></div><div><b>{fmt(live?.counts?.awayActive||0)}</b><span>{away.code} active</span></div></div>
+      </section>
+    </div>
+  </>
+}
 
 function JoinModal({standings,onClose,onJoined}){
   const [step,setStep]=useState(1); const [city,setCity]=useState(null); const [form,setForm]=useState({displayName:'',nickname:'',email:''}); const [busy,setBusy]=useState(false); const [error,setError]=useState('');
