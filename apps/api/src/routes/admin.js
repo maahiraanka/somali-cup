@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import { Router } from 'express';
 import { pool } from '../db/pool.js';
 import { requireAdminKey } from '../auth.js';
@@ -39,4 +40,67 @@ router.patch('/qualification/cities/:cityId',async(req,res,next)=>{
     res.json({ok:true});
   }catch(e){await conn.rollback();if(e.status)return res.status(e.status).json({error:e.message});next(e)}finally{conn.release()}
 });
+
+router.get('/matches',async(_req,res,next)=>{
+  try{
+    const [rows]=await pool.query(`
+      SELECT m.public_id,m.round_code,m.status,m.starts_at,m.lobby_opens_at,m.home_score,m.away_score,m.score_version,
+        hc.code home_code,hc.name home_name,ac.code away_code,ac.name away_name
+      FROM matches m JOIN cities hc ON hc.id=m.home_city_id JOIN cities ac ON ac.id=m.away_city_id
+      ORDER BY m.starts_at DESC,m.id DESC LIMIT 100`);
+    res.json({matches:rows});
+  }catch(e){next(e)}
+});
+
+router.post('/matches',async(req,res,next)=>{
+  const homeCode=String(req.body?.homeCityCode||'').trim().toUpperCase();
+  const awayCode=String(req.body?.awayCityCode||'').trim().toUpperCase();
+  const roundCode=String(req.body?.roundCode||'').trim().slice(0,40);
+  const startsAt=req.body?.startsAt;
+  const lobbyOpensAt=req.body?.lobbyOpensAt||null;
+  if(!homeCode||!awayCode||homeCode===awayCode||!roundCode||!startsAt) return res.status(400).json({error:'invalid_fixture'});
+  const conn=await pool.getConnection();
+  try{
+    await conn.beginTransaction();
+    const [[season]]=await conn.query("SELECT id,name,status FROM seasons WHERE status IN ('QUALIFICATION','GROUP','KNOCKOUT','FINAL') ORDER BY starts_at DESC,id DESC LIMIT 1");
+    if(!season) throw Object.assign(new Error('active_season_required'),{status:409});
+    const [cities]=await conn.query('SELECT id,code FROM cities WHERE code IN (?,?) AND is_active=1',[homeCode,awayCode]);
+    if(cities.length!==2) throw Object.assign(new Error('city_not_found'),{status:404});
+    const home=cities.find(c=>c.code===homeCode),away=cities.find(c=>c.code===awayCode);
+    const publicId=crypto.randomBytes(13).toString('hex');
+    const [result]=await conn.query(`INSERT INTO matches(public_id,season_id,round_code,home_city_id,away_city_id,starts_at,lobby_opens_at,status)
+      VALUES (?,?,?,?,?,?,?,'SCHEDULED')`,[publicId,season.id,roundCode,home.id,away.id,startsAt,lobbyOpensAt]);
+    await conn.query(`INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json)
+      VALUES (NULL,'MATCH_CREATED','MATCH',?,?)`,[String(result.insertId),JSON.stringify({publicId,homeCode,awayCode,roundCode,startsAt,lobbyOpensAt})]);
+    await conn.commit();
+    res.status(201).json({publicId,status:'SCHEDULED'});
+  }catch(e){await conn.rollback();if(e.status)return res.status(e.status).json({error:e.message});next(e)}finally{conn.release()}
+});
+
+router.patch('/matches/:publicId/state',async(req,res,next)=>{
+  const target=String(req.body?.status||'').toUpperCase();
+  const transitions={SCHEDULED:['LOBBY','CANCELLED'],LOBBY:['LIVE','CANCELLED'],LIVE:['FINAL','CANCELLED'],FINAL:[],CANCELLED:[]};
+  const conn=await pool.getConnection();
+  try{
+    await conn.beginTransaction();
+    const [[match]]=await conn.query('SELECT * FROM matches WHERE public_id=? LIMIT 1 FOR UPDATE',[req.params.publicId]);
+    if(!match) throw Object.assign(new Error('match_not_found'),{status:404});
+    if(!transitions[match.status]?.includes(target)) throw Object.assign(new Error('invalid_match_transition'),{status:409});
+    let winner=null;
+    if(target==='FINAL'){
+      if(Number(match.home_score)===Number(match.away_score)) throw Object.assign(new Error('tied_match_cannot_finalize'),{status:409});
+      winner=Number(match.home_score)>Number(match.away_score)?match.home_city_id:match.away_city_id;
+      await conn.query("UPDATE matches SET status='FINAL',winner_city_id=?,finalised_at=UTC_TIMESTAMP(),ends_at=COALESCE(ends_at,UTC_TIMESTAMP()) WHERE id=?",[winner,match.id]);
+    }else{
+      await conn.query('UPDATE matches SET status=? WHERE id=?',[target,match.id]);
+    }
+    await conn.query(`INSERT INTO match_state_events(match_id,from_status,to_status,metadata_json) VALUES (?,?,?,?)`,
+      [match.id,match.status,target,JSON.stringify({via:'ADMIN_BOOTSTRAP'})]);
+    await conn.query(`INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json)
+      VALUES (NULL,'MATCH_STATE_CHANGED','MATCH',?,?)`,[String(match.id),JSON.stringify({from:match.status,to:target,winnerCityId:winner})]);
+    await conn.commit();
+    res.json({ok:true,from:match.status,to:target,winnerCityId:winner});
+  }catch(e){await conn.rollback();if(e.status)return res.status(e.status).json({error:e.message});next(e)}finally{conn.release()}
+});
+
 export default router;
