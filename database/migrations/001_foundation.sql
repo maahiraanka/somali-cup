@@ -84,7 +84,7 @@ CREATE TABLE match_participations (
   UNIQUE KEY uq_match_user(match_id,user_id),
   CONSTRAINT fk_mp_match FOREIGN KEY(match_id) REFERENCES matches(id),
   CONSTRAINT fk_mp_user FOREIGN KEY(user_id) REFERENCES users(id),
-  CONSTRAINU fk_mp_city FOREIGN KEY(city_id) REFERENCES cities(id),
+  CONSTRAINT fk_mp_city FOREIGN KEY(city_id) REFERENCES cities(id),
   CONSTRAINT fk_mp_parent FOREIGN KEY(parent_participation_id) REFERENCES match_participations(id),
   INDEX ix_mp_parent(parent_participation_id),
   INDEX ix_mp_city_match(match_id,city_id)
