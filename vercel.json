@@ -1,5 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "npm run build -w apps/web",
+  "installCommand": "npm install",
+  "buildCommand": "npm --prefix apps/web run build",
   "outputDirectory": "apps/web/dist"
 }
