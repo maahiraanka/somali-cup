@@ -1,7 +1,7 @@
 {
   "name": "somali-cup",
   "private": true,
-  "version": "0.2.0-identity-qualification",
+  "version": "0.3.0-match-engine",
   "workspaces": [
     "apps/web",
     "apps/api"
