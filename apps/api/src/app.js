@@ -15,6 +15,7 @@ import adminAuthRoutes from './routes/adminAuth.js';
 import awardRoutes from './routes/awards.js';
 import competitionRoutes from './routes/competitions.js';
 import adminCompetitionRoutes from './routes/adminCompetitions.js';
+import { getStartupState } from './startupState.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -29,8 +30,25 @@ if(config.env!=='production'){
 app.get('/api/health',(_req,res)=>res.json({
   ok:true,
   service:'somali-cup-api',
-  version:'0.5.1-empty-public-data'
+  version:'0.5.2-startup-503-hotfix'
 }));
+
+app.get('/api/startup',(_req,res)=>{
+  const current=getStartupState();
+  const status=current.state==='READY'?200:current.state==='FAILED'?500:503;
+  res.status(status).json({
+    ok:current.state==='READY',
+    state:current.state,
+    error:current.state==='FAILED'?'database_bootstrap_failed':undefined
+  });
+});
+
+app.use('/api',(req,res,next)=>{
+  if(req.path==='/health'||req.path==='/startup')return next();
+  const current=getStartupState();
+  if(current.state==='READY')return next();
+  return res.status(503).json({error:'service_starting',state:current.state,retry:true});
+});
 
 app.use('/api/public',publicRoutes);
 app.use('/api/competitions',competitionRoutes);

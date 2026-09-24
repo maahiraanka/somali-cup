@@ -21,72 +21,29 @@ export async function migrateDatabase(){
     const sql=await fs.readFile(path.join(migrationsDir,file),'utf8');
     const statements=sql.split(/;\s*(?:\n|$)/).map(s=>s.trim()).filter(Boolean);
     console.log('[db] applying',file,'statements=',statements.length);
-    for(const statement of statements){
-      await pool.query(statement);
+    const conn=await pool.getConnection();
+    try{
+      await conn.beginTransaction();
+      for(const statement of statements)await conn.query(statement);
+      await conn.query('INSERT INTO schema_migrations(filename) VALUES (?)',[file]);
+      await conn.commit();
+      console.log('[db] applied',file);
+    }catch(e){
+      await conn.rollback();
+      throw e;
+    }finally{
+      conn.release();
     }
-    await pool.query('INSERT INTO schema_migrations(filename) VALUES (?)',[file]);
-    console.log('[db] applied',file);
   }
 }
 
 export async function seedDatabase(){
-  const cities=[
-    ['Mogadishu','Somalia','MOG','PREMIER'],
-    ['Hargeisa','Somalia','HAR','PREMIER'],
-    ['Kismayo','Somalia','KIS','PREMIER'],
-    ['Garowe','Somalia','GAR','PREMIER'],
-    ['Bosaso','Somalia','BOS','PREMIER'],
-    ['Baidoa','Somalia','BAI','PREMIER'],
-    ['Beledweyne','Somalia','BLW','CHAMPIONSHIP'],
-    ['Galkayo','Somalia','GAL','CHAMPIONSHIP'],
-    ['Jowhar','Somalia','JOW','CHAMPIONSHIP'],
-    ['Burco','Somalia','BUR','CHAMPIONSHIP']
-  ];
-
-  // Runtime seed is restart-safe: create missing canonical records only.
-  // Never reactivate/deactivate cities or regress mutable competition state.
-  for(const city of cities){
-    await pool.query(
-      'INSERT IGNORE INTO cities(name,country,code,tier,is_active) VALUES (?,?,?,?,1)',
-      city
-    );
-  }
-
+  // Production runtime must never recreate demo/public content.
+  // Public content is created intentionally from Admin.
   await pool.query(
-    "INSERT IGNORE INTO seasons(id,name,status,starts_at) VALUES (1,'Somali Cup 2027','QUALIFICATION','2027-01-01')"
+    "INSERT IGNORE INTO seasons(id,name,status,starts_at) VALUES (1,'Somali Cup','QUALIFICATION',NULL)"
   );
-
-  const [all]=await pool.query('SELECT id,tier FROM cities WHERE is_active=1');
-  for(const city of all){
-    const target=city.tier==='PREMIER'?500:city.tier==='CHAMPIONSHIP'?300:150;
-    await pool.query(
-      `INSERT IGNORE INTO season_cities(season_id,city_id,status,qualification_total,qualification_target,sort_order,is_open)
-       VALUES (1,?,'QUALIFYING',0,?,100,1)`,
-      [city.id,target]
-    );
-  }
-
-  const [fixtureCities]=await pool.query("SELECT id,code FROM cities WHERE is_active=1");
-  const cityId=Object.fromEntries(fixtureCities.map(c=>[c.code,c.id]));
-  const fixtures=[
-    ['sc2027-mog-har-group-01','MOG','HAR','2027-06-12 09:30:00','2027-06-12 09:00:00'],
-    ['sc2027-kis-gar-group-01','KIS','GAR','2027-06-12 10:00:00','2027-06-12 09:30:00'],
-    ['sc2027-bos-bai-group-01','BOS','BAI','2027-06-12 10:30:00','2027-06-12 10:00:00'],
-    ['sc2027-blw-gal-group-01','BLW','GAL','2027-06-12 11:00:00','2027-06-12 10:30:00'],
-    ['sc2027-jow-bur-group-01','JOW','BUR','2027-06-12 11:30:00','2027-06-12 11:00:00']
-  ];
-
-  for(const [publicId,homeCode,awayCode,startsAt,lobbyOpensAt] of fixtures){
-    if(!cityId[homeCode]||!cityId[awayCode]) continue;
-    const regulationEndsAt=new Date(new Date(startsAt+'Z').getTime()+60*60*1000);
-    await pool.query(
-      `INSERT IGNORE INTO matches(public_id,season_id,round_code,home_city_id,away_city_id,starts_at,regulation_ends_at,lobby_opens_at,status)
-       VALUES (?,1,'GROUP',?,?,?,?,?,'SCHEDULED')`,
-      [publicId,cityId[homeCode],cityId[awayCode],startsAt,regulationEndsAt,lobbyOpensAt]
-    );
-  }
-
-  console.log('[db] seed complete (restart-safe create-only)');
+  console.log('[db] empty runtime seed complete');
 }
 
 export async function bootstrapDatabase(){
