@@ -171,6 +171,18 @@ try{
   seasonId=Number(qualification.season.id);
   cityId=Number(mog.id);
 
+  await check('device_key_required',async()=>{
+    try{
+      await api('/api/identity/join',{method:'POST',body:{
+        displayName:'No Device '+stamp,cityCode:'MOG',source:'acceptance'
+      }});
+      throw new Error('join without a device key was incorrectly accepted');
+    }catch(e){
+      if(e.body?.error!=='device_key_required')throw e;
+      return 'missing device identity rejected';
+    }
+  });
+
   await check('supporter_a_join',async()=>{
     const d=await api('/api/identity/join',{method:'POST',body:{
       displayName:nameA,nickname:'Alpha '+stamp,email:emailA,cityCode:'MOG',
