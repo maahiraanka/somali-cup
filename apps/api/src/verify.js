@@ -46,6 +46,39 @@ await check('tournament_stages_table',()=>pool.query("SELECT code,stage_type,sta
 await check('tournament_groups_table',()=>pool.query("SELECT code,name FROM tournament_groups LIMIT 1"));
 await check('tournament_advancement_slots_table',()=>pool.query("SELECT target_stage_id,target_match_no,target_slot,source_type FROM tournament_advancement_slots LIMIT 1"));
 await check('tournament_events_table',()=>pool.query("SELECT event_type,created_at FROM tournament_events LIMIT 1"));
+await check('competitions_table',()=>pool.query("SELECT slug,competition_type,choice_type,language_preset,status FROM competitions LIMIT 1"));
+await check('competition_choices_table',()=>pool.query("SELECT competition_id,name,code,choice_type,status FROM competition_choices LIMIT 1"));
+await check('competition_nominations_table',()=>pool.query("SELECT competition_id,name,status FROM competition_nominations LIMIT 1"));
+await check('competition_supporters_table',()=>pool.query("SELECT competition_id,choice_id,user_id,supporter_no FROM competition_supporters LIMIT 1"));
+await check('competition_device_claims_table',()=>pool.query("SELECT competition_id,user_id,device_hash FROM competition_device_claims LIMIT 1"));
+await check('competition_referrals_table',()=>pool.query("SELECT competition_id,choice_id,referrer_user_id,referred_user_id FROM competition_referrals LIMIT 1"));
+await check('competition_stages_table',()=>pool.query("SELECT competition_id,code,stage_type,status,rule_type,target,advance_count FROM competition_stages LIMIT 1"));
+await check('competition_stage_choices_table',()=>pool.query("SELECT stage_id,choice_id,result_status,entry_supporter_count FROM competition_stage_choices LIMIT 1"));
+await check('competition_stage_events_table',()=>pool.query("SELECT competition_id,stage_id,event_type FROM competition_stage_events LIMIT 1"));
+await check('best_city_rounds_seeded',async()=>{
+  const [[r]]=await pool.query(`
+    SELECT COUNT(*) total,SUM(status='OPEN') open_rounds
+    FROM competition_stages cs
+    JOIN competitions cp ON cp.id=cs.competition_id
+    WHERE cp.slug='best-city-somalia'
+  `);
+  if(Number(r?.total||0)!==4)throw new Error('Best City must have 4 rounds');
+  if(Number(r?.open_rounds||0)!==1)throw new Error('Best City must have exactly one open round');
+});
+await check('competition_creator_schema_ready',async()=>{
+  await pool.query("SELECT id,slug,status FROM competitions LIMIT 1");
+  await pool.query("SELECT id,competition_id,code FROM competition_choices LIMIT 1");
+  await pool.query("SELECT id,competition_id,sequence_no,status FROM competition_stages LIMIT 1");
+  await pool.query("SELECT stage_id,choice_id FROM competition_stage_choices LIMIT 1");
+});
+await check('best_city_competition_seed',async()=>{
+  const [[r]]=await pool.query("SELECT id FROM competitions WHERE slug='best-city-somalia' AND language_preset='CITY' LIMIT 1");
+  if(!r)throw new Error('Best City competition seed missing');
+});
+await check('somali_cup_competition_backfill',async()=>{
+  const [[r]]=await pool.query("SELECT id FROM competitions WHERE slug='somali-cup' LIMIT 1");
+  if(!r)throw new Error('Somali Cup competition backfill missing');
+});
 await check('match_lifecycle_columns',()=>pool.query("SELECT regulation_ends_at,tiebreak_mode,tiebreak_started_at FROM matches LIMIT 1"));
 await check('tournament_stage_rules',()=>pool.query("SELECT tie_policy,match_duration_minutes FROM tournament_stages LIMIT 1"));
 await check('admin_credentials_table',()=>pool.query("SELECT user_id,password_updated_at FROM admin_credentials LIMIT 1"));

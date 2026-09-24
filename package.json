@@ -1,7 +1,7 @@
 {
   "name": "somali-cup",
   "private": true,
-  "version": "0.3.6-identity-integrity",
+  "version": "0.4.2-competition-creator",
   "type": "module",
   "engines": {
     "node": ">=22"

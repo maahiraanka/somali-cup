@@ -181,6 +181,35 @@ await check('tournament_api',async()=>{
   return body.stages.length+' published stages';
 });
 
+let competitions=null;
+await check('competitions_hub_api',async()=>{
+  const {response,body}=await request('/api/competitions',{expectJson:true});
+  if(response.status!==200||!body||!Array.isArray(body.competitions))throw new Error('invalid competitions response');
+  competitions=body.competitions;
+  const somaliCup=competitions.find(c=>c.slug==='somali-cup');
+  if(!somaliCup)throw new Error('Somali Cup missing from competition hub');
+  if(!somaliCup.language?.person||!somaliCup.language?.join)throw new Error('simple language pack missing');
+  return competitions.length+' competition(s) published';
+});
+
+await check('somali_cup_competition_detail',async()=>{
+  const {response,body}=await request('/api/competitions/somali-cup',{expectJson:true});
+  if(response.status!==200||body?.competition?.slug!=='somali-cup'||!Array.isArray(body?.choices))throw new Error('invalid Somali Cup competition detail');
+  return body.choices.length+' choices';
+});
+
+await check('best_city_competition_detail',async()=>{
+  const {response,body}=await request('/api/competitions/best-city-somalia',{expectJson:true});
+  if(response.status!==200||body?.competition?.slug!=='best-city-somalia'||!Array.isArray(body?.choices))throw new Error('invalid Best City competition detail');
+  if(body?.competition?.language?.join!=='Support this city')throw new Error('Best City simple language missing');
+  if(body?.competition?.allowNominations!==true)throw new Error('Best City nominations should be open');
+  if(!Array.isArray(body?.stages)||body.stages.length!==4)throw new Error('Best City round path missing');
+  if(!body?.currentStage||body.currentStage.status!=='OPEN')throw new Error('Best City current round missing');
+  const names=body.stages.map(s=>s.name);
+  for(const required of ['Round 1','Group Round','Semi Final','Final'])if(!names.includes(required))throw new Error('missing round '+required);
+  return body.choices.length+' cities · 4 rounds · simple city language verified';
+});
+
 await check('identity_protected_without_session',async()=>{
   const {response,body}=await request('/api/identity/me',{expectJson:true});
   if(response.status!==401)throw new Error('expected 401; got '+response.status);
