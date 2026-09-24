@@ -38,7 +38,7 @@ router.post('/join', async (req,res,next)=>{
     const season=await activeSeason(conn);
     if(!season) throw Object.assign(new Error('qualification_not_open'),{status:409});
     await conn.query(`INSERT INTO identity_integrity_events(season_id,event_type,device_hash,network_hash,user_agent_hash,metadata_json)
-      VALUES (?,'JOIN_ATTEMPT',?,?,?,?,JSON_OBJECT('cityCode',?,'source',?))`,[season.id,deviceHash,netHash,uaHash,cityCode,source]);
+      VALUES (?,'JOIN_ATTEMPT',?,?,?,JSON_OBJECT('cityCode',?,'source',?))`,[season.id,deviceHash,netHash,uaHash,cityCode,source]);
     if(netHash){
       const [[burst]]=await conn.query(`SELECT COUNT(*) total FROM identity_integrity_events
         WHERE event_type='JOIN_ATTEMPT' AND network_hash=? AND created_at>=UTC_TIMESTAMP()-INTERVAL 10 MINUTE`,[netHash]);
@@ -290,7 +290,10 @@ router.get('/me',requireSession,async(req,res,next)=>{
         }:null
       };
     }
-    const [[deviceClaim]]=membership?.season_id?await pool.query('SELECT id FROM season_device_claims WHERE season_id=? AND user_id=? LIMIT 1',[membership.season_id,req.identity.user_id]):[null];
+    let deviceClaim=null;
+    if(membership?.season_id){
+      [[deviceClaim]]=await pool.query('SELECT id FROM season_device_claims WHERE season_id=? AND user_id=? LIMIT 1',[membership.season_id,req.identity.user_id]);
+    }
     res.json({user:{publicId:req.identity.public_id,displayName:req.identity.display_name,nickname:req.identity.nickname,email:req.identity.email,role:req.identity.role},membership,qualificationImpact,integrity:{level:deviceClaim?'DEVICE_BOUND':'SESSION_ONLY'}});
   }catch(e){next(e)}
 });
