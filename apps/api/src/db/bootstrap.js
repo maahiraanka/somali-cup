@@ -67,14 +67,32 @@ export async function seedDatabase(){
     );
   }
 
-  const [[mog]]=await pool.query("SELECT id FROM cities WHERE code='MOG' LIMIT 1");
-  const [[har]]=await pool.query("SELECT id FROM cities WHERE code='HAR' LIMIT 1");
-  if(mog&&har){
+  const [fixtureCities]=await pool.query("SELECT id,code FROM cities WHERE is_active=1");
+  const cityId=Object.fromEntries(fixtureCities.map(c=>[c.code,c.id]));
+  const fixtures=[
+    ['sc2027-mog-har-group-01','MOG','HAR','2027-06-12 09:30:00','2027-06-12 09:00:00'],
+    ['sc2027-kis-gar-group-01','KIS','GAR','2027-06-12 10:00:00','2027-06-12 09:30:00'],
+    ['sc2027-bos-bai-group-01','BOS','BAI','2027-06-12 10:30:00','2027-06-12 10:00:00'],
+    ['sc2027-blw-gal-group-01','BLW','GAL','2027-06-12 11:00:00','2027-06-12 10:30:00'],
+    ['sc2027-jow-bur-group-01','JOW','BUR','2027-06-12 11:30:00','2027-06-12 11:00:00']
+  ];
+
+  // Retire the old single demo fixture without deleting linked test history.
+  await pool.query("UPDATE matches SET status='CANCELLED' WHERE public_id='sc2027mellondonqf000000001'");
+
+  for(const [publicId,homeCode,awayCode,startsAt,lobbyOpensAt] of fixtures){
+    if(!cityId[homeCode]||!cityId[awayCode]) continue;
     await pool.query(
       `INSERT INTO matches(public_id,season_id,round_code,home_city_id,away_city_id,starts_at,lobby_opens_at,status)
-       VALUES ('sc2027mellondonqf000000001',1,'QUARTERFINAL',?,?, '2027-06-12 09:30:00','2027-06-12 09:00:00','LOBBY')
-       ON DUPLICATE KEY UPDATE home_city_id=VALUES(home_city_id),away_city_id=VALUES(away_city_id),round_code=VALUES(round_code)`,
-      [mog.id,har.id]
+       VALUES (?,1,'GROUP',?,?,?,?,'LOBBY')
+       ON DUPLICATE KEY UPDATE
+         home_city_id=VALUES(home_city_id),
+         away_city_id=VALUES(away_city_id),
+         round_code=VALUES(round_code),
+         starts_at=VALUES(starts_at),
+         lobby_opens_at=VALUES(lobby_opens_at),
+         status=IF(status='CANCELLED','LOBBY',status)`,
+      [publicId,cityId[homeCode],cityId[awayCode],startsAt,lobbyOpensAt]
     );
   }
 
