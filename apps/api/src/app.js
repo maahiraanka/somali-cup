@@ -29,7 +29,7 @@ if(config.env!=='production'){
 app.get('/api/health',(_req,res)=>res.json({
   ok:true,
   service:'somali-cup-api',
-  version:'0.4.0-multi-tournament-foundation'
+  version:'0.4.1-best-city-progression'
 }));
 
 app.use('/api/public',publicRoutes);
