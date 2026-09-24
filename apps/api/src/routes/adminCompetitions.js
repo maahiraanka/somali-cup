@@ -60,6 +60,134 @@ router.post('/',async(req,res,next)=>{
   }
 });
 
+
+router.post('/create-complete',async(req,res,next)=>{
+  const name=clean(req.body?.name,140);
+  const shortName=clean(req.body?.shortName||name,80);
+  const slug=slugify(req.body?.slug||name);
+  const competitionType=clean(req.body?.competitionType||'STAGED',20).toUpperCase();
+  const choiceType=clean(req.body?.choiceType||'CUSTOM',20).toUpperCase();
+  const languagePreset=clean(req.body?.languagePreset||'SIMPLE',20).toUpperCase();
+  const allowNominations=req.body?.allowNominations?1:0;
+  const publishNow=Boolean(req.body?.publishNow);
+  const choices=Array.isArray(req.body?.choices)?req.body.choices:[];
+  const stages=Array.isArray(req.body?.stages)?req.body.stages:[];
+
+  if(name.length<3||!slug)return res.status(400).json({error:'name_required'});
+  if(!['STAGED','GOAL_RACE','TIMED','HEAD_TO_HEAD'].includes(competitionType))return res.status(400).json({error:'invalid_competition_type'});
+  if(!['CITY','UNIVERSITY','CLUB','BUSINESS','PERSON','COMMUNITY','CUSTOM'].includes(choiceType))return res.status(400).json({error:'invalid_choice_type'});
+  if(!supportedLanguagePresets().includes(languagePreset))return res.status(400).json({error:'invalid_language_preset'});
+  if(choices.length<2)return res.status(400).json({error:'at_least_two_choices_required'});
+  if(!stages.length)return res.status(400).json({error:'at_least_one_round_required'});
+
+  const normalizedChoices=[];
+  const seenCodes=new Set();
+  for(let i=0;i<choices.length;i++){
+    const choiceName=clean(choices[i]?.name,140);
+    const choiceCode=clean(choices[i]?.code||choiceName,24).toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24);
+    if(choiceName.length<2||!choiceCode)return res.status(400).json({error:'invalid_choice',index:i});
+    if(seenCodes.has(choiceCode))return res.status(400).json({error:'duplicate_choice_code',code:choiceCode});
+    seenCodes.add(choiceCode);
+    normalizedChoices.push({name:choiceName,shortName:clean(choices[i]?.shortName||choiceName,80),code:choiceCode});
+  }
+
+  const normalizedStages=[];
+  const seenStageCodes=new Set();
+  for(let i=0;i<stages.length;i++){
+    const s=stages[i]||{};
+    const code=clean(s.code||('ROUND_'+(i+1)),32).toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,32);
+    const stageName=clean(s.name||('Round '+(i+1)),100);
+    const stageType=clean(s.stageType||'QUALIFICATION',30).toUpperCase();
+    const ruleType=clean(s.ruleType||'TARGET',30).toUpperCase();
+    const target=s.target===null||s.target===undefined||s.target===''?null:Number(s.target);
+    const advanceCount=s.advanceCount===null||s.advanceCount===undefined||s.advanceCount===''?null:Number(s.advanceCount);
+    const groupSize=s.groupSize===null||s.groupSize===undefined||s.groupSize===''?null:Number(s.groupSize);
+
+    if(!code||!stageName||seenStageCodes.has(code))return res.status(400).json({error:'invalid_or_duplicate_round',index:i});
+    if(!['QUALIFICATION','GROUP','SEMI_FINAL','FINAL'].includes(stageType))return res.status(400).json({error:'invalid_round_type',index:i});
+    if(!['TARGET','TOP_N','TARGET_OR_TOP_N','HIGHEST_AT_CLOSE'].includes(ruleType))return res.status(400).json({error:'invalid_round_rule',index:i});
+    if(target!==null&&(!Number.isInteger(target)||target<1))return res.status(400).json({error:'invalid_round_target',index:i});
+    if(advanceCount!==null&&(!Number.isInteger(advanceCount)||advanceCount<1))return res.status(400).json({error:'invalid_round_advance_count',index:i});
+    if(groupSize!==null&&(!Number.isInteger(groupSize)||groupSize<2))return res.status(400).json({error:'invalid_round_group_size',index:i});
+
+    seenStageCodes.add(code);
+    normalizedStages.push({code,name:stageName,stageType,ruleType,target,advanceCount,groupSize});
+  }
+
+  const conn=await pool.getConnection();
+  try{
+    await conn.beginTransaction();
+    const [created]=await conn.query(`
+      INSERT INTO competitions(
+        slug,name,short_name,competition_type,choice_type,language_preset,status,allow_nominations
+      ) VALUES (?,?,?,?,?,?,?,?)
+    `,[slug,name,shortName,competitionType,choiceType,languagePreset,publishNow?'LIVE':'DRAFT',allowNominations]);
+    const competitionId=Number(created.insertId);
+
+    const choiceRows=[];
+    for(let i=0;i<normalizedChoices.length;i++){
+      const ch=normalizedChoices[i];
+      const [inserted]=await conn.query(`
+        INSERT INTO competition_choices(competition_id,name,short_name,code,choice_type,status,sort_order)
+        VALUES (?,?,?,?,?,'ACTIVE',?)
+      `,[competitionId,ch.name,ch.shortName,ch.code,choiceType,i+1]);
+      choiceRows.push({id:Number(inserted.insertId),...ch});
+    }
+
+    const stageRows=[];
+    for(let i=0;i<normalizedStages.length;i++){
+      const s=normalizedStages[i];
+      const [inserted]=await conn.query(`
+        INSERT INTO competition_stages(
+          competition_id,code,name,stage_type,sequence_no,status,rule_type,target,advance_count,group_size,starts_at
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
+      `,[
+        competitionId,s.code,s.name,s.stageType,i+1,
+        i===0&&publishNow?'OPEN':'DRAFT',
+        s.ruleType,s.target,s.advanceCount,s.groupSize,
+        i===0&&publishNow?new Date():null
+      ]);
+      stageRows.push({id:Number(inserted.insertId),...s});
+    }
+
+    const firstStage=stageRows[0];
+    for(let i=0;i<choiceRows.length;i++){
+      await conn.query(`
+        INSERT INTO competition_stage_choices(stage_id,choice_id,seed_no,entry_supporter_count)
+        VALUES (?,?,?,0)
+      `,[firstStage.id,choiceRows[i].id,i+1]);
+    }
+
+    if(publishNow){
+      await conn.query(
+        "INSERT INTO competition_stage_events(competition_id,stage_id,event_type,metadata_json) VALUES (?,?,'STAGE_OPENED',?)",
+        [competitionId,firstStage.id,JSON.stringify({choices:choiceRows.length,createdByWizard:true})]
+      );
+    }
+
+    await conn.query(
+      'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'COMPETITION_CREATED_COMPLETE','COMPETITION',String(competitionId),JSON.stringify({
+        slug,name,competitionType,choiceType,languagePreset,allowNominations:Boolean(allowNominations),
+        published:publishNow,choices:choiceRows.map(x=>x.code),stages:stageRows.map(x=>x.code)
+      })]
+    );
+
+    await conn.commit();
+    res.status(201).json({
+      ok:true,
+      competition:{id:competitionId,slug,name,status:publishNow?'LIVE':'DRAFT'},
+      choices:choiceRows.length,
+      stages:stageRows.length,
+      firstStage:{id:firstStage.id,name:firstStage.name,status:publishNow?'OPEN':'DRAFT'}
+    });
+  }catch(e){
+    await conn.rollback();
+    if(e.code==='ER_DUP_ENTRY')return res.status(409).json({error:'competition_or_choice_exists'});
+    next(e);
+  }finally{conn.release()}
+});
+
 router.patch('/:id',async(req,res,next)=>{
   const id=Number(req.params.id);
   if(!Number.isInteger(id)||id<1)return res.status(400).json({error:'invalid_competition'});
