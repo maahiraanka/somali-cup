@@ -19,6 +19,20 @@ const flag=(country)=>({Australia:'🇦🇺','United Kingdom':'🇬🇧',Canada:
 const fmt=n=>Number(n||0).toLocaleString();
 const matchStatusPollDelay=status=>status==='LIVE'?8000:status==='LOBBY'?15000:30000;
 function api(path,opts={}){const token=localStorage.getItem('somalicup_session');const headers={'Content-Type':'application/json',...(opts.headers||{})};if(token)headers.Authorization=`Bearer ${token}`;return fetch(path,{...opts,headers}).then(async r=>{const body=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(body.error||'request_failed'),{status:r.status,body});return body})}
+function analyticsId(){
+  let id=localStorage.getItem('somalicup_anon');
+  if(!id){id=crypto.randomUUID?.()||('sc-'+Date.now()+'-'+Math.random().toString(36).slice(2));localStorage.setItem('somalicup_anon',id)}
+  return id;
+}
+function trackEvent(eventName,{cityCode='',matchPublicId='',source='',metadata={}}={}){
+  const token=localStorage.getItem('somalicup_session');
+  fetch('/api/analytics/event',{
+    method:'POST',keepalive:true,
+    headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},
+    body:JSON.stringify({eventName,anonymousId:analyticsId(),cityCode,matchPublicId,source,metadata})
+  }).catch(()=>{});
+}
+
 const imgFor=c=>cityImages[c?.code]||heroImage;
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[m]));
 async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer='Different cities. One people.',accent='#ffcf4a',fromName='',refPublicId=''}){
@@ -78,6 +92,7 @@ async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer
   if(navigator.share&&navigator.canShare?.({files:[file]})){
     try{
       await navigator.share({title:'Somali Cup',text:shareText,files:[file]});
+      trackEvent('SHARE_COMPLETED',{cityCode:city?.code||'',source:'native_share',metadata:{outcome:'shared'}});
       return 'shared'
     }catch(e){if(e?.name==='AbortError')return 'cancelled'}
   }
@@ -91,7 +106,9 @@ async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer
   const url=URL.createObjectURL(pngBlob);
   const a=document.createElement('a');a.href=url;a.download='somali-cup-status.png';document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1200);
-  return linkCopied?'downloaded_link_copied':'downloaded';
+  const outcome=linkCopied?'downloaded_link_copied':'downloaded';
+  trackEvent('SHARE_COMPLETED',{cityCode:city?.code||'',source:'poster_fallback',metadata:{outcome}});
+  return outcome;
 }
 
 const shareResultMessage=result=>({
@@ -204,7 +221,7 @@ export default function App(){
       setInitialLoading(false);
     }
   };
-  useEffect(()=>{refresh()},[]);
+  useEffect(()=>{refresh();const params=new URLSearchParams(window.location.search);trackEvent('LANDING_VIEW',{source:(params.get('src')||'direct').slice(0,32)})},[]);
   useEffect(()=>{
     if(!me?.membership)return;
     let cancelled=false;
@@ -236,7 +253,7 @@ export default function App(){
     const code=new URLSearchParams(window.location.search).get('city')?.toUpperCase();
     if(!code){setViralCity(null);return}
     const city=standings.find(c=>c.code===code&&c.is_open);
-    if(city)setViralCity(city);
+    if(city){setViralCity(city);const key='sc_ref_landing_'+city.code+'_'+window.location.search;if(!sessionStorage.getItem(key)){sessionStorage.setItem(key,'1');trackEvent('REFERRAL_LANDING',{cityCode:city.code,source:(new URLSearchParams(window.location.search).get('src')||'referral').slice(0,32)})}}
   },[standings,me,identityChecked]);
   useEffect(()=>{
     const params=new URLSearchParams(window.location.search);
@@ -245,7 +262,7 @@ export default function App(){
     if(!matchId||!invite){setViralMatch(null);return}
     let cancelled=false;
     api(`/api/matches/${encodeURIComponent(matchId)}/invite/${encodeURIComponent(invite)}`)
-      .then(d=>{if(!cancelled)setViralMatch(d)})
+      .then(d=>{if(!cancelled){setViralMatch(d);const key='sc_match_invite_'+matchId+'_'+invite;if(!sessionStorage.getItem(key)){sessionStorage.setItem(key,'1');trackEvent('MATCH_INVITE_LANDING',{matchPublicId:matchId,cityCode:d?.invite?.city?.code||'',source:'match_invite'})}}})
       .catch(()=>{if(!cancelled)setViralMatch(null)});
     return()=>{cancelled=true}
   },[]);
@@ -256,6 +273,7 @@ export default function App(){
   const total=standings.reduce((a,c)=>a+Number(c.verified_supporters||0),0);
   const viralFrom=(new URLSearchParams(window.location.search).get('from')||'').trim().slice(0,40);
   const requestJoin=(city=null)=>{
+    trackEvent('JOIN_OPENED',{cityCode:city?.code||'',source:'app'});
     if(me?.membership){setNotice(`You already represent ${me.membership.name} this season.`);setTimeout(()=>setNotice(''),2600);return}
     setJoinCity(city||null);
     setShowJoin(true);
