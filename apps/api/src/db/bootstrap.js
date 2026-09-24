@@ -82,17 +82,18 @@ export async function seedDatabase(){
 
   for(const [publicId,homeCode,awayCode,startsAt,lobbyOpensAt] of fixtures){
     if(!cityId[homeCode]||!cityId[awayCode]) continue;
+    const regulationEndsAt=new Date(new Date(startsAt+'Z').getTime()+60*60*1000);
     await pool.query(
-      `INSERT INTO matches(public_id,season_id,round_code,home_city_id,away_city_id,starts_at,lobby_opens_at,status)
-       VALUES (?,1,'GROUP',?,?,?,?,'LOBBY')
+      `INSERT INTO matches(public_id,season_id,round_code,home_city_id,away_city_id,starts_at,regulation_ends_at,lobby_opens_at,status)
+       VALUES (?,1,'GROUP',?,?,?,?,?,'SCHEDULED')
        ON DUPLICATE KEY UPDATE
          home_city_id=VALUES(home_city_id),
          away_city_id=VALUES(away_city_id),
          round_code=VALUES(round_code),
          starts_at=VALUES(starts_at),
-         lobby_opens_at=VALUES(lobby_opens_at),
-         status=IF(status='CANCELLED','LOBBY',status)`,
-      [publicId,cityId[homeCode],cityId[awayCode],startsAt,lobbyOpensAt]
+         regulation_ends_at=COALESCE(regulation_ends_at,VALUES(regulation_ends_at)),
+         lobby_opens_at=VALUES(lobby_opens_at)`,
+      [publicId,cityId[homeCode],cityId[awayCode],startsAt,regulationEndsAt,lobbyOpensAt]
     );
   }
 
