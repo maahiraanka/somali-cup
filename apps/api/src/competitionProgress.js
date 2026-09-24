@@ -61,9 +61,14 @@ export async function closeCompetitionStage({competitionId,stageId,actorUserId=n
       for(let i=0;i<rows.length;i++){
         const row=rows[i];
         const pass=qualifies(row,stage,i+1);
+        const resultStatus=pass?(stage.stage_type==='FINAL'?'WINNER':'QUALIFIED'):'ELIMINATED';
         await conn.query(
           "UPDATE competition_stage_choices SET final_supporter_count=?,result_status=? WHERE stage_id=? AND choice_id=?",
-          [row.final_supporter_count,pass?(stage.stage_type==='FINAL'?'WINNER':'QUALIFIED'):'ELIMINATED',stage.id,row.choice_id]
+          [row.final_supporter_count,resultStatus,stage.id,row.choice_id]
+        );
+        await conn.query(
+          "UPDATE competition_choices SET status=? WHERE id=? AND competition_id=?",
+          [resultStatus==='WINNER'?'WINNER':pass?'ACTIVE':'ELIMINATED',row.choice_id,competitionId]
         );
         if(pass)advanced.push(row);
       }
