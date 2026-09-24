@@ -1,7 +1,7 @@
 {
   "name": "somali-cup",
   "private": true,
-  "version": "0.3.2-hostinger-entry",
+  "version": "0.3.3-hostinger-db-bootstrap",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -13,7 +13,7 @@
   "scripts": {
     "dev": "concurrently -n WEB,API -c auto \"npm --prefix apps/web run dev\" \"node --watch apps/api/src/server.js\"",
     "build": "npm --prefix apps/web run build && node scripts/build-api.mjs",
-    "start": "node server.js",
+    "start": "npm run db:migrate && npm run db:seed && node server.js",
     "db:migrate": "node apps/api/src/db/migrate.js",
     "db:seed": "node apps/api/src/db/seed.js",
     "verify": "npm run build && node apps/api/src/verify.js"
