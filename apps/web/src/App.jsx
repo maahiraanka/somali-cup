@@ -349,7 +349,7 @@ export default function App(){
       setInitialLoading(false);
     }
   };
-  useEffect(()=>{refresh();const params=new URLSearchParams(window.location.search);trackEvent('LANDING_VIEW',{source:(params.get('src')||'direct').slice(0,32)})},[]);
+  useEffect(()=>{refresh();const params=new URLSearchParams(window.location.search);trackEvent('LANDING_VIEW',{source:(params.get('src')||'direct').slice(0,32)});const competition=params.get('competition');if(competition==='best-city-somalia'){api('/api/competitions/best-city-somalia').then(d=>{setBestCity(d);setView('best-city')}).catch(()=>{})}},[]);
   useEffect(()=>{
     if(!me?.membership)return;
     let cancelled=false;
@@ -580,8 +580,12 @@ function BestCityExperience({data,me,onBack,onRefresh}){
   const [message,setMessage]=useState('');
 
   useEffect(()=>{
+    const code=(new URLSearchParams(window.location.search).get('choice')||'').toUpperCase();
+    if(code&&choices.length&&!selected)setSelected(choices.find(x=>x.code===code)||null);
+  },[choices.length]);
+  useEffect(()=>{
     if(!competition)return;
-    api('/api/competitions/best-city-somalia/me').then(d=>setMySupport(d.support)).catch(()=>setMySupport(null));
+    api('/api/competitions/best-city-somalia/me').then(d=>setMySupport({...d.support,publicId:d.user?.public_id||''})).catch(()=>setMySupport(null));
   },[competition?.slug]);
 
   if(!competition)return <LiveDataState title="Best City is unavailable" body="We could not load this competition." onRetry={onRefresh}/>;
@@ -601,7 +605,7 @@ function BestCityExperience({data,me,onBack,onRefresh}){
       if(payload.token)localStorage.setItem('somalicup_session',payload.token);
       setMySupport({
         code:payload.choice.code,choice_name:payload.choice.name,supporter_no:payload.choice.supporterNo,
-        friends_brought:0,competition_name:payload.competition.name
+        friends_brought:0,competition_name:payload.competition.name,publicId:payload.user?.publicId||''
       });
       setShowJoin(false);
       setMessage('You now support '+payload.choice.name+'.');
@@ -633,7 +637,14 @@ function BestCityExperience({data,me,onBack,onRefresh}){
         <h1>Which city<br/><em>has the most support?</em></h1>
         <p>Choose your city. Bring your friends. Cities that reach the target move to the next round.</p>
         {!mySupport&&<button className="bestCityPrimary" onClick={()=>{setSelected(top||null);setShowJoin(true)}}>SUPPORT MY CITY <ArrowRight size={17}/></button>}
-        {mySupport&&<div className="mySupportHero"><Check size={18}/><div><span>YOU SUPPORT</span><strong>{mySupport.choice_name}</strong><small>You are supporter #{fmt(mySupport.supporter_no)}</small></div></div>}
+        {mySupport&&<div className="mySupportHero"><Check size={18}/><div><span>YOU SUPPORT</span><strong>{mySupport.choice_name}</strong><small>You are supporter #{fmt(mySupport.supporter_no)} · {fmt(mySupport.friends_brought)} friends brought</small></div></div>}
+        {mySupport&&<button className="bestCityShare" onClick={async()=>{
+          const url=`${window.location.origin}${window.location.pathname}?competition=best-city-somalia&choice=${encodeURIComponent(mySupport.code)}&ref=${encodeURIComponent(mySupport.publicId||'')}`;
+          try{
+            if(navigator.share)await navigator.share({title:'Best City in Somalia',text:`I support ${mySupport.choice_name}. Support your city too.`,url});
+            else {await navigator.clipboard.writeText(url);setMessage('Share link copied.');}
+          }catch{}
+        }}><Share2 size={16}/> SHARE {String(mySupport.choice_name||'MY CITY').toUpperCase()}</button>}
       </div>
       <div className="bestCityLeader">
         <span>LEADING CITY</span>
