@@ -5,6 +5,112 @@ import { requireAdminKey } from '../auth.js';
 const router=Router();
 router.use(requireAdminKey);
 
+
+router.get('/overview',async(_req,res,next)=>{
+  try{
+    const [[season]]=await pool.query("SELECT id,name,status,starts_at,ends_at FROM seasons ORDER BY id DESC LIMIT 1");
+    if(!season)return res.json({season:null});
+    const [[summary]]=await pool.query(`
+      SELECT
+        (SELECT COUNT(*) FROM season_cities WHERE season_id=?) cities,
+        (SELECT COUNT(*) FROM city_memberships WHERE season_id=? AND status='ACTIVE' AND verification_status='VERIFIED') verifiedSupporters,
+        (SELECT COUNT(*) FROM qualification_referrals WHERE season_id=?) qualificationAssists,
+        (SELECT COUNT(*) FROM matches WHERE season_id=? AND status='LIVE') liveMatches,
+        (SELECT COUNT(*) FROM matches WHERE season_id=? AND status='LOBBY') lobbyMatches,
+        (SELECT COUNT(*) FROM matches WHERE season_id=? AND status='SCHEDULED') scheduledMatches,
+        (SELECT COUNT(*) FROM matches WHERE season_id=? AND status='FINAL') finalMatches,
+        (SELECT COUNT(*) FROM match_assists ma JOIN matches m ON m.id=ma.match_id WHERE m.season_id=?) matchAssists,
+        (SELECT COUNT(*) FROM competition_awards WHERE season_id=? AND status='CONFIRMED') confirmedAwards
+    `,[season.id,season.id,season.id,season.id,season.id,season.id,season.id,season.id,season.id]);
+    const [[integrity]]=await pool.query(`
+      SELECT
+        SUM(event_type='DUPLICATE_DEVICE_BLOCKED') duplicateBlocks,
+        SUM(event_type='NETWORK_BURST_SIGNAL') burstSignals
+      FROM identity_integrity_events
+      WHERE season_id=? AND created_at>=UTC_TIMESTAMP()-INTERVAL 7 DAY
+    `,[season.id]);
+    const [stages]=await pool.query(`
+      SELECT code,name,stage_type,status,sequence_no
+      FROM tournament_stages WHERE season_id=?
+      ORDER BY sequence_no
+    `,[season.id]);
+    const [leaders]=await pool.query(`
+      SELECT c.code,c.name,COUNT(cm.id) verified_supporters,sc.qualification_target,sc.status
+      FROM season_cities sc
+      JOIN cities c ON c.id=sc.city_id
+      LEFT JOIN city_memberships cm ON cm.season_id=sc.season_id AND cm.city_id=sc.city_id
+        AND cm.status='ACTIVE' AND cm.verification_status='VERIFIED'
+      WHERE sc.season_id=?
+      GROUP BY c.id,c.code,c.name,sc.qualification_target,sc.status
+      ORDER BY verified_supporters DESC,c.name
+      LIMIT 5
+    `,[season.id]);
+    const [recentAudit]=await pool.query(`
+      SELECT al.id,al.action,al.entity_type,al.entity_id,al.created_at,u.display_name actor_name
+      FROM audit_log al
+      LEFT JOIN users u ON u.id=al.actor_user_id
+      ORDER BY al.id DESC LIMIT 8
+    `);
+    res.json({
+      season,
+      summary:{
+        cities:Number(summary.cities||0),
+        verifiedSupporters:Number(summary.verifiedSupporters||0),
+        qualificationAssists:Number(summary.qualificationAssists||0),
+        liveMatches:Number(summary.liveMatches||0),
+        lobbyMatches:Number(summary.lobbyMatches||0),
+        scheduledMatches:Number(summary.scheduledMatches||0),
+        finalMatches:Number(summary.finalMatches||0),
+        matchAssists:Number(summary.matchAssists||0),
+        confirmedAwards:Number(summary.confirmedAwards||0)
+      },
+      integrity:{
+        duplicateBlocks:Number(integrity?.duplicateBlocks||0),
+        burstSignals:Number(integrity?.burstSignals||0)
+      },
+      stages,
+      leaders:leaders.map(r=>({...r,verified_supporters:Number(r.verified_supporters||0),qualification_target:Number(r.qualification_target||0)})),
+      recentAudit
+    });
+  }catch(e){next(e)}
+});
+
+router.get('/audit',async(req,res,next)=>{
+  try{
+    const limit=Math.max(10,Math.min(200,Number(req.query.limit)||100));
+    const [rows]=await pool.query(`
+      SELECT al.id,al.action,al.entity_type,al.entity_id,al.metadata_json,al.created_at,
+        u.public_id actor_public_id,u.display_name actor_name,u.email actor_email
+      FROM audit_log al
+      LEFT JOIN users u ON u.id=al.actor_user_id
+      ORDER BY al.id DESC
+      LIMIT ?
+    `,[limit]);
+    res.json({audit:rows});
+  }catch(e){next(e)}
+});
+
+router.get('/supporters',async(req,res,next)=>{
+  try{
+    const q=String(req.query.q||'').trim().slice(0,80);
+    const like='%'+q+'%';
+    const [rows]=await pool.query(`
+      SELECT u.public_id,u.display_name,u.nickname,u.email,u.status,u.created_at,
+        c.code city_code,c.name city_name,
+        cm.goal_number,cm.verification_status,cm.joined_at,
+        (SELECT COUNT(*) FROM qualification_referrals qr WHERE qr.season_id=cm.season_id AND qr.referrer_user_id=u.id) assists
+      FROM users u
+      JOIN city_memberships cm ON cm.user_id=u.id
+      JOIN cities c ON c.id=cm.city_id
+      WHERE u.role='PLAYER'
+        AND (?='' OR u.display_name LIKE ? OR u.nickname LIKE ? OR u.email LIKE ? OR u.public_id LIKE ?)
+      ORDER BY cm.joined_at DESC
+      LIMIT 100
+    `,[q,like,like,like,like]);
+    res.json({supporters:rows.map(r=>({...r,goal_number:Number(r.goal_number||0),assists:Number(r.assists||0)}))});
+  }catch(e){next(e)}
+});
+
 router.get('/qualification',async(_req,res,next)=>{
   try{
     const [[season]]=await pool.query("SELECT id,name,status FROM seasons WHERE status='QUALIFICATION' ORDER BY starts_at DESC,id DESC LIMIT 1");
