@@ -13,6 +13,53 @@ router.get('/launch-readiness',async(_req,res,next)=>{
   }catch(e){next(e)}
 });
 
+router.post('/repair-fixture-lifecycle',async(req,res,next)=>{
+  const conn=await pool.getConnection();
+  try{
+    await conn.beginTransaction();
+    const [rows]=await conn.query(`
+      SELECT id,public_id,status,lobby_opens_at,starts_at
+      FROM matches
+      WHERE status IN ('LOBBY','LIVE')
+        AND (
+          (status='LOBBY' AND lobby_opens_at>UTC_TIMESTAMP())
+          OR
+          (status='LIVE' AND starts_at>UTC_TIMESTAMP())
+        )
+      FOR UPDATE
+    `);
+    const repaired=[];
+    for(const m of rows){
+      let target='SCHEDULED';
+      if(m.lobby_opens_at){
+        const [[dueLobby]]=await conn.query('SELECT ?<=UTC_TIMESTAMP() due',[m.lobby_opens_at]);
+        if(Number(dueLobby?.due||0)===1)target='LOBBY';
+      }
+      if(m.starts_at){
+        const [[dueStart]]=await conn.query('SELECT ?<=UTC_TIMESTAMP() due',[m.starts_at]);
+        if(Number(dueStart?.due||0)===1)target='LIVE';
+      }
+      if(target!==m.status){
+        await conn.query("UPDATE matches SET status=?,tiebreak_mode='NONE',tiebreak_started_at=NULL WHERE id=?",[target,m.id]);
+        await conn.query(`
+          INSERT INTO match_state_events(match_id,from_status,to_status,metadata_json)
+          VALUES (?,?,?,JSON_OBJECT('via','ADMIN_LIFECYCLE_REPAIR'))
+        `,[m.id,m.status,target]);
+        repaired.push({publicId:m.public_id,from:m.status,to:target});
+      }
+    }
+    await conn.query(`
+      INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json)
+      VALUES (?,'FIXTURE_LIFECYCLE_REPAIRED','MATCH_SET','PRELAUNCH',?)
+    `,[req.admin?.user_id||null,JSON.stringify({repaired})]);
+    await conn.commit();
+    res.json({ok:true,repairedCount:repaired.length,repaired});
+  }catch(e){
+    await conn.rollback();
+    next(e);
+  }finally{conn.release()}
+});
+
 router.post('/launch-mode',async(req,res,next)=>{
   const mode=String(req.body?.mode||'').toUpperCase();
   if(!['COMING_SOON','LIVE'].includes(mode))return res.status(400).json({error:'invalid_launch_mode'});
