@@ -479,9 +479,9 @@ function MatchCenter({matches,me,onNeedIdentity}){
 
   return <div className="matchExperience">
     <section className="broadcastHero">
-      <div className="matchSide homeSide" style={{backgroundImage:`linear-gradient(90deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(home)}")`}}><CityThumb city={home} size="lg"/><h2>{home.name}</h2><small>MOGADISHU</small></div>
+      <div className="matchSide homeSide" style={{backgroundImage:`linear-gradient(90deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(home)}")`}}><CityThumb city={home} size="lg"/><h2>{home.name}</h2><small>{home.code}</small></div>
       <div className="scoreBoard"><div className={"liveBadge "+(match.status==='LIVE'?'red':'')}><span/> {match.status}</div><small>{match.roundCode||match.round_code}</small><strong>{fmt(home.score)} <em>–</em> {fmt(away.score)}</strong><span className="matchClock">{match.status==='LIVE'?'VERIFIED SCORE':match.status==='LOBBY'?'LOBBY OPEN':match.status==='SCHEDULED'?'UPCOMING':match.status}</span></div>
-      <div className="matchSide awaySide" style={{backgroundImage:`linear-gradient(270deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(away)}")`}}><CityThumb city={away} size="lg"/><h2>{away.name}</h2><small>HARGEISA</small></div>
+      <div className="matchSide awaySide" style={{backgroundImage:`linear-gradient(270deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(away)}")`}}><CityThumb city={away} size="lg"/><h2>{away.name}</h2><small>{away.code}</small></div>
     </section>
     <section className="supportMeter"><div><b>{homeSupportPct}%</b><span>{fmt(homeActive)} active</span></div><div className="meterTrack"><i style={{width:`${homeSupportPct}%`}}/><em style={{width:`${awaySupportPct}%`}}/></div><div><b>{awaySupportPct}%</b><span>{fmt(awayActive)} active</span></div></section>
 
@@ -514,7 +514,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
         <span className="statePulse"/>
         <small>{leader?'MATCH STATE':'MATCH STATE'}</small>
         <h3>{leader?`${leader.name} lead by ${leadMargin}`:'Level match — next goal changes everything'}</h3>
-        <p>{leader?`${trailing.name} need a response. Every verified supporter can still move this match.`:'The pressure is balanced. One verified supporter can break the deadlock.'}</p>
+        <p>{leader?`${trailing.name} need a response. The next verified Goal changes the match.`:'The score is level. The next verified Goal breaks the deadlock.'}</p>
       </div>
       <div className="pressureBattle">
         <div className="pressureCity home"><span>{home.code}</span><b>{homeScore}</b><i style={{height:`${homeScorePct}%`}}/></div>
