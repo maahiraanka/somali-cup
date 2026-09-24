@@ -9,6 +9,12 @@ import { startLifecycleTimer, syncMatchLifecycle } from './matchLifecycle.js';
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const webDist=path.resolve(__dirname,'../../web/dist');
 
+app.use((req,res,next)=>{
+  if(req.path.startsWith('/preview')||req.path.startsWith('/admin')){
+    res.setHeader('X-Robots-Tag','noindex, nofollow, noarchive');
+  }
+  next();
+});
 app.use(express.static(webDist,{maxAge:config.env==='production'?'1h':0}));
 app.get(/^(?!\/api).*/,(_req,res)=>res.sendFile(path.join(webDist,'index.html')));
 
