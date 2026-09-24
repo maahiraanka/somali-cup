@@ -63,6 +63,7 @@ function humanError(e,fallback='Something went wrong. Please try again.'){
     match_not_found:'This match is no longer available.',
     match_not_live:'This match is not live yet.',
     match_not_open:'This match has not opened yet.',
+    match_not_joinable:'This match is scheduled. Reservations open when the lobby opens.',
     invite_not_found:'That match invite is no longer valid.',
     invite_not_found_or_revoked:'That match invite is no longer valid.',
     invite_revoked:'That match invite is no longer valid.',
@@ -650,7 +651,7 @@ function Home({standings,top,total,season,myCity,me,matches,onJoin,openCity,goQu
         <div>
           <small>NEXT MOVE</small>
           <h3>{myFixture?myFixture.status==='LIVE'?'Your city is playing now.':myFixture.status==='LOBBY'?'Your city’s lobby is open.':'Your city already has its next fixture.':'Bring the next Goal into '+myCity.name+'.'}</h3>
-          <p>{myFixture&&opponent?myCity.name+' vs '+opponent.name+'. '+(myFixture.status==='LIVE'?'Enter the match and make your verified Goal count.':'Open the fixture, reserve your place and call your city.'):'Share your city. If one person joins through your link, you get the Assist and they score their own Goal.'}</p>
+          <p>{myFixture&&opponent?myCity.name+' vs '+opponent.name+'. '+(myFixture.status==='LIVE'?'Enter the match and make your verified Goal count.':myFixture.status==='LOBBY'?'The lobby is open. Reserve your place and call your city.':'Your fixture is scheduled. Open it now; reservations begin when the lobby opens.'):'Share your city. If one person joins through your link, you get the Assist and they score their own Goal.'}</p>
         </div>
         <button className="goldBtn" onClick={myFixture?goMatches:shareMyCity}>{myFixture?<Radio size={16}/>:<Share2 size={16}/>} {fixtureCta}</button>
       </div>
@@ -978,7 +979,23 @@ function MatchCenter({matches,me,onNeedIdentity}){
   const extendedBranch=Math.max(0,Number(mine?.indirect_joins??(branchTotal-directAssists)));
   const benchFilled=Math.min(3,directAssists);
   const commentary=(live?.activity||[]).slice(0,5);
-  const join=async()=>{if(!me){onNeedIdentity();return}setBusy(true);setMsg('');try{const inviteToken=new URLSearchParams(window.location.search).get('invite')||'';const d=await api(`/api/matches/${match.publicId}/join`,{method:'POST',body:JSON.stringify({inviteToken})});setMine(d.participation);setMsg(d.created?'Place reserved.':'You are already registered.');await load(match)}catch(e){setMsg(humanError(e,'We could not reserve your place. Try again.'))}finally{setBusy(false)}};
+  const join=async()=>{
+    if(!me){onNeedIdentity();return}
+    if(!['LOBBY','LIVE'].includes(match.status)){
+      setMsg(match.status==='SCHEDULED'?'Reservations open when the lobby opens.':'This match is not open for reservations.');
+      return;
+    }
+    setBusy(true);setMsg('');
+    try{
+      const inviteToken=new URLSearchParams(window.location.search).get('invite')||'';
+      const d=await api(`/api/matches/${match.publicId}/join`,{method:'POST',body:JSON.stringify({inviteToken})});
+      setMine(d.participation);
+      setMsg(d.created?'Place reserved.':'You are already registered.');
+      await load(match)
+    }catch(e){
+      setMsg(humanError(e,'We could not reserve your place. Try again.'))
+    }finally{setBusy(false)}
+  };
   const activate=async()=>{setBusy(true);setMsg('');try{const d=await api(`/api/matches/${match.publicId}/activate`,{method:'POST',body:'{}'});setMsg(d.goalAdded?'GOAL — your verified entry moved the score.':'Your Goal is already counted.');await load(match)}catch(e){setMsg(humanError(e,'We could not count your Goal. Try again.'))}finally{setBusy(false)}};
   const personalMatchUrl=()=>{
     const token=mine?.share_token||mine?.shareToken;
@@ -1017,7 +1034,8 @@ function MatchCenter({matches,me,onNeedIdentity}){
         <small>YOUR NEXT MOVE</small>
         {!me?<><h3>Choose your city first.</h3><p>Your city identity decides which side you can represent in Somali Cup.</p></>:
         !myMatchCity?<><h3>Taking you to your city’s match.</h3><p>Every active city has a current Somali Cup fixture.</p></>:
-        !mine?<><h3>Join {myMatchCity.name} in this match.</h3><p>Reserve your place. When it goes live, your verified entry scores 1 Goal.</p></>:
+        !mine&&match.status==='SCHEDULED'?<><h3>{myMatchCity.name} vs {myMatchCity.code===home.code?away.name:home.name} is scheduled.</h3><p>Reservations are not open yet. Come back when the lobby opens.</p></>:
+        !mine&&['LOBBY','LIVE'].includes(match.status)?<><h3>Join {myMatchCity.name} in this match.</h3><p>{match.status==='LOBBY'?'Reserve your place now. When the match goes live, your verified entry can score 1 Goal.':'The match is live. Join your city and activate your one verified Goal.'}</p></>:
         mine.status==='REGISTERED'&&match.tiebreakMode==='SUDDEN_DEATH'?<><h3>Enter now. Win it.</h3><p>The next verified Goal ends the match. Your one Goal can decide it for {myMatchCity.name}.</p></>:
         mine.status==='REGISTERED'&&match.status==='LIVE'?<><h3>Enter now. Score once.</h3><p>Your verified entry scores exactly 1 Goal for {myMatchCity.name}.</p></>:
         mine.status==='REGISTERED'?<><h3>Your place is reserved.</h3><p>Use your personal link to bring your city into the lobby before kickoff.</p></>:
@@ -1028,7 +1046,8 @@ function MatchCenter({matches,me,onNeedIdentity}){
       <div className="nextActionButton">
         {!me?<button className="goldBtn" onClick={onNeedIdentity}>CHOOSE MY CITY <ArrowRight size={16}/></button>:
         !myMatchCity?<button className="goldBtn" onClick={()=>{const own=matches.find(m=>m.home?.code===me?.membership?.code||m.away?.code===me?.membership?.code);if(own)setSelected(own)}}>OPEN MY CITY MATCH <ArrowRight size={16}/></button>:
-        !mine?<button className="goldBtn" disabled={busy} onClick={join}>{busy?'Joining…':'JOIN THIS MATCH'} <ArrowRight size={16}/></button>:
+        !mine&&match.status==='SCHEDULED'?<button className="goldBtn scheduledMatchBtn" disabled><Radio size={16}/> LOBBY NOT OPEN</button>:
+        !mine&&['LOBBY','LIVE'].includes(match.status)?<button className="goldBtn" disabled={busy} onClick={join}>{busy?'Joining…':match.status==='LIVE'?'ENTER MATCH':'JOIN THIS MATCH'} <ArrowRight size={16}/></button>:
         mine.status==='REGISTERED'&&match.tiebreakMode==='SUDDEN_DEATH'?<button className="goldBtn suddenDeathCta" disabled={busy} onClick={activate}>{busy?'Entering…':'ENTER & WIN IT'} <Zap size={16}/></button>:
         mine.status==='REGISTERED'&&match.status==='LIVE'?<button className="goldBtn" disabled={busy} onClick={activate}>{busy?'Entering…':'ENTER & SCORE'} <Play size={16}/></button>:
         mine.status==='REGISTERED'?<button className="goldBtn" onClick={copyLink}><Share2 size={16}/> CALL MY CITY</button>:
