@@ -11,8 +11,9 @@ if(process.env.ACCEPTANCE_MUTATIONS!==REQUIRED){
 
 const origin=String(process.env.ACCEPTANCE_ORIGIN||config.appOrigin||'').replace(/\/$/,'');
 const adminKey=String(process.env.ACCEPTANCE_ADMIN_KEY||process.env.ADMIN_BOOTSTRAP_KEY||'');
-if(!origin||!adminKey){
-  console.error('REFUSED controlled acceptance. ACCEPTANCE_ORIGIN/APP_ORIGIN and ACCEPTANCE_ADMIN_KEY/ADMIN_BOOTSTRAP_KEY are required.');
+const adminToken=String(process.env.ACCEPTANCE_ADMIN_TOKEN||'');
+if(!origin||(!adminKey&&!adminToken)){
+  console.error('REFUSED controlled acceptance. ACCEPTANCE_ORIGIN/APP_ORIGIN and admin authorization are required.');
   process.exit(2);
 }
 if(new URL(origin).protocol!=='https:'){
@@ -39,7 +40,10 @@ async function api(path,{method='GET',body,token,admin=false}={}){
   try{
     const headers={'Content-Type':'application/json'};
     if(token)headers.Authorization='Bearer '+token;
-    if(admin)headers['x-admin-key']=adminKey;
+    if(admin){
+      if(adminToken)headers.Authorization='Bearer '+adminToken;
+      else headers['x-admin-key']=adminKey;
+    }
     const r=await fetch(origin+path,{method,headers,body:body===undefined?undefined:JSON.stringify(body),signal:controller.signal});
     const payload=await r.json().catch(()=>({}));
     if(!r.ok)throw Object.assign(new Error(payload.error||'request_failed'),{status:r.status,body:payload});
