@@ -42,5 +42,9 @@ await check('match_state_events_table',()=>pool.query("SELECT id FROM match_stat
 await check('funnel_analytics_table',()=>pool.query("SELECT event_name,created_at FROM funnel_events LIMIT 1"));
 await check('season_device_claims_table',()=>pool.query("SELECT device_hash,last_seen_at FROM season_device_claims LIMIT 1"));
 await check('identity_integrity_events_table',()=>pool.query("SELECT event_type,created_at FROM identity_integrity_events LIMIT 1"));
+await check('tournament_stages_table',()=>pool.query("SELECT code,stage_type,status FROM tournament_stages LIMIT 1"));
+await check('tournament_groups_table',()=>pool.query("SELECT code,name FROM tournament_groups LIMIT 1"));
+await check('tournament_advancement_slots_table',()=>pool.query("SELECT target_stage_id,target_match_no,target_slot,source_type FROM tournament_advancement_slots LIMIT 1"));
+await check('tournament_events_table',()=>pool.query("SELECT event_type,created_at FROM tournament_events LIMIT 1"));
 await pool.end();
 if(!ok) process.exit(1);
