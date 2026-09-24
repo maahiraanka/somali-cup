@@ -73,7 +73,9 @@ function humanError(e,fallback='Something went wrong. Please try again.'){
     city_not_open:'That city is not open for joining right now.',
     qualification_not_open:'Qualification is not open right now.',
     device_already_registered:'This device already has a Somali Cup identity for this season.',
-    invalid_admin_session:'Your admin session expired. Sign in again.'
+    invalid_admin_session:'Your admin session expired. Sign in again.',
+    joins_temporarily_frozen:'New supporter joins are temporarily paused while Somali Cup is being reviewed.',
+    match_operations_temporarily_frozen:'Match participation is temporarily paused while Somali Cup is being reviewed.'
   };
   return map[code]||fallback;
 }
