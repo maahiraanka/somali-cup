@@ -1,5 +1,6 @@
 import React from 'react';
-import {ArrowRight,Globe2,Sparkles,Trophy} from 'lucide-react';
+import {Globe2,Sparkles,Trophy} from 'lucide-react';
+import {PublicFooter} from './Legal';
 
 export default function ComingSoon(){
   return <main className="comingSoonPage">
@@ -30,10 +31,13 @@ export default function ComingSoon(){
         <div className="comingSoonLine"><i/><span>Qualification · Rivalry · Match Day · The Road to the Cup</span><i/></div>
       </div>
 
-      <footer className="comingSoonFooter">
-        <span>© 2027 Somali Cup</span>
-        <b>Different cities. One people.</b>
-      </footer>
+      <div className="comingSoonFooterWrap">
+        <footer className="comingSoonFooter">
+          <span>© 2027 Somali Cup</span>
+          <b>Different cities. One people.</b>
+        </footer>
+        <PublicFooter/>
+      </div>
     </section>
   </main>
 }
