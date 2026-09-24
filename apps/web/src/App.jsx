@@ -589,7 +589,18 @@ function BestCityExperience({data,me,onBack,onRefresh}){
   },[competition?.slug]);
 
   if(!competition)return <LiveDataState title="Best City is unavailable" body="We could not load this competition." onRetry={onRefresh}/>;
-  const top=choices[0];
+  const stages=Array.isArray(data?.stages)?data.stages:[];
+  const currentStage=data?.currentStage||stages.find(s=>s.status==='OPEN')||null;
+  const currentCodes=new Set((currentStage?.choices||[]).filter(x=>x.resultStatus==='ACTIVE').map(x=>x.code));
+  const activeChoices=currentCodes.size?choices.filter(x=>currentCodes.has(x.code)):choices.filter(x=>x.status!=='ELIMINATED');
+  const rankedActive=[...activeChoices].sort((a,b)=>Number(b.supporterCount||0)-Number(a.supporterCount||0)||Number(a.rank||999)-Number(b.rank||999));
+  const top=rankedActive[0]||choices[0];
+  const roundTarget=Number(currentStage?.target||0);
+  const ruleText=!currentStage?'Competition is getting ready.':
+    currentStage.ruleType==='TARGET'?'Reach '+fmt(roundTarget)+' supporters to move to the next round.':
+    currentStage.ruleType==='TOP_N'?'The top '+fmt(currentStage.advanceCount)+' cities move to the next round.':
+    currentStage.ruleType==='TARGET_OR_TOP_N'?'Reach '+fmt(roundTarget)+' supporters, or finish in the top '+fmt(currentStage.advanceCount)+' in your group.':
+    'The city with the most support when this round closes wins.';
 
   const join=async()=>{
     if(!selected)return;
@@ -635,7 +646,7 @@ function BestCityExperience({data,me,onBack,onRefresh}){
       <div>
         <small>BEST CITY IN SOMALIA</small>
         <h1>Which city<br/><em>has the most support?</em></h1>
-        <p>Choose your city. Bring your friends. Cities that reach the target move to the next round.</p>
+        <p>{currentStage?<><b>{currentStage.name}:</b> {ruleText}</>:<>Choose your city. Bring your friends. Help your city move to the next round.</>}</p>
         {!mySupport&&<button className="bestCityPrimary" onClick={()=>{setSelected(selected||top||null);setShowJoin(true)}}>SUPPORT MY CITY <ArrowRight size={17}/></button>}
         {mySupport&&<div className="mySupportHero"><Check size={18}/><div><span>YOU SUPPORT</span><strong>{mySupport.choice_name}</strong><small>You are supporter #{fmt(mySupport.supporter_no)} · {fmt(mySupport.friends_brought)} friends brought</small></div></div>}
         {mySupport&&<button className="bestCityShare" onClick={async()=>{
@@ -657,13 +668,29 @@ function BestCityExperience({data,me,onBack,onRefresh}){
 
     {message&&<div className="bestCityMessage"><Check size={15}/>{message}</div>}
 
+    <section className="roundPath">
+      <div className="roundPathHead"><div><small>HOW THE COMPETITION MOVES</small><h2>{currentStage?.name||'Next round'}</h2><p>{ruleText}</p></div><span>{currentStage?.status||'DRAFT'}</span></div>
+      <div className="roundSteps">
+        {stages.map((stage,index)=><div key={stage.code} className={'roundStep '+(stage.status==='OPEN'?'current':stage.status==='COMPLETE'?'done':'')}>
+          <span>{stage.status==='COMPLETE'?<Check size={13}/>:index+1}</span>
+          <div><b>{stage.name}</b><small>{stage.status==='COMPLETE'?'Finished':stage.status==='OPEN'?'Live now':'Next'}</small></div>
+        </div>)}
+      </div>
+      {currentStage?.type==='GROUP'&&<div className="groupRoundGrid">
+        {[...new Set((currentStage.choices||[]).map(x=>x.groupCode).filter(Boolean))].map(group=>{
+          const rows=(currentStage.choices||[]).filter(x=>x.groupCode===group).sort((a,b)=>b.supporterCount-a.supporterCount||a.seed-b.seed);
+          return <div className="groupRoundCard" key={group}><div><small>GROUP</small><strong>{group}</strong></div>{rows.map((row,i)=><div className="groupRoundRow" key={row.code}><span>#{i+1}</span><b>{row.name}</b><strong>{fmt(row.supporterCount)}</strong><small>supporters</small></div>)}</div>
+        })}
+      </div>}
+    </section>
+
     <section className="bestCityListSection">
-      <div className="bestCitySectionHead"><div><small>LIVE TABLE</small><h2>Support your city</h2><p>One person can support one city in this competition.</p></div>{competition.allowNominations&&<button onClick={()=>setShowNominate(true)}>Can't find your city? <b>Add my city</b></button>}</div>
+      <div className="bestCitySectionHead"><div><small>{currentStage?.name?.toUpperCase()||'LIVE TABLE'}</small><h2>Support a city still in the competition</h2><p>One person can support one city in this competition.</p></div>{competition.allowNominations&&<button onClick={()=>setShowNominate(true)}>Can't find your city? <b>Add my city</b></button>}</div>
       <div className="bestCityGrid">
-        {choices.map(city=><button key={city.code} className={'bestCityCard '+(mySupport?.code===city.code?'mine':'')} onClick={()=>{if(!mySupport){setSelected(city);setShowJoin(true)}}}>
-          <div className="bestCityRank">#{city.rank}</div>
+        {rankedActive.map((city,index)=><button key={city.code} className={'bestCityCard '+(mySupport?.code===city.code?'mine':'')} onClick={()=>{if(!mySupport){setSelected(city);setShowJoin(true)}}}>
+          <div className="bestCityRank">#{index+1}</div>
           <CityThumb city={{...city,country:'Somalia'}} size="md"/>
-          <div className="bestCityCardMain"><strong>{city.name}</strong><span>{fmt(city.supporterCount)} supporters</span><Progress value={city.progressPct}/><small>{city.target?fmt(Math.max(0,city.target-city.supporterCount))+' more needed':'Support is open'}</small></div>
+          <div className="bestCityCardMain"><strong>{city.name}</strong><span>{fmt(city.supporterCount)} supporters</span><Progress value={roundTarget?Math.min(100,Number(city.supporterCount||0)*100/roundTarget):0}/><small>{roundTarget?fmt(Math.max(0,roundTarget-Number(city.supporterCount||0)))+' more needed this round':'Support is open'}</small></div>
           {mySupport?.code===city.code?<span className="bestCityMine"><Check size={13}/> YOUR CITY</span>:<span className="bestCityJoin">SUPPORT</span>}
         </button>)}
       </div>
