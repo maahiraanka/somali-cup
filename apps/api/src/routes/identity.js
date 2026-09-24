@@ -194,7 +194,24 @@ router.get('/me',requireSession,async(req,res,next)=>{
           COUNT(*) branch
         FROM tree
       `,[membership.season_id,req.identity.user_id,membership.season_id,membership.season_id,req.identity.user_id]);
-      qualificationImpact={...qualificationImpact,assists:Number(impact?.assists||0),branch:Number(impact?.branch||0)};
+      const [[latestAssist]]=await pool.query(`
+        SELECT qr.id,u.display_name,u.nickname,qr.created_at
+        FROM qualification_referrals qr
+        JOIN users u ON u.id=qr.referred_user_id
+        WHERE qr.season_id=? AND qr.referrer_user_id=?
+        ORDER BY qr.id DESC
+        LIMIT 1
+      `,[membership.season_id,req.identity.user_id]);
+      qualificationImpact={
+        ...qualificationImpact,
+        assists:Number(impact?.assists||0),
+        branch:Number(impact?.branch||0),
+        latestAssist:latestAssist?{
+          id:Number(latestAssist.id),
+          name:latestAssist.nickname||latestAssist.display_name||'Someone',
+          createdAt:latestAssist.created_at
+        }:null
+      };
     }
     res.json({user:{publicId:req.identity.public_id,displayName:req.identity.display_name,nickname:req.identity.nickname,email:req.identity.email,role:req.identity.role},membership,qualificationImpact});
   }catch(e){next(e)}
