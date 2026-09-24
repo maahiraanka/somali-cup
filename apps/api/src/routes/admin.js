@@ -550,13 +550,15 @@ router.post('/matches/:publicId/score-adjustment',async(req,res,next)=>{
 
 router.patch('/matches/:publicId/state',async(req,res,next)=>{
   const target=String(req.body?.status||'').toUpperCase();
-  const transitions={SCHEDULED:['LOBBY','CANCELLED'],LOBBY:['LIVE','CANCELLED'],LIVE:['FINAL','CANCELLED'],FINAL:[],CANCELLED:[]};
+  const transitions={SCHEDULED:['LOBBY','CANCELLED'],LOBBY:['LIVE','CANCELLED'],LIVE:['FINAL','CANCELLED'],FINAL:[],CANCELLED:['SCHEDULED']};
   const conn=await pool.getConnection();
   try{
     await conn.beginTransaction();
     const [[match]]=await conn.query('SELECT * FROM matches WHERE public_id=? LIMIT 1 FOR UPDATE',[req.params.publicId]);
     if(!match) throw Object.assign(new Error('match_not_found'),{status:404});
     if(!transitions[match.status]?.includes(target)) throw Object.assign(new Error('invalid_match_transition'),{status:409});
+    if(target==='CANCELLED'&&String(req.body?.confirmation||'')!=='CANCEL MATCH')throw Object.assign(new Error('cancel_match_confirmation_required'),{status:400});
+    if(match.status==='CANCELLED'&&target==='SCHEDULED'&&String(req.body?.confirmation||'')!=='REOPEN MATCH')throw Object.assign(new Error('reopen_match_confirmation_required'),{status:400});
     let winner=null;
     if(target==='FINAL'){
       const tied=Number(match.home_score)===Number(match.away_score);
@@ -577,9 +579,9 @@ router.patch('/matches/:publicId/state',async(req,res,next)=>{
       await conn.query('UPDATE matches SET status=? WHERE id=?',[target,match.id]);
     }
     await conn.query(`INSERT INTO match_state_events(match_id,from_status,to_status,metadata_json) VALUES (?,?,?,?)`,
-      [match.id,match.status,target,JSON.stringify({via:'ADMIN_BOOTSTRAP'})]);
+      [match.id,match.status,target,JSON.stringify({via:'ADMIN',actorUserId:req.admin?.user_id||null})]);
     await conn.query(`INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json)
-      VALUES (NULL,'MATCH_STATE_CHANGED','MATCH',?,?)`,[String(match.id),JSON.stringify({from:match.status,to:target,winnerCityId:winner})]);
+      VALUES (?,'MATCH_STATE_CHANGED','MATCH',?,?)`,[req.admin?.user_id||null,String(match.id),JSON.stringify({from:match.status,to:target,winnerCityId:winner})]);
     await conn.commit();
     res.json({ok:true,from:match.status,to:target,winnerCityId:winner});
   }catch(e){await conn.rollback();if(e.status)return res.status(e.status).json({error:e.message});next(e)}finally{conn.release()}
