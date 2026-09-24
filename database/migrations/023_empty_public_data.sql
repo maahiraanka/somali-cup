@@ -9,6 +9,7 @@ DELETE FROM competition_choices;
 DELETE FROM competitions;
 
 DELETE FROM competition_awards;
+DELETE FROM funnel_events;
 DELETE FROM awards;
 DELETE FROM scoring_events;
 DELETE FROM match_assists;
@@ -27,7 +28,6 @@ DELETE FROM city_memberships;
 DELETE FROM season_cities;
 DELETE FROM season_device_claims;
 DELETE FROM identity_integrity_events;
-DELETE FROM funnel_events;
 DELETE FROM moderation_cases;
 
 UPDATE users SET home_city_id=NULL WHERE home_city_id IS NOT NULL;
