@@ -68,50 +68,72 @@ async function check(name,fn){
 }
 
 async function cleanup(){
+  currentStep='cleanup';
+  const conn=await pool.getConnection();
   try{
+    await conn.beginTransaction();
     const ids=[];
     if(userA?.publicId||userB?.publicId){
-      const [rows]=await pool.query('SELECT id,public_id FROM users WHERE public_id IN (?,?)',[userA?.publicId||'',userB?.publicId||'']);
+      const [rows]=await conn.query(
+        'SELECT id,public_id FROM users WHERE public_id IN (?,?)',
+        [userA?.publicId||'',userB?.publicId||'']
+      );
       ids.push(...rows.map(r=>Number(r.id)));
     }
+
     let matchId=null;
     if(matchPublicId){
-      const [[m]]=await pool.query('SELECT id FROM matches WHERE public_id=? LIMIT 1',[matchPublicId]);
+      const [[m]]=await conn.query('SELECT id FROM matches WHERE public_id=? LIMIT 1',[matchPublicId]);
       matchId=m?.id?Number(m.id):null;
     }
 
     if(matchId){
-      await pool.query('DELETE FROM match_assists WHERE match_id=?',[matchId]);
-      await pool.query('DELETE FROM scoring_events WHERE match_id=?',[matchId]);
-      await pool.query('DELETE FROM match_participations WHERE match_id=?',[matchId]);
-      await pool.query('DELETE FROM match_state_events WHERE match_id=?',[matchId]);
-      await pool.query('DELETE FROM funnel_events WHERE match_id=?',[matchId]);
-      await pool.query("DELETE FROM audit_log WHERE entity_type='MATCH' AND entity_id=?",[String(matchId)]);
-      await pool.query('DELETE FROM matches WHERE id=?',[matchId]);
+      await conn.query('DELETE FROM competition_awards WHERE match_id=?',[matchId]);
+      await conn.query('DELETE FROM awards WHERE match_id=?',[matchId]);
+      await conn.query('DELETE FROM match_assists WHERE match_id=?',[matchId]);
+      await conn.query('DELETE FROM scoring_events WHERE match_id=?',[matchId]);
+      await conn.query('DELETE FROM funnel_events WHERE match_id=?',[matchId]);
+      await conn.query('DELETE FROM match_state_events WHERE match_id=?',[matchId]);
+
+      // match_participations is self-referencing through parent_participation_id.
+      // Delete descendants first, then roots, so FK RESTRICT cannot block cleanup.
+      await conn.query('DELETE FROM match_participations WHERE match_id=? AND parent_participation_id IS NOT NULL',[matchId]);
+      await conn.query('DELETE FROM match_participations WHERE match_id=?',[matchId]);
+
+      await conn.query("DELETE FROM audit_log WHERE entity_type='MATCH' AND entity_id=?",[String(matchId)]);
+      await conn.query('DELETE FROM matches WHERE id=?',[matchId]);
     }
 
     if(ids.length){
       const placeholders=ids.map(()=>'?').join(',');
-      await pool.query(`DELETE FROM qualification_referrals WHERE referrer_user_id IN (${placeholders}) OR referred_user_id IN (${placeholders})`,[...ids,...ids]);
-      await pool.query(`DELETE FROM qualification_events WHERE user_id IN (${placeholders})`,ids);
-      await pool.query(`DELETE FROM funnel_events WHERE user_id IN (${placeholders})`,ids);
-      await pool.query(`DELETE FROM identity_integrity_events WHERE user_id IN (${placeholders})`,ids);
-      await pool.query(`DELETE FROM season_device_claims WHERE user_id IN (${placeholders})`,ids);
-      await pool.query(`DELETE FROM identity_sessions WHERE user_id IN (${placeholders})`,ids);
-      await pool.query(`DELETE FROM city_memberships WHERE user_id IN (${placeholders})`,ids);
-      await pool.query(`DELETE FROM users WHERE id IN (${placeholders})`,ids);
+      await conn.query(`DELETE FROM competition_awards WHERE user_id IN (${placeholders}) OR confirmed_by_user_id IN (${placeholders})`,[...ids,...ids]);
+      await conn.query(`DELETE FROM awards WHERE user_id IN (${placeholders})`,ids);
+      await conn.query(`DELETE FROM qualification_referrals WHERE referrer_user_id IN (${placeholders}) OR referred_user_id IN (${placeholders})`,[...ids,...ids]);
+      await conn.query(`DELETE FROM qualification_events WHERE user_id IN (${placeholders})`,ids);
+      await conn.query(`DELETE FROM funnel_events WHERE user_id IN (${placeholders})`,ids);
+      await conn.query(`DELETE FROM identity_integrity_events WHERE user_id IN (${placeholders})`,ids);
+      await conn.query(`DELETE FROM season_device_claims WHERE user_id IN (${placeholders})`,ids);
+      await conn.query(`DELETE FROM identity_sessions WHERE user_id IN (${placeholders})`,ids);
+      await conn.query(`DELETE FROM admin_sessions WHERE user_id IN (${placeholders})`,ids);
+      await conn.query(`DELETE FROM admin_credentials WHERE user_id IN (${placeholders})`,ids);
+      await conn.query(`DELETE FROM city_memberships WHERE user_id IN (${placeholders})`,ids);
+      await conn.query(`DELETE FROM audit_log WHERE actor_user_id IN (${placeholders})`,ids);
+      await conn.query(`DELETE FROM users WHERE id IN (${placeholders})`,ids);
     }
 
     const hashes=[
       crypto.createHash('sha256').update(deviceA).digest('hex'),
       crypto.createHash('sha256').update(deviceB).digest('hex')
     ];
-    await pool.query('DELETE FROM identity_integrity_events WHERE device_hash IN (?,?)',hashes);
+    await conn.query('DELETE FROM identity_integrity_events WHERE device_hash IN (?,?)',hashes);
 
     if(seasonId&&cityId&&goalB){
-      const [[r]]=await pool.query('SELECT next_goal_number FROM season_cities WHERE season_id=? AND city_id=?',[seasonId,cityId]);
+      const [[r]]=await conn.query(
+        'SELECT next_goal_number FROM season_cities WHERE season_id=? AND city_id=?',
+        [seasonId,cityId]
+      );
       if(Number(r?.next_goal_number||0)===Number(goalB)+1){
-        await pool.query(`
+        await conn.query(`
           UPDATE season_cities sc
           SET next_goal_number=(
             SELECT next_value FROM (
@@ -124,10 +146,20 @@ async function cleanup(){
         `,[seasonId,cityId,seasonId,cityId,Number(goalB)+1]);
       }
     }
-    console.log('CLEANUP acceptance records removed');
+
+    await conn.commit();
+    completedSteps.push({name:'cleanup',status:'PASS',detail:'temporary acceptance records removed'});
+    console.log('PASS cleanup temporary acceptance records removed');
+    return true;
   }catch(e){
-    console.error('CLEANUP FAILED',e.message);
+    await conn.rollback();
+    failureMessage=String(e?.message||e||'cleanup_failed');
+    completedSteps.push({name:'cleanup',status:'FAIL',detail:failureMessage});
+    console.error('FAIL cleanup',failureMessage);
     failures++;
+    return false;
+  }finally{
+    conn.release();
   }
 }
 
