@@ -561,7 +561,8 @@ function JoinedMoment({payload,city,onDone}){
       <div className="joinedBurst">★</div>
       <small>YOU’RE IN</small>
       <h2>You represent<br/><em>{city.name}.</em></h2>
-      <p>You are now <b>supporter #{fmt(supporters)}</b> for {city.name}. Your place in the race is real.</p>
+      <div className="joinedNumber"><span>YOU ARE SUPPORTER</span><strong>#{fmt(supporters)}</strong><small>for {city.name}</small></div>
+      <p>Your support changed the live city count. Now keep the chain moving.</p>
       <div className="joinedCityStrip"><CityThumb city={city} size="lg"/><div><span>YOUR CITY</span><strong>{city.name}</strong><small>{remaining?fmt(remaining)+' more needed to reach the target':'Qualification target reached'}</small></div></div>
       <div className="joinedShareReason"><Share2 size={18}/><div><b>Make supporter #{fmt(nextNumber)} happen.</b><span>Share your ready-made Status poster and challenge one person from {city.name} to join you.</span></div></div>
       <button className="joinedPrimary" disabled={sharing} onClick={share}>{sharing?'CREATING POSTER…':`SHARE ${city.name.toUpperCase()}`} <Share2 size={17}/></button>
