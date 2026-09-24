@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { pool } from '../db/pool.js';
 import { requireSession } from '../auth.js';
 import { syncMatchLifecycle } from '../matchLifecycle.js';
+import { progressTournament } from '../tournamentProgress.js';
 
 const router=Router();
 const shareToken=()=>crypto.randomBytes(16).toString('hex');
@@ -174,6 +175,7 @@ router.post('/:publicId/activate',requireSession,async(req,res,next)=>{
     if(p.city_id===match.home_city_id) await conn.query('UPDATE matches SET home_score=home_score+1,score_version=score_version+1 WHERE id=?',[match.id]);
     else await conn.query('UPDATE matches SET away_score=away_score+1,score_version=score_version+1 WHERE id=?',[match.id]);
 
+    let suddenDeathFinished=false;
     if(match.tiebreak_mode==='SUDDEN_DEATH'){
       const [[sd]]=await conn.query('SELECT home_score,away_score FROM matches WHERE id=? FOR UPDATE',[match.id]);
       if(Number(sd.home_score)!==Number(sd.away_score)){
@@ -187,6 +189,7 @@ router.post('/:publicId/activate',requireSession,async(req,res,next)=>{
           INSERT INTO match_state_events(match_id,from_status,to_status,metadata_json)
           VALUES (?,'LIVE','FINAL',JSON_OBJECT('via','SUDDEN_DEATH_GOAL','winnerCityId',?))
         `,[match.id,winner]);
+        suddenDeathFinished=true;
       }
     }
 
@@ -211,6 +214,7 @@ router.post('/:publicId/activate',requireSession,async(req,res,next)=>{
       FROM matches m JOIN seasons s ON s.id=m.season_id JOIN cities hc ON hc.id=m.home_city_id JOIN cities ac ON ac.id=m.away_city_id
       LEFT JOIN cities wc ON wc.id=m.winner_city_id WHERE m.id=? LIMIT 1`,[match.id]);
     await conn.commit();
+    if(suddenDeathFinished) await progressTournament().catch(e=>console.error('[tournament] sudden-death progression failed',e));
     res.json({activated:true,goalAdded:1,match:publicMatch(fresh),participation:{shareToken:p.share_token,status:'ACTIVE',generation:p.generation}});
   }catch(e){await conn.rollback();if(e.code==='ER_DUP_ENTRY' && String(e.message).includes('idempotency')) return res.status(200).json({activated:false,alreadyActive:true});if(e.status)return res.status(e.status).json({error:e.message});next(e)}finally{conn.release()}
 });
