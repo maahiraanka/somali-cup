@@ -180,6 +180,7 @@ export default function AdminApp(){
 
 function LaunchReadiness({d,act}){
   const status=d?.overall||'BLOCKED';
+  const fixtureBlocker=(d?.checks||[]).find(c=>c.id==='fixture_health'&&c.status==='BLOCKER');
   const grouped=(d?.checks||[]).reduce((acc,c)=>{(acc[c.category]||=[]).push(c);return acc},{});
   const order=['ENVIRONMENT','SECURITY','DATABASE','COMPETITION','INTEGRITY','MATCHES','OPERATIONS','PROOF'];
   return <>
@@ -221,6 +222,11 @@ function LaunchReadiness({d,act}){
       <div><span>Checks</span><strong>{fmt(d?.checks?.length||0)}</strong></div>
       <div><span>Evidence runs</span><strong>{fmt(d?.evidence?.length||0)}</strong></div>
     </div>
+
+    {fixtureBlocker&&<section className="launchRepairCard">
+      <div><small>SAFE REPAIR AVAILABLE</small><h3>4 fixtures are in an impossible future LIVE state.</h3><p>This repair only moves future Lobby/Live fixtures back to the correct state based on their configured times. It does not change scores or completed matches.</p></div>
+      <button className="adminPrimary" onClick={()=>act(()=>adminApi('/api/admin/repair-fixture-lifecycle',{method:'POST'}),'Fixture lifecycle repaired')}><RefreshCw size={15}/> REPAIR FIXTURE LIFECYCLE</button>
+    </section>}
 
     {order.filter(k=>grouped[k]?.length).map(category=><section className="adminPanel launchCategory" key={category}>
       <PanelHead eyebrow={category} title={nice(category.toLowerCase())}/>
