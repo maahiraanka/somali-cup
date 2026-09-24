@@ -189,8 +189,8 @@ export default function AdminApp(){
           view==='cities'?<CitiesAdmin d={data.cities} act={act}/>:
           view==='matches'?<MatchesAdmin d={data.matches} act={act}/>:
           view==='tournament'?<TournamentAdmin d={data.tournament} act={act}/>:
-          view==='supporters'?<SupportersAdmin d={data.supporters} query={query} setQuery={setQuery} refresh={refresh}/>:
-          view==='integrity'?<IntegrityAdmin d={data.integrity}/>:
+          view==='supporters'?<SupportersAdmin d={data.supporters} query={query} setQuery={setQuery} refresh={refresh} act={act}/>:
+          view==='integrity'?<IntegrityAdmin d={data.integrity} act={act}/>:
           view==='analytics'?<AnalyticsAdmin d={data.analytics}/>:
           view==='awards'?<AwardsAdmin d={data.awards} confirmed={data.confirmedAwards} act={act}/>:
           <AuditAdmin d={data.audit}/>
@@ -512,17 +512,72 @@ function TournamentAdmin({d,act}){
   </>
 }
 
-function SupportersAdmin({d,query,setQuery,refresh}){
-  return <section className="adminPanel"><div className="adminPanelAction"><PanelHead eyebrow="SUPPORTERS" title="Verified identities"/><div className="adminSearch"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&refresh()} placeholder="Search name, email or supporter ID"/></div></div>
-    <div className="adminTable supporters"><div className="adminTR head"><span>Supporter</span><span>City</span><span>Goal</span><span>Assists</span><span>Verification</span></div>{(d?.supporters||[]).map(u=><div className="adminTR" key={u.public_id}><div><b>{u.nickname||u.display_name}</b><small>{u.email||u.public_id}</small></div><span>{u.city_name}</span><strong>#{u.goal_number}</strong><span>{u.assists}</span><span>{u.verification_status}</span></div>)}</div>
+function SupportersAdmin({d,query,setQuery,refresh,act}){
+  const [selected,setSelected]=useState(null);
+  const [reason,setReason]=useState('');
+  const supporters=d?.supporters||[];
+  return <section className="adminPanel">
+    <div className="adminPanelAction"><PanelHead eyebrow="SUPPORTER OPERATIONS" title="Verified identities & access"/><div className="adminSearch"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&refresh()} placeholder="Search name, email or supporter ID"/></div></div>
+    <div className="supporterOpsList">{supporters.map(u=><article key={u.public_id} className={'supporterOpsCard '+String(u.status).toLowerCase()}>
+      <div className="supporterOpsIdentity"><span>{(u.nickname||u.display_name||'?')[0]}</span><div><b>{u.nickname||u.display_name}</b><small>{u.email||u.public_id}</small></div></div>
+      <div className="supporterOpsMetrics">
+        <div><span>City</span><b>{u.city_name} · {u.city_code}</b></div>
+        <div><span>Goal</span><b>#{u.goal_number}</b></div>
+        <div><span>Assists</span><b>{fmt(u.assists)}</b></div>
+        <div><span>Devices</span><b>{fmt(u.device_claims)}</b></div>
+        <div><span>Integrity</span><b>{fmt(u.integrity_flags)}</b></div>
+      </div>
+      <div className="supporterOpsActions">
+        <span className={'status '+String(u.status).toLowerCase()}>{u.status}</span>
+        <button onClick={()=>{setSelected(selected===u.public_id?null:u.public_id);setReason('')}}><Pencil size={12}/> {selected===u.public_id?'CLOSE':'MANAGE'}</button>
+      </div>
+      {selected===u.public_id&&<div className="supporterManage">
+        <label><span>Reason for this account action</span><input value={reason} onChange={e=>setReason(e.target.value)} placeholder="Internal reason, minimum 5 characters"/></label>
+        {u.status==='ACTIVE'
+          ?<button className="danger" onClick={()=>{
+            if(reason.trim().length<5)return;
+            if(window.confirm('Suspend '+(u.nickname||u.display_name)+'? Their active supporter sessions will be revoked immediately.')){
+              act(()=>adminApi('/api/admin/supporters/'+u.public_id+'/status',{method:'PATCH',body:JSON.stringify({status:'SUSPENDED',reason,confirmation:'CONFIRM SUPPORTER STATUS'})}),'Supporter suspended')
+            }
+          }}><Ban size={13}/> SUSPEND SUPPORTER</button>
+          :<button className="adminPrimary compact" onClick={()=>{
+            if(reason.trim().length<5)return;
+            if(window.confirm('Reinstate '+(u.nickname||u.display_name)+'?')){
+              act(()=>adminApi('/api/admin/supporters/'+u.public_id+'/status',{method:'PATCH',body:JSON.stringify({status:'ACTIVE',reason,confirmation:'CONFIRM SUPPORTER STATUS'})}),'Supporter reinstated')
+            }
+          }}><ShieldCheck size={13}/> REINSTATE SUPPORTER</button>}
+        <p>Suspension blocks supporter access immediately but preserves Goal, referral and audit history for review.</p>
+      </div>}
+    </article>)}</div>
   </section>
 }
 
-function IntegrityAdmin({d}){
+function IntegrityAdmin({d,act}){
   const s=d?.summary||{};
+  const [reviewing,setReviewing]=useState(null);
+  const [notes,setNotes]=useState('');
   return <>
     <div className="adminStats integrity"><Stat label="Device claims" value={s.deviceClaims} detail="Bound supporter identities"/><Stat label="Recoveries" value={s.deviceRecoveries} detail="Sessions restored"/><Stat label="Duplicate blocks" value={s.duplicateDeviceBlocks} detail="Same-device repeat attempts"/><Stat label="Network bursts" value={s.networkBurstSignals} detail="Review only" tone={s.networkBurstSignals?'warn':''}/></div>
-    <section className="adminPanel"><PanelHead eyebrow="REVIEW EVIDENCE" title="Recent integrity signals"/><div className="adminSignalList">{(d?.recent||[]).length?(d.recent||[]).map(r=><div key={r.id}><ShieldCheck size={16}/><div><b>{nice(r.event_type)}</b><small>{r.display_name||'Anonymous attempt'} · {new Date(r.created_at).toLocaleString()}</small></div><span>{r.device_hint||r.network_hint||'—'}</span></div>):<Empty compact title="No review signals" body="No recent duplicate-device or burst events."/>}</div></section>
+    <section className="adminPanel">
+      <div className="adminPanelAction"><PanelHead eyebrow="INTEGRITY OPERATIONS" title="Review signals & document decisions"/><span className="opsHint">Evidence, not automatic guilt</span></div>
+      <div className="integrityOpsList">{(d?.recent||[]).length?(d.recent||[]).map(r=><article className={'integrityOpsCard '+String(r.review_status||'UNREVIEWED').toLowerCase()} key={r.id}>
+        <div className="integrityOpsIcon"><ShieldCheck size={17}/></div>
+        <div className="integrityOpsMain">
+          <div><b>{nice(r.event_type)}</b><span className={'status '+String(r.review_status||'UNREVIEWED').toLowerCase()}>{r.review_status||'UNREVIEWED'}</span></div>
+          <small>{r.display_name||'Anonymous attempt'} · {new Date(r.created_at).toLocaleString()}</small>
+          <p>{r.device_hint?'Device '+r.device_hint:''}{r.device_hint&&r.network_hint?' · ':''}{r.network_hint?'Network '+r.network_hint:''}</p>
+          {r.review_notes&&<em>Review: {r.review_notes}{r.reviewed_by_name?' · '+r.reviewed_by_name:''}</em>}
+        </div>
+        <button className="adminSmallBtn" onClick={()=>{setReviewing(reviewing===r.id?null:r.id);setNotes(r.review_notes||'')}}>{reviewing===r.id?'Close':'Review'}</button>
+        {reviewing===r.id&&<div className="integrityReviewBox">
+          <label><span>Internal review notes</span><input value={notes} onChange={e=>setNotes(e.target.value)} placeholder="What did you verify?"/></label>
+          <div>
+            <button disabled={notes.trim().length<3} onClick={()=>act(()=>adminApi('/api/admin/integrity/'+r.id+'/review',{method:'PATCH',body:JSON.stringify({status:'REVIEWED',notes})}),'Signal marked reviewed')}><ShieldCheck size={12}/> MARK REVIEWED</button>
+            <button className="dismiss" disabled={notes.trim().length<3} onClick={()=>act(()=>adminApi('/api/admin/integrity/'+r.id+'/review',{method:'PATCH',body:JSON.stringify({status:'DISMISSED',notes})}),'Signal dismissed')}><X size={12}/> DISMISS</button>
+          </div>
+        </div>}
+      </article>):<Empty compact title="No review signals" body="No recent duplicate-device or burst events."/>}</div>
+    </section>
   </>
 }
 
