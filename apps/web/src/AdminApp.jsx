@@ -127,7 +127,7 @@ export default function AdminApp(){
     operations:'/api/admin/operations',
     cities:'/api/admin/qualification',
     matches:'/api/admin/matches',
-    tournament:'/api/tournament',
+    tournament:'/api/admin/tournament-config',
     supporters:'/api/admin/supporters'+(query?'?q='+encodeURIComponent(query):''),
     integrity:'/api/admin/integrity?days=7',
     analytics:'/api/analytics/funnel?days=30',
@@ -548,10 +548,64 @@ function MatchesAdmin({d,act}){
 }
 
 function TournamentAdmin({d,act}){
+  const [showStage,setShowStage]=useState(false);
+  const [stageForm,setStageForm]=useState({code:'',name:'',stageType:'GROUP',sequenceNo:1,advanceCount:'',tiePolicy:'DRAW_ALLOWED',matchDurationMinutes:60});
+  const [groupStage,setGroupStage]=useState(null);
+  const [groupForm,setGroupForm]=useState({code:'A',name:'Group A'});
+  const [assigning,setAssigning]=useState(null);
+  const [assignForm,setAssignForm]=useState({cityCode:'',seedNo:1});
+
+  const createStage=()=>act(()=>adminApi('/api/admin/tournament/stages',{method:'POST',body:JSON.stringify(stageForm)}),'Tournament stage created');
+  const createGroup=stage=>act(()=>adminApi('/api/admin/tournament/groups',{method:'POST',body:JSON.stringify({stageId:stage.id,...groupForm})}),'Group created');
+
   return <>
-    <section className="adminPanel"><div className="adminPanelAction"><PanelHead eyebrow="ROAD TO THE CUP" title={d?.season?.name||'Tournament'}/><button className="adminPrimary compact" onClick={()=>act(()=>adminApi('/api/admin/tournament/progress',{method:'POST'}),'Tournament progression checked')}>RUN PROGRESSION <ChevronRight size={14}/></button></div>
-      {(d?.stages||[]).length?<div className="adminStageGrid">{d.stages.map(s=><article key={s.code}><div><small>{s.type}</small><h3>{s.name}</h3></div><span className={'status '+String(s.status).toLowerCase()}>{s.status}</span><p>{s.type==='GROUP'?fmt(s.groups?.length)+' groups':fmt(s.matches?.length)+' fixtures'}</p></article>)}</div>:<Empty title="Tournament structure not published" body="The engine is ready. Configure stages after qualification decides the field."/>}
+    <section className="tournamentOpsHero">
+      <div><small>ROAD TO THE CUP</small><h2>{d?.season?.name||'Tournament Builder'}</h2><p>Build the competition structure, assign cities and control progression without touching the database.</p></div>
+      <div><button onClick={()=>act(()=>adminApi('/api/admin/tournament/progress',{method:'POST'}),'Tournament progression checked')}><RefreshCw size={14}/> RUN PROGRESSION</button><button className="adminPrimary" onClick={()=>setShowStage(v=>!v)}><Plus size={14}/> {showStage?'CLOSE':'ADD STAGE'}</button></div>
     </section>
+
+    {showStage&&<section className="adminPanel tournamentBuilderForm">
+      <PanelHead eyebrow="NEW STAGE" title="Add competition stage"/>
+      <div className="opsFormGrid">
+        <label><span>Code</span><input value={stageForm.code} onChange={e=>setStageForm({...stageForm,code:e.target.value.toUpperCase()})} placeholder="GROUPS"/></label>
+        <label><span>Name</span><input value={stageForm.name} onChange={e=>setStageForm({...stageForm,name:e.target.value})} placeholder="Group Stage"/></label>
+        <label><span>Stage type</span><select value={stageForm.stageType} onChange={e=>setStageForm({...stageForm,stageType:e.target.value,tiePolicy:e.target.value==='GROUP'?'DRAW_ALLOWED':'SUDDEN_DEATH'})}><option value="GROUP">Group</option><option value="KNOCKOUT">Knockout</option><option value="FINAL">Final</option></select></label>
+        <label><span>Sequence</span><input type="number" min="1" value={stageForm.sequenceNo} onChange={e=>setStageForm({...stageForm,sequenceNo:Number(e.target.value)})}/></label>
+        <label><span>Tie policy</span><select value={stageForm.tiePolicy} onChange={e=>setStageForm({...stageForm,tiePolicy:e.target.value})}><option value="DRAW_ALLOWED">Draw allowed</option><option value="SUDDEN_DEATH">Sudden death</option></select></label>
+        <label><span>Match duration</span><input type="number" min="1" value={stageForm.matchDurationMinutes} onChange={e=>setStageForm({...stageForm,matchDurationMinutes:Number(e.target.value)})}/></label>
+        <label><span>Advance count</span><input type="number" min="1" value={stageForm.advanceCount} onChange={e=>setStageForm({...stageForm,advanceCount:e.target.value})} placeholder="Optional"/></label>
+      </div>
+      <button className="adminPrimary compact" onClick={createStage}><Plus size={13}/> CREATE STAGE</button>
+    </section>}
+
+    <div className="tournamentStageOps">
+      {(d?.stages||[]).length?(d.stages||[]).map(stage=><section className="adminPanel tournamentStageCard" key={stage.id}>
+        <div className="tournamentStageHead">
+          <div><small>{stage.stage_type} · SEQUENCE {stage.sequence_no}</small><h3>{stage.name}</h3><p>{stage.tie_policy==='DRAW_ALLOWED'?'Draws allowed':'Sudden death on ties'} · {stage.match_duration_minutes} min</p></div>
+          <span className={'status '+String(stage.status).toLowerCase()}>{stage.status}</span>
+        </div>
+        <div className="tournamentStageActions">
+          {stage.status!=='OPEN'&&<button onClick={()=>act(()=>adminApi('/api/admin/tournament/stages/'+stage.id,{method:'PATCH',body:JSON.stringify({name:stage.name,status:'OPEN',tiePolicy:stage.tie_policy,matchDurationMinutes:stage.match_duration_minutes})}),'Stage opened')}><Radio size={12}/> OPEN STAGE</button>}
+          {stage.stage_type==='GROUP'&&<button onClick={()=>setGroupStage(groupStage===stage.id?null:stage.id)}><Plus size={12}/> ADD GROUP</button>}
+        </div>
+
+        {groupStage===stage.id&&<div className="groupCreateInline">
+          <label><span>Group code</span><input value={groupForm.code} onChange={e=>setGroupForm({...groupForm,code:e.target.value.toUpperCase()})}/></label>
+          <label><span>Group name</span><input value={groupForm.name} onChange={e=>setGroupForm({...groupForm,name:e.target.value})}/></label>
+          <button className="adminPrimary compact" onClick={()=>createGroup(stage)}>CREATE GROUP</button>
+        </div>}
+
+        {stage.stage_type==='GROUP'&&<div className="groupOpsGrid">{(stage.groups||[]).map(g=><article className="groupOpsCard" key={g.id}>
+          <div className="groupOpsHead"><div><span>{g.code}</span><b>{g.name}</b></div><button onClick={()=>setAssigning(assigning===g.id?null:g.id)}><Plus size={12}/> CITY</button></div>
+          <div className="groupCityList">{(g.cities||[]).length?(g.cities||[]).map(c=><div key={c.code}><span>{c.seed_no}</span><b>{c.name}</b><small>{c.code}</small><button onClick={()=>act(()=>adminApi('/api/admin/tournament/groups/'+g.id+'/cities/'+c.code,{method:'DELETE'}),c.name+' removed from '+g.name)}><X size={11}/></button></div>):<p>No cities assigned yet.</p>}</div>
+          {assigning===g.id&&<div className="groupAssignInline">
+            <select value={assignForm.cityCode} onChange={e=>setAssignForm({...assignForm,cityCode:e.target.value})}><option value="">Select city</option>{(d.cities||[]).map(c=><option key={c.code} value={c.code}>{c.name} · {c.code}</option>)}</select>
+            <input type="number" min="1" value={assignForm.seedNo} onChange={e=>setAssignForm({...assignForm,seedNo:Number(e.target.value)})}/>
+            <button onClick={()=>act(()=>adminApi('/api/admin/tournament/groups/'+g.id+'/cities',{method:'POST',body:JSON.stringify(assignForm)}),'City assigned to '+g.name)}>ASSIGN</button>
+          </div>}
+        </article>)}</div>}
+      </section>):<Empty title="Tournament structure not configured" body="Add the first stage when the qualification field and Cup format are ready."/>}
+    </div>
   </>
 }
 
