@@ -668,3 +668,7 @@ radial-gradient(circle at 50% 50%,#0c3f64,#071d34 57%,#04101b 76%);border:1px so
 .legalDoc section{padding:18px 0;border-top:1px solid rgba(76,151,198,.07)}.legalDoc section h2{font-size:16px;margin:0 0 7px}.legalDoc section p{font-size:10px;line-height:1.7;color:#8199ad;margin:0;max-width:850px}
 .legalUpdated{margin-top:18px;padding-top:16px;border-top:1px solid rgba(76,151,198,.07);font-size:7px;color:#536d82;letter-spacing:.06em}
 @media(max-width:720px){.publicLegalFooter{align-items:flex-start;flex-direction:column;padding:16px 18px}.legalPage{padding:14px}.legalTop{align-items:flex-start}.legalDoc{padding:20px 16px}.legalTitle h1{font-size:31px}.comingSoonFooterWrap .publicLegalFooter{padding-top:8px}}
+
+
+/* v0.32 scheduled match state */
+.scheduledMatchBtn{background:#132231!important;color:#71899d!important;border:1px solid rgba(116,152,177,.16)!important;box-shadow:none!important;cursor:not-allowed!important}
