@@ -673,7 +673,18 @@ function TournamentAdmin({d,act}){
 function SupportersAdmin({d,query,setQuery,refresh,act}){
   const [selected,setSelected]=useState(null);
   const [reason,setReason]=useState('');
+  const [detailId,setDetailId]=useState(null);
+  const [detail,setDetail]=useState(null);
+  const [detailLoading,setDetailLoading]=useState(false);
   const supporters=d?.supporters||[];
+
+  const inspect=async publicId=>{
+    if(detailId===publicId){setDetailId(null);setDetail(null);return}
+    setDetailId(publicId);setDetail(null);setDetailLoading(true);
+    try{setDetail(await adminApi('/api/admin/supporters/'+publicId+'/detail'))}
+    finally{setDetailLoading(false)}
+  };
+
   return <section className="adminPanel">
     <div className="adminPanelAction"><PanelHead eyebrow="SUPPORTER OPERATIONS" title="Verified identities & access"/><div className="adminSearch"><Search size={15}/><input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>e.key==='Enter'&&refresh()} placeholder="Search name, email or supporter ID"/></div></div>
     <div className="supporterOpsList">{supporters.map(u=><article key={u.public_id} className={'supporterOpsCard '+String(u.status).toLowerCase()}>
@@ -687,8 +698,29 @@ function SupportersAdmin({d,query,setQuery,refresh,act}){
       </div>
       <div className="supporterOpsActions">
         <span className={'status '+String(u.status).toLowerCase()}>{u.status}</span>
+        <button onClick={()=>inspect(u.public_id)}><Activity size={12}/> {detailId===u.public_id?'CLOSE DETAIL':'INSPECT'}</button>
         <button onClick={()=>{setSelected(selected===u.public_id?null:u.public_id);setReason('')}}><Pencil size={12}/> {selected===u.public_id?'CLOSE':'MANAGE'}</button>
       </div>
+
+      {detailId===u.public_id&&<div className="supporterInvestigation">
+        {detailLoading?<div className="adminLoading compact"><RefreshCw className="spin" size={16}/><span>Loading supporter evidence…</span></div>:detail&&<>
+          <div className="investigationStats">
+            <div><span>Goal</span><strong>#{detail.supporter.goal_number}</strong></div>
+            <div><span>Direct Assists</span><strong>{fmt(detail.supporter.direct_assists)}</strong></div>
+            <div><span>Branch</span><strong>{fmt(detail.supporter.branch_count)}</strong></div>
+            <div><span>Branch depth</span><strong>{fmt(detail.supporter.branch_depth)}</strong></div>
+          </div>
+          <div className="supporterEvidenceGrid">
+            <section><h4>Identity & devices</h4>
+              <p><b>{detail.supporter.city_name} · {detail.supporter.city_code}</b><span>{detail.supporter.verification_status} via {nice(detail.supporter.verification_method)}</span></p>
+              <div className="deviceEvidence">{(detail.devices||[]).length?detail.devices.map(x=><div key={x.id}><ShieldCheck size={12}/><span>{x.device_hint}</span><small>Last seen {new Date(x.last_seen_at).toLocaleString()}</small></div>):<em>No device claims.</em>}</div>
+            </section>
+            <section><h4>Integrity history</h4><div className="evidenceRows">{(detail.integrity||[]).length?detail.integrity.slice(0,12).map(x=><div key={x.id}><ShieldCheck size={13}/><div><b>{nice(x.event_type)}</b><small>{x.review_status||'UNREVIEWED'}{x.review_notes?' · '+x.review_notes:''}</small></div><time>{new Date(x.created_at).toLocaleString()}</time></div>):<p>No integrity events.</p>}</div></section>
+          </div>
+          <section className="supporterMatchHistory"><h4>Match history</h4><div>{(detail.matches||[]).length?detail.matches.map(x=><div key={x.participation_id}><span>{x.home_code} vs {x.away_code}</span><b>{x.supporter_city_code} · {x.participation_status}</b><small>{x.scored?'Goal scored':'No Goal'} · {fmt(x.match_assists)} Assists · {new Date(x.starts_at).toLocaleString()}</small></div>):<p>No match participation.</p>}</div></section>
+        </>}
+      </div>}
+
       {selected===u.public_id&&<div className="supporterManage">
         <label><span>Reason for this account action</span><input value={reason} onChange={e=>setReason(e.target.value)} placeholder="Internal reason, minimum 5 characters"/></label>
         {u.status==='ACTIVE'
