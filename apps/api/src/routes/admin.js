@@ -312,9 +312,51 @@ router.get('/supporters',async(req,res,next)=>{
   }catch(e){next(e)}
 });
 
+router.patch('/season',async(req,res,next)=>{
+  const target=String(req.body?.status||'').toUpperCase();
+  const allowed=['QUALIFICATION','GROUP','KNOCKOUT','FINAL','COMPLETE','ARCHIVED'];
+  if(!allowed.includes(target))return res.status(400).json({error:'invalid_season_status'});
+  const conn=await pool.getConnection();
+  try{
+    await conn.beginTransaction();
+    const [[season]]=await conn.query('SELECT * FROM seasons ORDER BY id DESC LIMIT 1 FOR UPDATE');
+    if(!season)throw Object.assign(new Error('season_not_found'),{status:404});
+    const forward={
+      DRAFT:['QUALIFICATION'],
+      QUALIFICATION:['GROUP'],
+      GROUP:['KNOCKOUT'],
+      KNOCKOUT:['FINAL'],
+      FINAL:['COMPLETE'],
+      COMPLETE:['ARCHIVED'],
+      ARCHIVED:[]
+    };
+    if(!forward[season.status]?.includes(target))throw Object.assign(new Error('invalid_season_transition'),{status:409});
+    if(String(req.body?.confirmation||'')!=='CONFIRM SEASON CHANGE')throw Object.assign(new Error('season_change_confirmation_required'),{status:400});
+    await conn.query(
+      ['COMPLETE','ARCHIVED'].includes(target)
+        ? 'UPDATE seasons SET status=?,ends_at=COALESCE(ends_at,UTC_TIMESTAMP()) WHERE id=?'
+        : 'UPDATE seasons SET status=? WHERE id=?',
+      [target,season.id]
+    );
+    if(season.status==='QUALIFICATION'&&target!=='QUALIFICATION'){
+      await conn.query('UPDATE season_cities SET is_open=0 WHERE season_id=?',[season.id]);
+    }
+    await conn.query(
+      'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'SEASON_STATUS_CHANGED','SEASON',String(season.id),JSON.stringify({from:season.status,to:target})]
+    );
+    await conn.commit();
+    res.json({ok:true,from:season.status,to:target});
+  }catch(e){
+    await conn.rollback();
+    if(e.status)return res.status(e.status).json({error:e.message});
+    next(e);
+  }finally{conn.release()}
+});
+
 router.get('/qualification',async(_req,res,next)=>{
   try{
-    const [[season]]=await pool.query("SELECT id,name,status FROM seasons WHERE status='QUALIFICATION' ORDER BY starts_at DESC,id DESC LIMIT 1");
+    const [[season]]=await pool.query("SELECT id,name,status,starts_at,ends_at FROM seasons WHERE status IN ('QUALIFICATION','GROUP','KNOCKOUT','FINAL','COMPLETE') ORDER BY id DESC LIMIT 1");
     if(!season) return res.json({season:null,cities:[]});
     const [cities]=await pool.query(`SELECT c.id,c.code,c.name,c.country,c.tier,sc.status,sc.qualification_target,sc.is_open,
       SUM(cm.status='ACTIVE' AND cm.verification_status='VERIFIED') verified_supporters
@@ -337,12 +379,12 @@ router.patch('/qualification/cities/:cityId',async(req,res,next)=>{
   const conn=await pool.getConnection();
   try{
     await conn.beginTransaction();
-    const [[season]]=await conn.query("SELECT id FROM seasons WHERE status='QUALIFICATION' ORDER BY starts_at DESC,id DESC LIMIT 1");
-    if(!season) throw Object.assign(new Error('qualification_not_open'),{status:409});
+    const [[season]]=await conn.query("SELECT id,status FROM seasons WHERE status IN ('QUALIFICATION','GROUP','KNOCKOUT','FINAL','COMPLETE') ORDER BY id DESC LIMIT 1");
+    if(!season) throw Object.assign(new Error('active_season_required'),{status:409});
     const [result]=await conn.query(`UPDATE season_cities SET ${fields.join(',')} WHERE season_id=? AND city_id=?`,[...vals,season.id,cityId]);
     if(!result.affectedRows) throw Object.assign(new Error('city_not_in_season'),{status:404});
     for(const [type,delta,meta] of events) await conn.query(`INSERT INTO qualification_events(season_id,city_id,type,delta,metadata_json) VALUES (?,?,?,?,?)`,[season.id,cityId,type,delta,JSON.stringify(meta)]);
-    await conn.query(`INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (NULL,'QUALIFICATION_CITY_UPDATED','SEASON_CITY',?,?)`,[`${season.id}:${cityId}`,JSON.stringify(req.body)]);
+    await conn.query(`INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,'QUALIFICATION_CITY_UPDATED','SEASON_CITY',?,?)`,[req.admin?.user_id||null,`${season.id}:${cityId}`,JSON.stringify(req.body)]);
     await conn.commit();
     res.json({ok:true});
   }catch(e){await conn.rollback();if(e.status)return res.status(e.status).json({error:e.message});next(e)}finally{conn.release()}
