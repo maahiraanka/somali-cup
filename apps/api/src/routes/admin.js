@@ -56,9 +56,13 @@ async function runLaunchScript(kind,adminUserId=null){
     const err=Object.assign(new Error('launch_check_failed'),{status:409});
     err.payload={
       error:'launch_check_failed',
+      message:String(e.message||'Controlled acceptance process failed'),
       exitCode:e.code??null,
+      signal:e.signal??null,
+      killed:Boolean(e.killed),
       stdout:String(e.stdout||'').slice(-16000),
-      stderr:String(e.stderr||'').slice(-8000)
+      stderr:String(e.stderr||'').slice(-8000),
+      command:process.execPath+' '+path.join(apiRoot,file)
     };
     throw err;
   }finally{
@@ -97,7 +101,18 @@ router.post('/launch-checks/:kind',async(req,res,next)=>{
       INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json)
       VALUES (?,'LAUNCH_CHECK_RUN','LAUNCH_ACCEPTANCE',?,JSON_OBJECT('kind',?,'result','FAIL'))
     `,[req.admin?.user_id||null,kind,kind]).catch(()=>{});
-    if(e.status)return res.status(e.status).json(e.payload||{error:e.message});
+    if(e.status){
+      const payload=e.payload||{error:e.message};
+      await pool.query(`
+        INSERT INTO launch_acceptance_runs(run_type,status,failures,warnings,origin,evidence_json)
+        VALUES (?, 'FAIL', 1, 0, ?, ?)
+      `,[
+        kind==='preflight'?'PREFLIGHT':kind==='safe'?'SAFE_ACCEPTANCE':'CONTROLLED_ACCEPTANCE',
+        process.env.APP_ORIGIN||null,
+        JSON.stringify({source:'CONTROL_CENTRE_RUNNER',kind,...payload})
+      ]).catch(()=>{});
+      return res.status(e.status).json(payload);
+    }
     next(e);
   }
 });
