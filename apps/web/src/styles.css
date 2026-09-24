@@ -566,3 +566,35 @@ animation:suddenDeathCtaPulse 1.15s ease-in-out infinite alternate}
 @media(max-width:420px){
   .adminStats,.adminStats.integrity{grid-template-columns:1fr 1fr}.adminStat{padding:11px}.adminStat strong{font-size:21px}.adminAuthCard{padding:22px 17px}.adminTopbar h1{font-size:18px}
 }
+
+
+/* v0.25 Public Coming Soon */
+.comingSoonPage{min-height:100vh;position:relative;overflow:hidden;background:
+radial-gradient(circle at 12% 16%,rgba(29,171,255,.11),transparent 24%),
+radial-gradient(circle at 85% 22%,rgba(255,196,54,.08),transparent 22%),
+linear-gradient(180deg,#020711 0%,#030b16 58%,#020711 100%);color:#f7fbff}
+.comingSoonAmbient{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.comingSoonAmbient:before{content:"";position:absolute;inset:0;background:
+linear-gradient(rgba(44,129,189,.045) 1px,transparent 1px),
+linear-gradient(90deg,rgba(44,129,189,.045) 1px,transparent 1px);background-size:54px 54px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.8),transparent 78%)}
+.comingSoonAmbient i{position:absolute;border-radius:50%;filter:blur(1px)}
+.comingSoonAmbient i:nth-child(1){width:430px;height:430px;left:-170px;top:18%;background:radial-gradient(circle,rgba(45,190,255,.12),transparent 70%);animation:ambientDriftA 18s ease-in-out infinite alternate}
+.comingSoonAmbient i:nth-child(2){width:370px;height:370px;right:-140px;top:9%;background:radial-gradient(circle,rgba(255,205,67,.1),transparent 68%);animation:ambientDriftB 20s ease-in-out infinite alternate}
+.comingSoonAmbient i:nth-child(3){width:340px;height:340px;left:42%;bottom:-170px;background:radial-gradient(circle,rgba(47,230,151,.055),transparent 70%);animation:ambientDriftC 22s ease-in-out infinite alternate}
+.comingSoonAmbient span{position:absolute;width:3px;height:3px;border-radius:50%;background:#64dcff;box-shadow:0 0 16px rgba(100,220,255,.75);opacity:.55}
+.comingSoonAmbient span:nth-of-type(1){left:19%;top:58%;animation:ambientParticle 8s linear infinite}
+.comingSoonAmbient span:nth-of-type(2){right:18%;top:68%;animation:ambientParticle 10s linear infinite 1.8s}
+.comingSoonShell{position:relative;z-index:2;min-height:100vh;width:min(1440px,100%);margin:0 auto;padding:22px 34px 24px;display:grid;grid-template-rows:auto 1fr auto}
+.comingSoonHeader{display:flex;align-items:center;justify-content:space-between;gap:20px}.comingSoonBrand{display:flex;align-items:center;gap:11px}.comingSoonMark{width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:linear-gradient(145deg,#ffe27b,#c9870d);color:#07101a;box-shadow:0 0 28px rgba(255,196,52,.18)}.comingSoonBrand strong,.comingSoonBrand small{display:block}.comingSoonBrand strong{font-size:14px;letter-spacing:.06em}.comingSoonBrand small{font-size:8px;color:#7892aa;margin-top:2px}.comingSoonPill{display:flex;align-items:center;gap:7px;padding:7px 10px;border-radius:999px;background:rgba(8,23,37,.66);border:1px solid rgba(77,181,235,.14);color:#8db4ca;font-size:7px;font-weight:1000;letter-spacing:.12em}.comingSoonPill span{width:6px;height:6px;border-radius:50%;background:#5bd9ff;box-shadow:0 0 11px rgba(91,217,255,.8);animation:livePulse 1.4s ease-in-out infinite}
+.comingSoonHero{align-self:center;max-width:940px;padding:70px 0 52px}.comingSoonKicker{display:inline-flex;align-items:center;gap:7px;color:#62d9ff;font-size:8px;font-weight:1000;letter-spacing:.15em}.comingSoonHero h1{font-size:clamp(62px,9.2vw,132px);line-height:.79;letter-spacing:-.072em;margin:22px 0 24px;text-transform:uppercase}.comingSoonHero h1 em{font-style:normal;background:linear-gradient(180deg,#fff1a9,#ffc940 67%,#d99914);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:0 0 38px rgba(255,197,55,.07)}.comingSoonHero>p{max-width:720px;font-size:clamp(15px,1.6vw,21px);line-height:1.55;color:#a8bdd0;margin:0}
+.comingSoonStatus{display:grid;grid-template-columns:minmax(0,1fr) 170px;align-items:center;gap:20px;margin-top:34px;padding:19px 20px;border-radius:20px;background:linear-gradient(180deg,rgba(8,25,40,.78),rgba(4,14,25,.8));border:1px solid rgba(80,184,235,.13);box-shadow:0 28px 70px rgba(0,0,0,.23);backdrop-filter:blur(18px)}.comingSoonStatus>div:first-child span,.comingSoonStatus>div:first-child strong,.comingSoonStatus>div:first-child small{display:block}.comingSoonStatus>div:first-child span{font-size:7px;letter-spacing:.15em;color:#62d9ff;font-weight:1000}.comingSoonStatus>div:first-child strong{font-size:28px;margin:4px 0 3px}.comingSoonStatus>div:first-child small{font-size:9px;color:#718ca2}.comingSoonOrb{justify-self:end;width:130px;height:130px;border-radius:50%;display:grid;place-items:center;align-content:center;gap:6px;color:#74ddff;background:
+radial-gradient(circle at 35% 30%,rgba(89,216,255,.18),transparent 20%),
+radial-gradient(circle at 50% 50%,#0c3f64,#071d34 57%,#04101b 76%);border:1px solid rgba(85,199,247,.18);box-shadow:0 0 42px rgba(35,157,223,.1),inset 0 0 30px rgba(64,194,255,.07)}.comingSoonOrb span{font-size:7px;letter-spacing:.14em;font-weight:1000;color:#8ebbd0}
+.comingSoonLine{display:flex;align-items:center;gap:12px;margin-top:22px;color:#5f7b91;font-size:8px;letter-spacing:.09em;text-transform:uppercase}.comingSoonLine i{height:1px;flex:1;background:linear-gradient(90deg,transparent,rgba(77,171,220,.15))}.comingSoonLine i:last-child{background:linear-gradient(90deg,rgba(77,171,220,.15),transparent)}
+.comingSoonFooter{display:flex;align-items:center;justify-content:space-between;gap:20px;padding-top:18px;border-top:1px solid rgba(80,154,200,.08);font-size:7px;color:#4f6d83;letter-spacing:.07em}.comingSoonFooter b{color:#7895aa;font-weight:800}
+@media(max-width:720px){
+  .comingSoonShell{padding:18px 18px 20px}.comingSoonPill{font-size:0;padding:7px}.comingSoonPill:after{content:"SOON";font-size:7px}.comingSoonHero{padding:54px 0 42px}.comingSoonHero h1{font-size:clamp(58px,18vw,90px);line-height:.82;margin:18px 0 20px}.comingSoonHero>p{font-size:14px}.comingSoonStatus{grid-template-columns:1fr;padding:16px}.comingSoonOrb{display:none}.comingSoonLine{align-items:flex-start;line-height:1.5}.comingSoonLine i{display:none}.comingSoonFooter{align-items:flex-start;flex-direction:column;gap:6px}.comingSoonBrand small{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+  .comingSoonAmbient i,.comingSoonAmbient span,.comingSoonPill span{animation:none!important}
+}
