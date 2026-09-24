@@ -10,6 +10,7 @@ export async function clearPublicCompetitionContent(conn){
   await conn.query('DELETE FROM competitions');
 
   await conn.query('DELETE FROM competition_awards');
+  await conn.query('DELETE FROM funnel_events');
   await conn.query('DELETE FROM awards');
   await conn.query('DELETE FROM scoring_events');
   await conn.query('DELETE FROM match_assists');
@@ -28,7 +29,6 @@ export async function clearPublicCompetitionContent(conn){
   await conn.query('DELETE FROM season_cities');
   await conn.query('DELETE FROM season_device_claims');
   await conn.query('DELETE FROM identity_integrity_events');
-  await conn.query('DELETE FROM funnel_events');
   await conn.query('DELETE FROM moderation_cases');
 
   await conn.query('UPDATE users SET home_city_id=NULL WHERE home_city_id IS NOT NULL');
