@@ -66,9 +66,9 @@ router.post('/join', async (req,res,next)=>{
       }
     }
 
-    const [[city]]=await conn.query(`SELECT c.id,c.name,c.country,c.code,sc.is_open,sc.status
+    const [[city]]=await conn.query(`SELECT c.id,c.name,c.country,c.code,sc.is_open,sc.status,sc.next_goal_number
       FROM cities c JOIN season_cities sc ON sc.city_id=c.id AND sc.season_id=?
-      WHERE c.code=? AND c.is_active=1 LIMIT 1`,[season.id,cityCode]);
+      WHERE c.code=? AND c.is_active=1 LIMIT 1 FOR UPDATE`,[season.id,cityCode]);
     if(!city || !city.is_open || city.status==='ELIMINATED') throw Object.assign(new Error('city_not_open'),{status:409});
     let referrer=null;
     if(refPublicId){
@@ -88,10 +88,12 @@ router.post('/join', async (req,res,next)=>{
       if(existing) throw Object.assign(new Error('email_already_registered'),{status:409});
     }
     const publicId=makePublicId();
+    const goalNumber=Math.max(1,Number(city.next_goal_number||1));
     const [u]=await conn.query(`INSERT INTO users(public_id,display_name,nickname,email,home_city_id,role,status,last_seen_at)
       VALUES (?,?,?,?,?,'PLAYER','ACTIVE',UTC_TIMESTAMP())`,[publicId,displayName,nickname,email,city.id]);
-    await conn.query(`INSERT INTO city_memberships(user_id,season_id,city_id,status,verification_status,verification_method,verified_at)
-      VALUES (?,?,?,'ACTIVE','VERIFIED','DEVICE_SESSION',UTC_TIMESTAMP())`,[u.insertId,season.id,city.id]);
+    await conn.query(`UPDATE season_cities SET next_goal_number=? WHERE season_id=? AND city_id=?`,[goalNumber+1,season.id,city.id]);
+    await conn.query(`INSERT INTO city_memberships(user_id,season_id,city_id,status,verification_status,verification_method,verified_at,goal_number)
+      VALUES (?,?,?,'ACTIVE','VERIFIED','DEVICE_SESSION',UTC_TIMESTAMP(),?)`,[u.insertId,season.id,city.id,goalNumber]);
     if(referrer && Number(referrer.id)!==Number(u.insertId)){
       await conn.query(`INSERT IGNORE INTO qualification_referrals(season_id,city_id,referrer_user_id,referred_user_id,source)
         VALUES (?,?,?,?,?)`,[season.id,city.id,referrer.id,u.insertId,source]);
@@ -156,6 +158,7 @@ router.post('/join', async (req,res,next)=>{
       season:{id:season.id,name:season.name,status:season.status},
       city:{
         id:city.id,code:city.code,name:city.name,country:city.country,
+        goalNumber,
         supporterNumber,
         verified_supporters:supporterNumber,
         qualification_target:qualificationTarget,
@@ -173,10 +176,10 @@ router.post('/join', async (req,res,next)=>{
 
 router.get('/me',requireSession,async(req,res,next)=>{
   try{
-    const [[membership]]=await pool.query(`SELECT cm.season_id,cm.city_id,cm.status,cm.verification_status,cm.joined_at,c.code,c.name,c.country,s.name season_name,s.status season_status
+    const [[membership]]=await pool.query(`SELECT cm.season_id,cm.city_id,cm.status,cm.verification_status,cm.goal_number,cm.joined_at,c.code,c.name,c.country,s.name season_name,s.status season_status
       FROM city_memberships cm JOIN cities c ON c.id=cm.city_id JOIN seasons s ON s.id=cm.season_id
       WHERE cm.user_id=? ORDER BY cm.joined_at DESC LIMIT 1`,[req.identity.user_id]);
-    let qualificationImpact={goal:membership?.verification_status==='VERIFIED'?1:0,assists:0,branch:0};
+    let qualificationImpact={goal:membership?.verification_status==='VERIFIED'?1:0,goalNumber:Number(membership?.goal_number||0),assists:0,branch:0};
     if(membership?.season_id){
       const [[impact]]=await pool.query(`
         WITH RECURSIVE tree AS (
