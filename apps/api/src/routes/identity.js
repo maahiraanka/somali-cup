@@ -19,6 +19,11 @@ async function activeSeason(conn=pool){
 }
 
 router.post('/join', async (req,res,next)=>{
+  try{
+    const [[op]]=await pool.query("SELECT setting_value FROM platform_settings WHERE setting_key='JOIN_OPERATIONS_MODE' LIMIT 1");
+    if(op?.setting_value==='FROZEN')return res.status(503).json({error:'joins_temporarily_frozen'});
+  }catch(e){return next(e)}
+
   const displayName=clean(req.body?.displayName,120);
   const nickname=clean(req.body?.nickname||displayName,80);
   const email=clean(req.body?.email,190).toLowerCase()||null;
