@@ -11,6 +11,8 @@ import matchRoutes from './routes/matches.js';
 import analyticsRoutes from './routes/analytics.js';
 import tournamentRoutes from './routes/tournament.js';
 import adminTournamentRoutes from './routes/adminTournament.js';
+import adminAuthRoutes from './routes/adminAuth.js';
+import awardRoutes from './routes/awards.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -34,6 +36,8 @@ app.use('/api/qualification',qualificationRoutes);
 app.use('/api/matches',matchRoutes);
 app.use('/api/analytics',analyticsRoutes);
 app.use('/api/tournament',tournamentRoutes);
+app.use('/api/admin/auth',adminAuthRoutes);
+app.use('/api/admin/awards',awardRoutes);
 app.use('/api/admin/tournament',adminTournamentRoutes);
 app.use('/api/admin',adminRoutes);
 
