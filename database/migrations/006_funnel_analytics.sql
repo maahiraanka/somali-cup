@@ -1,0 +1,21 @@
+CREATE TABLE funnel_events (
+  id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+  event_name VARCHAR(48) NOT NULL,
+  user_id BIGINT UNSIGNED NULL,
+  season_id BIGINT UNSIGNED NULL,
+  city_id BIGINT UNSIGNED NULL,
+  match_id BIGINT UNSIGNED NULL,
+  anonymous_id CHAR(36) NULL,
+  source VARCHAR(32) NULL,
+  metadata_json JSON NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_fe_user FOREIGN KEY(user_id) REFERENCES users(id),
+  CONSTRAINT fk_fe_season FOREIGN KEY(season_id) REFERENCES seasons(id),
+  CONSTRAINT fk_fe_city FOREIGN KEY(city_id) REFERENCES cities(id),
+  CONSTRAINT fk_fe_match FOREIGN KEY(match_id) REFERENCES matches(id),
+  INDEX ix_fe_event_time(event_name,created_at),
+  INDEX ix_fe_user_time(user_id,created_at),
+  INDEX ix_fe_city_time(city_id,created_at),
+  INDEX ix_fe_match_time(match_id,created_at),
+  INDEX ix_fe_anon_time(anonymous_id,created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
