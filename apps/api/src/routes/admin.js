@@ -103,15 +103,35 @@ router.post('/launch-checks/:kind',async(req,res,next)=>{
     `,[req.admin?.user_id||null,kind,kind]).catch(()=>{});
     if(e.status){
       const payload=e.payload||{error:e.message};
+      const runType=kind==='preflight'?'PREFLIGHT':kind==='safe'?'SAFE_ACCEPTANCE':'CONTROLLED_ACCEPTANCE';
+      let structuredEvidence=null;
+      if(kind==='controlled'){
+        const [[latest]]=await pool.query(`
+          SELECT id,status,failures,warnings,evidence_json,created_at
+          FROM launch_acceptance_runs
+          WHERE run_type='CONTROLLED_ACCEPTANCE'
+          ORDER BY id DESC LIMIT 1
+        `).catch(()=>[[null]]);
+        if(latest){
+          structuredEvidence={
+            id:Number(latest.id),
+            status:latest.status,
+            failures:Number(latest.failures||0),
+            warnings:Number(latest.warnings||0),
+            evidence:latest.evidence_json,
+            createdAt:latest.created_at
+          };
+        }
+      }
       await pool.query(`
         INSERT INTO launch_acceptance_runs(run_type,status,failures,warnings,origin,evidence_json)
         VALUES (?, 'FAIL', 1, 0, ?, ?)
       `,[
-        kind==='preflight'?'PREFLIGHT':kind==='safe'?'SAFE_ACCEPTANCE':'CONTROLLED_ACCEPTANCE',
+        runType,
         process.env.APP_ORIGIN||null,
-        JSON.stringify({source:'CONTROL_CENTRE_RUNNER',kind,...payload})
+        JSON.stringify({source:'CONTROL_CENTRE_RUNNER',kind,...payload,structuredEvidence})
       ]).catch(()=>{});
-      return res.status(e.status).json(payload);
+      return res.status(e.status).json({...payload,structuredEvidence});
     }
     next(e);
   }
