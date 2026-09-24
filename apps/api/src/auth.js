@@ -5,6 +5,7 @@ const sha256 = (value) => crypto.createHash('sha256').update(value).digest('hex'
 export const makePublicId = () => crypto.randomBytes(13).toString('hex');
 export const makeSessionToken = () => crypto.randomBytes(32).toString('base64url');
 export const hashSessionToken = sha256;
+export const hashDeviceKey = sha256;
 
 export async function createSession(userId, userAgent='') {
   const token = makeSessionToken();
