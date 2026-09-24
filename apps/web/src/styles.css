@@ -283,3 +283,8 @@ linear-gradient(180deg,#091827,#030b14);border:1px solid rgba(75,190,250,.23);bo
 .joinedNumber{margin:4px auto 16px;width:min(320px,100%);padding:15px 16px;border-radius:18px;background:radial-gradient(circle at 50% 20%,rgba(255,207,74,.12),transparent 42%),#071522;border:1px solid rgba(255,207,74,.17);box-shadow:inset 0 0 0 1px rgba(255,255,255,.015)}
 .joinedNumber span,.joinedNumber strong,.joinedNumber small{display:block}.joinedNumber span{font-size:8px;color:#77dfff;font-weight:1000;letter-spacing:.17em}.joinedNumber strong{font-size:46px;line-height:1;margin:5px 0;color:#ffcf4a;letter-spacing:-.05em;text-shadow:0 0 26px rgba(255,207,74,.12)}.joinedNumber small{color:#8ea5bb;font-size:10px}
 .viralLandingContent>p b{color:#fff}.viralLandingContent>small{max-width:620px;display:block}
+
+
+/* v0.12 rivalry urgency */
+.returningRival{margin:10px 0 12px;padding:10px 12px;border-radius:11px;font-size:9px;line-height:1.4;background:#071622;border:1px solid rgba(77,167,226,.12);color:#8ea7bd}.returningRival b{color:#fff}.returningRival.leading{border-color:rgba(77,232,157,.16);background:rgba(24,76,57,.16)}.returningRival.behind{border-color:rgba(255,201,65,.17);background:rgba(87,65,18,.14)}.returningRival.tied{border-color:rgba(64,198,255,.17);background:rgba(15,66,95,.14)}
+.viralUrgency.leading{border-color:rgba(65,232,154,.16);background:rgba(28,86,62,.14)}.viralUrgency.behind{border-color:rgba(255,206,71,.17);background:rgba(91,67,20,.14)}.viralUrgency.tied{border-color:rgba(73,194,255,.18);background:rgba(22,66,94,.16)}
