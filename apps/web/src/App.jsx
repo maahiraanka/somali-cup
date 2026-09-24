@@ -59,9 +59,11 @@ async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer
       <rect x="70" y="340" width="796" height="2" fill="#274b66"/>
       <text x="70" y="390" fill="${accent}" font-family="Arial,sans-serif" font-size="25" font-weight="800" letter-spacing="4">VERIFIED SUPPORTER</text>
     </g>
-    <text x="72" y="1510" fill="#fff" font-family="Arial,sans-serif" font-size="46" font-weight="800">${esc(footer)}</text>
-    <text x="72" y="1580" fill="#6f8ea8" font-family="Arial,sans-serif" font-size="28">somalicup.com</text>
-    <text x="72" y="1805" fill="#31516d" font-family="Arial,sans-serif" font-size="28" font-weight="700" letter-spacing="5">ONE CITY • ONE SEASON • ONE CUP</text>
+    <text x="72" y="1480" fill="#fff" font-family="Arial,sans-serif" font-size="46" font-weight="800">${esc(footer)}</text>
+    <rect x="72" y="1540" width="650" height="112" rx="56" fill="${accent}"/>
+    <text x="397" y="1611" text-anchor="middle" fill="#07101a" font-family="Arial,sans-serif" font-size="34" font-weight="900">JOIN ${esc(city?.name?.toUpperCase()||'YOUR CITY')}</text>
+    <text x="72" y="1710" fill="#8eb2ca" font-family="Arial,sans-serif" font-size="28">somalicup.com/?city=${esc(city?.code||'')}</text>
+    <text x="72" y="1815" fill="#31516d" font-family="Arial,sans-serif" font-size="28" font-weight="700" letter-spacing="5">ONE CITY • ONE SEASON • ONE CUP</text>
   </svg>`;
   const svgBlob=new Blob([svg],{type:'image/svg+xml'});
   const svgUrl=URL.createObjectURL(svgBlob);
@@ -78,7 +80,7 @@ async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer
   });
   const file=new File([pngBlob],'somali-cup-status.png',{type:'image/png'});
   if(navigator.share&&navigator.canShare?.({files:[file]})){
-    try{await navigator.share({title:'Somali Cup',text:`${subtitle}\nJoin ${city?.name||'your city'}: ${window.location.origin}/?city=${city?.code||''}`,files:[file]});return 'shared'}catch(e){if(e?.name==='AbortError')return 'cancelled'}
+    try{await navigator.share({title:'Somali Cup',text:`${subtitle}\nJoin ${city?.name||'your city'}: ${window.location.origin}/?city=${city?.code||''}&src=status`,files:[file]});return 'shared'}catch(e){if(e?.name==='AbortError')return 'cancelled'}
   }
   const url=URL.createObjectURL(pngBlob);
   const a=document.createElement('a');a.href=url;a.download='somali-cup-status.png';document.body.appendChild(a);a.click();a.remove();
@@ -98,6 +100,7 @@ export default function App(){
   const [identityChecked,setIdentityChecked]=useState(false);
   const [showJoin,setShowJoin]=useState(false);
   const [joinCity,setJoinCity]=useState(null);
+  const [viralCity,setViralCity]=useState(null);
   const [joinedMoment,setJoinedMoment]=useState(null);
   const [notice,setNotice]=useState('');
   const [matches,setMatches]=useState(demoMatches);
@@ -111,12 +114,12 @@ export default function App(){
   };
   useEffect(()=>{refresh()},[]);
   useEffect(()=>{
-    if(!identityChecked||me?.membership||showJoin)return;
+    if(!identityChecked||me?.membership)return;
     const code=new URLSearchParams(window.location.search).get('city')?.toUpperCase();
-    if(!code)return;
+    if(!code){setViralCity(null);return}
     const city=standings.find(c=>c.code===code&&c.is_open);
-    if(city){setJoinCity(city);setShowJoin(true)}
-  },[standings,me,showJoin,identityChecked]);
+    if(city)setViralCity(city);
+  },[standings,me,identityChecked]);
   const top=standings[0];
   const myCity=useMemo(()=>me?.membership?standings.find(c=>c.code===me.membership.code):null,[me,standings]);
   const total=standings.reduce((a,c)=>a+Number(c.verified_supporters||0),0);
@@ -131,12 +134,15 @@ export default function App(){
     setIdentityChecked(true);
     setShowJoin(false);
     setJoinCity(null);
+    setViralCity(null);
+    window.history.replaceState({},'',window.location.pathname);
     setJoinedMoment(payload);
     setNotice(`You're in. You represent ${payload.city.name}.`);
     refresh();
     setTimeout(()=>setNotice(''),2200);
   };
   const openCity=(c)=>{setSelectedCity(c);setView('city');window.scrollTo({top:0,behavior:'smooth'})};
+  const leaveViralLanding=()=>{setViralCity(null);window.history.replaceState({},'',window.location.pathname);setView('home')};
 
   return <div className="appShell">
     <header className="topbar">
@@ -152,26 +158,54 @@ export default function App(){
       </div>
     </header>
 
-    <main className="mainStage">
-      {view==='home'&&<Home standings={standings} top={top} total={total} season={season} myCity={myCity} onJoin={requestJoin} openCity={openCity} goQualification={()=>setView('qualification')} goMatches={()=>setView('matches')}/>}
-      {view==='qualification'&&<Qualification standings={standings} season={season} onJoin={requestJoin} openCity={openCity}/>}
-      {view==='cities'&&<Cities standings={standings} openCity={openCity} onJoin={requestJoin}/>}
-      {view==='city'&&selectedCity&&<CityPage city={standings.find(c=>c.code===selectedCity.code)||selectedCity} me={me} onBack={()=>setView('cities')} onJoin={requestJoin}/>} 
-      {view==='matches'&&<MatchCenter matches={matches} me={me} onNeedIdentity={requestJoin}/>}
-      {view==='profile'&&<SupporterProfile me={me} city={myCity} season={season} onJoin={requestJoin} onCity={()=>myCity&&openCity(myCity)} onMatches={()=>setView('matches')}/>}
+    <main className={viralCity&&!me?.membership?'mainStage viralStage':'mainStage'}>
+      {viralCity&&!me?.membership?<ViralCityLanding city={viralCity} standings={standings} onJoin={()=>requestJoin(viralCity)} onOther={leaveViralLanding}/>:<>
+        {view==='home'&&<Home standings={standings} top={top} total={total} season={season} myCity={myCity} onJoin={requestJoin} openCity={openCity} goQualification={()=>setView('qualification')} goMatches={()=>setView('matches')}/>}
+        {view==='qualification'&&<Qualification standings={standings} season={season} onJoin={requestJoin} openCity={openCity}/>}
+        {view==='cities'&&<Cities standings={standings} openCity={openCity} onJoin={requestJoin}/>}
+        {view==='city'&&selectedCity&&<CityPage city={standings.find(c=>c.code===selectedCity.code)||selectedCity} me={me} onBack={()=>setView('cities')} onJoin={requestJoin}/>} 
+        {view==='matches'&&<MatchCenter matches={matches} me={me} onNeedIdentity={requestJoin}/>}
+        {view==='profile'&&<SupporterProfile me={me} city={myCity} season={season} onJoin={requestJoin} onCity={()=>myCity&&openCity(myCity)} onMatches={()=>setView('matches')}/>}
+      </>}
     </main>
 
-    <nav className="mobileDock">
+    {!viralCity&&<nav className="mobileDock">
       <button className={view==='home'?'active':''} onClick={()=>setView('home')}><Trophy size={18}/><span>Home</span></button>
       <button className={view==='qualification'?'active':''} onClick={()=>setView('qualification')}><BarChart3 size={18}/><span>Table</span></button>
       <button className={view==='matches'?'active':''} onClick={()=>setView('matches')}><Radio size={18}/><span>Matches</span></button>
       <button className={view==='cities'?'active':''} onClick={()=>setView('cities')}><MapPin size={18}/><span>Cities</span></button>
       <button className={view==='profile'?'active':''} onClick={()=>me?.membership?setView('profile'):requestJoin()}><Users size={18}/><span>{me?.membership?'Me':'Join'}</span></button>
-    </nav>
+    </nav>}
 
     {showJoin&&!me?.membership&&<JoinExperience standings={standings.filter(c=>c.is_open)} initialCity={joinCity} onClose={()=>{setShowJoin(false);setJoinCity(null)}} onJoined={joined}/>}
     {joinedMoment&&<JoinedMoment payload={joinedMoment} city={standings.find(c=>c.code===joinedMoment.city.code)||joinedMoment.city} onDone={()=>{setJoinedMoment(null);setView('profile')}}/>}
     {notice&&<div className="toast"><Check size={16}/>{notice}</div>}
+  </div>
+}
+
+function ViralCityLanding({city,standings,onJoin,onOther}){
+  const need=Math.max(0,Number(city.qualification_target||0)-Number(city.verified_supporters||0));
+  const leader=standings[0];
+  const gap=leader&&leader.code!==city.code?Math.max(0,Number(leader.verified_supporters||0)-Number(city.verified_supporters||0)):0;
+  return <div className="viralLanding">
+    <section className="viralLandingHero" style={{backgroundImage:`linear-gradient(180deg,rgba(1,7,16,.2),rgba(1,7,16,.96)),url("${imgFor(city)}")`}}>
+      <div className="viralLandingTop"><Logo/><span><i/> LIVE QUALIFICATION</span></div>
+      <div className="viralLandingContent">
+        <small>SOMEONE FROM {city.name.toUpperCase()} SENT YOU THIS</small>
+        <h1>{city.name}<br/><em>needs you.</em></h1>
+        <p>Somalia’s cities are competing for Somali Cup 2027. Every verified supporter moves their city closer to qualification.</p>
+        <div className="viralLandingNumbers">
+          <div><span>CITY RANK</span><strong>#{city.rank}</strong></div>
+          <div><span>SUPPORTERS</span><strong>{fmt(city.verified_supporters)}</strong></div>
+          <div><span>STILL NEEDED</span><strong>{fmt(need)}</strong></div>
+        </div>
+        <div className="viralLandingProgress"><div><span>{fmt(city.verified_supporters)} / {fmt(city.qualification_target)}</span><b>{Number(city.progress_pct||0).toFixed(0)}%</b></div><Progress value={city.progress_pct}/></div>
+        {gap>0&&<div className="viralUrgency"><Zap size={16}/><span><b>{fmt(gap)} supporters</b> separate {city.name} from #{leader.rank} {leader.name}.</span></div>}
+        <button className="viralJoinButton" onClick={onJoin}>I REPRESENT {city.name.toUpperCase()} <ArrowRight size={18}/></button>
+        <button className="viralOtherCity" onClick={onOther}>I represent another city</button>
+        <div className="viralTrust"><ShieldCheck size={15}/><span>One person. One city. One season.</span></div>
+      </div>
+    </section>
   </div>
 }
 
