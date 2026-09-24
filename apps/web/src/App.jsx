@@ -312,7 +312,7 @@ function ViralMatchLanding({data,me,matches,busy,onIdentity,onEnter,onLeave}){
         <p>{statusCopy} {memberCity?`Enter for ${memberCity.name}. Your verified entry can score exactly 1 Goal.`:!me?'Choose your real city first. Every active city has a current fixture.':'Somali Cup is opening your city’s current fixture.'}</p>
         {!me?<button className="matchInvitePrimary" onClick={onIdentity}>CHOOSE MY CITY <ArrowRight size={18}/></button>:
           memberCity?<button className="matchInvitePrimary" disabled={busy} onClick={onEnter}>{busy?'ENTERING…':`ENTER FOR ${memberCity.name.toUpperCase()}`} <ArrowRight size={18}/></button>:
-          <button className="matchInvitePrimary watch" onClick={onEnter}>WATCH THE MATCH <Radio size={17}/></button>}
+          <button className="matchInvitePrimary" onClick={onEnter}>OPEN MY CITY MATCH <ArrowRight size={17}/></button>}
         <button className="viralOtherCity" onClick={onLeave}>Go to Somali Cup home</button>
         <div className="viralTrust"><ShieldCheck size={15}/><span>1 verified person = 1 Goal. Invites never change your city.</span></div>
       </div>
