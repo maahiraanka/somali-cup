@@ -7,6 +7,7 @@ import { promisify } from 'node:util';
 import { pool } from '../db/pool.js';
 import { requireAdminKey } from '../auth.js';
 import { getLaunchReadiness } from '../launchReadiness.js';
+import { progressTournament } from '../tournamentProgress.js';
 const execFileAsync=promisify(execFile);
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const apiRoot=path.resolve(__dirname,'..');
@@ -321,6 +322,15 @@ router.get('/audit',async(req,res,next)=>{
       LIMIT ?
     `,[limit]);
     res.json({audit:rows});
+  }catch(e){next(e)}
+});
+
+router.post('/tournament/progress',async(req,res,next)=>{
+  try{
+    const result=await progressTournament();
+    await pool.query('INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'TOURNAMENT_MANUAL_PROGRESSION','SEASON','ACTIVE',JSON.stringify(result)]);
+    res.json(result);
   }catch(e){next(e)}
 });
 
