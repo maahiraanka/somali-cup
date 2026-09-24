@@ -48,5 +48,8 @@ await check('tournament_advancement_slots_table',()=>pool.query("SELECT target_s
 await check('tournament_events_table',()=>pool.query("SELECT event_type,created_at FROM tournament_events LIMIT 1"));
 await check('match_lifecycle_columns',()=>pool.query("SELECT regulation_ends_at,tiebreak_mode,tiebreak_started_at FROM matches LIMIT 1"));
 await check('tournament_stage_rules',()=>pool.query("SELECT tie_policy,match_duration_minutes FROM tournament_stages LIMIT 1"));
+await check('admin_credentials_table',()=>pool.query("SELECT user_id,password_updated_at FROM admin_credentials LIMIT 1"));
+await check('admin_sessions_table',()=>pool.query("SELECT user_id,expires_at FROM admin_sessions LIMIT 1"));
+await check('competition_awards_table',()=>pool.query("SELECT season_id,award_type,status FROM competition_awards LIMIT 1"));
 await pool.end();
 if(!ok) process.exit(1);
