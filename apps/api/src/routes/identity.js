@@ -32,7 +32,8 @@ router.post('/join', async (req,res,next)=>{
   const referredBy=clean(req.body?.referredBy,80)||null;
   const refPublicId=clean(req.body?.refPublicId,64)||null;
   const deviceKey=clean(req.body?.deviceKey,128);
-  const deviceHash=deviceKey.length>=24?hashDeviceKey(deviceKey):null;
+  if(deviceKey.length<24) return res.status(400).json({error:'device_key_required'});
+  const deviceHash=hashDeviceKey(deviceKey);
   const netHash=networkHash(req);
   const uaHash=hashUa(req.get('user-agent')||'');
   if(displayName.length<2) return res.status(400).json({error:'display_name_required'});
