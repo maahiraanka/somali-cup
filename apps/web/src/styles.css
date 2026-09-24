@@ -277,3 +277,9 @@ linear-gradient(180deg,#091827,#030b14);border:1px solid rgba(75,190,250,.23);bo
 
 .viralJoinMicro{display:block;width:min(620px,100%);text-align:center;margin-top:8px;color:#718ca4;font-size:8px;font-weight:800;letter-spacing:.04em}
 .viralStage,.viralLanding,.viralLandingHero{min-height:100vh}
+
+
+/* v0.11 supporter-number achievement + personal challenge */
+.joinedNumber{margin:4px auto 16px;width:min(320px,100%);padding:15px 16px;border-radius:18px;background:radial-gradient(circle at 50% 20%,rgba(255,207,74,.12),transparent 42%),#071522;border:1px solid rgba(255,207,74,.17);box-shadow:inset 0 0 0 1px rgba(255,255,255,.015)}
+.joinedNumber span,.joinedNumber strong,.joinedNumber small{display:block}.joinedNumber span{font-size:8px;color:#77dfff;font-weight:1000;letter-spacing:.17em}.joinedNumber strong{font-size:46px;line-height:1;margin:5px 0;color:#ffcf4a;letter-spacing:-.05em;text-shadow:0 0 26px rgba(255,207,74,.12)}.joinedNumber small{color:#8ea5bb;font-size:10px}
+.viralLandingContent>p b{color:#fff}.viralLandingContent>small{max-width:620px;display:block}
