@@ -448,6 +448,14 @@ function MatchCenter({matches,me,onNeedIdentity}){
   const home=match.home||{code:match.home_code,name:match.home_name,country:'Somalia',score:match.home_score||0};
   const away=match.away||{code:match.away_code,name:match.away_name,country:'Somalia',score:match.away_score||0};
   const homeScore=Number(home.score||0),awayScore=Number(away.score||0);
+  const homeActive=Number(live?.counts?.homeActive||0);
+  const awayActive=Number(live?.counts?.awayActive||0);
+  const activeTotal=homeActive+awayActive;
+  const homeSupportPct=activeTotal?Math.round(homeActive*100/activeTotal):0;
+  const awaySupportPct=activeTotal?100-homeSupportPct:0;
+  const scoreTotal=homeScore+awayScore;
+  const homeScorePct=scoreTotal?Math.round(homeScore*100/scoreTotal):0;
+  const awayScorePct=scoreTotal?100-homeScorePct:0;
   const leader=homeScore===awayScore?null:(homeScore>awayScore?home:away);
   const trailing=homeScore===awayScore?null:(homeScore>awayScore?away:home);
   const leadMargin=Math.abs(homeScore-awayScore);
@@ -472,10 +480,10 @@ function MatchCenter({matches,me,onNeedIdentity}){
   return <div className="matchExperience">
     <section className="broadcastHero">
       <div className="matchSide homeSide" style={{backgroundImage:`linear-gradient(90deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(home)}")`}}><CityThumb city={home} size="lg"/><h2>{home.name}</h2><small>MOGADISHU</small></div>
-      <div className="scoreBoard"><div className="liveBadge red"><span/> {match.status}</div><small>{match.roundCode||match.round_code}</small><strong>{fmt(home.score)} <em>–</em> {fmt(away.score)}</strong><span className="matchClock">62:18</span></div>
+      <div className="scoreBoard"><div className={"liveBadge "+(match.status==='LIVE'?'red':'')}><span/> {match.status}</div><small>{match.roundCode||match.round_code}</small><strong>{fmt(home.score)} <em>–</em> {fmt(away.score)}</strong><span className="matchClock">{match.status==='LIVE'?'VERIFIED SCORE':match.status==='LOBBY'?'LOBBY OPEN':match.status==='SCHEDULED'?'UPCOMING':match.status}</span></div>
       <div className="matchSide awaySide" style={{backgroundImage:`linear-gradient(270deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(away)}")`}}><CityThumb city={away} size="lg"/><h2>{away.name}</h2><small>HARGEISA</small></div>
     </section>
-    <section className="supportMeter"><div><b>58%</b><span>{fmt(live?.counts?.homeActive||0)} supporters</span></div><div className="meterTrack"><i/><em/></div><div><b>42%</b><span>{fmt(live?.counts?.awayActive||0)} supporters</span></div></section>
+    <section className="supportMeter"><div><b>{homeSupportPct}%</b><span>{fmt(homeActive)} active</span></div><div className="meterTrack"><i style={{width:`${homeSupportPct}%`}}/><em style={{width:`${awaySupportPct}%`}}/></div><div><b>{awaySupportPct}%</b><span>{fmt(awayActive)} active</span></div></section>
 
     <section className="matchNextAction">
       <div className="nextActionCopy">
@@ -483,10 +491,10 @@ function MatchCenter({matches,me,onNeedIdentity}){
         {!me?<><h3>Choose your city first.</h3><p>Your city identity decides which side you can represent in Somali Cup.</p></>:
         !myMatchCity?<><h3>Watch this rivalry.</h3><p>Your city is not playing in this fixture, so there is nothing you need to do here.</p></>:
         !mine?<><h3>Join {myMatchCity.name} in this match.</h3><p>Reserve your place. When it goes live, your verified entry scores 1 Goal.</p></>:
-        mine.status==='REGISTERED'&&match.status==='LIVE'?<><h3>Enter now. Score once.</h3><p>Your verified entry will add exactly one goal for {myMatchCity.name}.</p></>:
+        mine.status==='REGISTERED'&&match.status==='LIVE'?<><h3>Enter now. Score once.</h3><p>Your verified entry scores exactly 1 Goal for {myMatchCity.name}.</p></>:
         mine.status==='REGISTERED'?<><h3>Your place is reserved.</h3><p>Use your personal link to bring your city into the lobby before kickoff.</p></>:
         match.status==='FINAL'?<><h3>Full time. Share the result.</h3><p>Turn the finish into the next Somali Cup moment.</p></>:
-        <><h3>Your Goal is in. Go for the Assist.</h3><p>Bring up to three Goals scored from {myMatchCity.name}. Each person scores only for themselves.</p></>}
+        <><h3>Your Goal is in. Go for the Assist.</h3><p>Bring one person through your link. If they join, you get the Assist and they score their own Goal.</p></>}
       </div>
       <div className="nextActionButton">
         {!me?<button className="goldBtn" onClick={onNeedIdentity}>CHOOSE MY CITY <ArrowRight size={16}/></button>:
@@ -509,9 +517,9 @@ function MatchCenter({matches,me,onNeedIdentity}){
         <p>{leader?`${trailing.name} need a response. Every verified supporter can still move this match.`:'The pressure is balanced. One verified supporter can break the deadlock.'}</p>
       </div>
       <div className="pressureBattle">
-        <div className="pressureCity home"><span>{home.code}</span><b>{homeScore}</b><i style={{height:`${Math.min(100,42+homeScore*7)}%`}}/></div>
-        <div className="pressureCore"><Zap size={17}/><strong>FAN PRESSURE</strong><small>Live supporter momentum</small></div>
-        <div className="pressureCity away"><span>{away.code}</span><b>{awayScore}</b><i style={{height:`${Math.min(100,42+awayScore*7)}%`}}/></div>
+        <div className="pressureCity home"><span>{home.code}</span><b>{homeScore}</b><i style={{height:`${homeScorePct}%`}}/></div>
+        <div className="pressureCore"><Zap size={17}/><strong>SCORE PRESSURE</strong><small>Verified Goal balance</small></div>
+        <div className="pressureCity away"><span>{away.code}</span><b>{awayScore}</b><i style={{height:`${awayScorePct}%`}}/></div>
       </div>
       <div className="nextMoment">
         <small>NEXT MOMENT</small>
@@ -520,20 +528,16 @@ function MatchCenter({matches,me,onNeedIdentity}){
       </div>
     </section>
 
-    <div className="matchTabs"><button className="active"><Radio size={15}/> Live</button><button><Clock3 size={15}/> Timeline</button><button><BarChart3 size={15}/> Stats</button><button><Users size={15}/> Lineups</button><button><Heart size={15}/> Fan Activity</button></div>
-
-    <section className="stadiumRibbon">
-      <div><span className="ribbonDot live"/><b>LIVE STADIUM</b><small>{fmt(live?.counts?.total||0)} inside the match</small></div>
-      <div><span className="ribbonDot cyan"/><b>{fmt(live?.counts?.registered||0)}</b><small>waiting to enter</small></div>
-      <div><span className="ribbonDot gold"/><b>{fmt((live?.counts?.homeActive||0)+(live?.counts?.awayActive||0))}</b><small>active supporters</small></div>
-      <div><span className="ribbonDot green"/><b>{match.scoreVersion||0}</b><small>verified score events</small></div>
+    <section className="verifiedActivityPanel">
+      <div className="panelHead"><div><small>VERIFIED MATCH ACTIVITY</small><h3>{commentary.length?'Goals happening now':'Waiting for the first verified Goal'}</h3></div><ShieldCheck/></div>
+      <div className="verifiedActivityFeed">
+        {commentary.length?commentary.map((a,i)=><div key={a.id||i}>
+          <span className={a.city_code===home.code?'activitySide home':'activitySide away'}>{a.city_code||'SC'}</span>
+          <div><b>{a.nickname||a.display_name||'Supporter'}</b><p>{a.type==='GOAL'?'scored a verified Goal for '+(a.city_name||a.city_code)+'.':a.type==='ASSIST'?'earned a verified Assist for '+(a.city_name||a.city_code)+'.':'created a verified match event for '+(a.city_name||a.city_code)+'.'}</p></div>
+          <time>{a.created_at?new Date(a.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):''}</time>
+        </div>):<div className="truthEmpty"><ShieldCheck size={19}/><div><b>No verified scoring events yet.</b><p>When a supporter enters and scores, it will appear here.</p></div></div>}
+      </div>
     </section>
-
-    <section className="matchContentGrid">
-      <div className="panel momentumPanel"><div className="panelHead"><div><small>LIVE PRESSURE</small><h3>Match Momentum</h3></div><Sparkles/></div><div className="momentumChart"><svg viewBox="0 0 600 210" preserveAspectRatio="none"><defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#23c9ff" stopOpacity=".5"/><stop offset="100%" stopColor="#23c9ff" stopOpacity="0"/></linearGradient></defs><path d="M0 160 C45 140 55 95 95 122 S150 92 180 115 S230 60 265 95 S330 145 355 115 S410 55 450 90 S515 62 600 80 L600 210 L0 210Z" fill="url(#area)"/><path d="M0 160 C45 140 55 95 95 122 S150 92 180 115 S230 60 265 95 S330 145 355 115 S410 55 450 90 S515 62 600 80" fill="none" stroke="#23c9ff" strokeWidth="5"/></svg><span className="eventDot d1">⚽</span><span className="eventDot d2">⚡</span><span className="eventDot d3">⚽</span></div></div>
-      <div className="panel activityPanel"><div className="panelHead"><div><small>RIGHT NOW</small><h3>Live Fan Activity</h3></div><span className="activityFilter">All Activity</span></div><div className="activityFeed">{['Ayaan M. · Mogadishu','Ubah M. · Hargeisa','Yusuf H. · Kismayo','Fadumo S. · Garowe'].map((n,i)=><div key={n}><span className="feedAvatar">{n[0]}</span><div><b>{n}</b><small>{i===0?'Mogadishu is pushing! 🔥':i===1?'Hargeisa responds! 💛':'City pride is building. 🇸🇴'}</small></div><strong>♥ {142-i*27}</strong></div>)}</div></div>
-    </section>
-
     <section className="benchAndCommentary">
       <div className="callBenchCard">
         <div className="benchHead"><div><small>CALL THE BENCH</small><h3>Bring 3 people into your squad.</h3></div><UserPlus size={22}/></div>
@@ -545,33 +549,8 @@ function MatchCenter({matches,me,onNeedIdentity}){
         {benchPulse>0&&<small className="benchHint">Link ready. Share it on WhatsApp or WhatsApp Status.</small>}
       </div>
 
-      <div className="commentaryCard">
-        <div className="benchHead"><div><small>LIVE COMMENTARY</small><h3>What’s happening now.</h3></div><Radio size={21}/></div>
-        <div className="commentaryFeed">
-          {commentary.length?commentary.map((a,i)=><div key={a.id||i}><span className="commentMinute">{Math.max(1,62-i*4)}′</span><i className={a.city_code===home.code?'home':'away'}/><p><b>{a.city_name||a.city_code}</b> · {(a.nickname||a.display_name||'Supporter')} {a.type==='GOAL'?'entered and scored a verified goal.':a.type==='ASSIST'?'created an assist.':'moved the match.'}</p></div>):<>
-            <div><span className="commentMinute">62′</span><i className="home"/><p><b>{home.name}</b> supporters are pushing the pressure line.</p></div>
-            <div><span className="commentMinute">58′</span><i className="away"/><p><b>{away.name}</b> bench activity is building.</p></div>
-            <div><span className="commentMinute">HT</span><i/><p>Second-half supporter window is open.</p></div>
-          </>}
-        </div>
-      </div>
-
-      <div className="motmCard">
-        <div className="motmHalo"><Trophy size={30}/></div>
-        <small>MAN OF THE MATCH</small>
-        <h3>{match.status==='FINAL'?'Award ready':'Race still open'}</h3>
-        <p>Verified branch impact decides who created the strongest supporter chain — not raw link sends.</p>
-        <div className="motmStats"><div><b>{mine?.assists??mine?.direct_joins??0}</b><span>Your assists</span></div><div><b>{mine?.downstream_joins??0}</b><span>Your branch</span></div></div>
-        <span className="motmLock"><LockKeyhole size={14}/>{match.status==='FINAL'?'Full-time award can now be confirmed':'Unlocks at full time'}</span>
-      </div>
     </section>
 
-        <section className="matchActionGrid">
-      <div className="actionPanel"><small>SUPPORT YOUR CITY</small><h3>Every supporter moves the match.</h3>{!me?<button className="blueBtn" onClick={onNeedIdentity}>Create supporter identity</button>:!mine?<button className="blueBtn" disabled={busy} onClick={join}>Join this match</button>:mine.status==='REGISTERED'&&match.status==='LIVE'?<button className="goldBtn" disabled={busy} onClick={activate}><Play size={16}/> Enter Live & Score</button>:<div className="activeState"><Check/> You're active in this match</div>}</div>
-      <div className="actionPanel"><small>YOUR MATCH LINK</small><h3>Bring your people into the stadium.</h3><div className="shareFake">{mine?'somalicup.com/your-match-link':'Join the match to unlock your link'}<Link2 size={15}/></div>{mine&&<button className="glassBtn" onClick={copyLink}><Share2 size={15}/> Copy Personal Link</button>}</div>
-      <div className="actionPanel impactPoints"><small>CONTRIBUTE TO IMPACT</small><div><span>⚽</span><b>Goal</b><strong>You join</strong></div><div><span>🟢</span><b>Assist</b><strong>They join</strong></div><div><span>🤝</span><b>Branch</b><strong>They bring more</strong></div></div>
-      <div className="actionPanel shareMoments"><small>SHARE THE MOMENT</small><h3>Turn your match into a Status.</h3><div className="momentButtons"><button onClick={()=>shareMoment('callup')}><Share2 size={14}/> Call-Up</button>{mine?.status==='ACTIVE'&&<button onClick={()=>shareMoment('goal')}>⚽ Goal</button>}{Number(mine?.assists??mine?.direct_joins??0)>0&&<button onClick={()=>shareMoment('assist')}>🟢 Assist</button>}<button onClick={()=>shareMoment('motm')}><Trophy size={14}/> Impact</button></div></div>
-    </section>
     </>}
 
     {match.status==='FINAL'&&<section className="fullTimeStage">
