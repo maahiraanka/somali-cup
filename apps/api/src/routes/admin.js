@@ -296,10 +296,13 @@ router.get('/supporters',async(req,res,next)=>{
     const q=String(req.query.q||'').trim().slice(0,80);
     const like='%'+q+'%';
     const [rows]=await pool.query(`
-      SELECT u.public_id,u.display_name,u.nickname,u.email,u.status,u.created_at,
+      SELECT u.id user_id,u.public_id,u.display_name,u.nickname,u.email,u.status,u.created_at,
         c.code city_code,c.name city_name,
         cm.goal_number,cm.verification_status,cm.joined_at,
-        (SELECT COUNT(*) FROM qualification_referrals qr WHERE qr.season_id=cm.season_id AND qr.referrer_user_id=u.id) assists
+        (SELECT COUNT(*) FROM qualification_referrals qr WHERE qr.season_id=cm.season_id AND qr.referrer_user_id=u.id) assists,
+        (SELECT COUNT(*) FROM qualification_referrals qr2 WHERE qr2.season_id=cm.season_id AND (qr2.referrer_user_id=u.id OR qr2.referred_user_id=u.id)) referral_links,
+        (SELECT COUNT(*) FROM season_device_claims sdc WHERE sdc.user_id=u.id) device_claims,
+        (SELECT COUNT(*) FROM identity_integrity_events iie WHERE iie.user_id=u.id AND iie.event_type IN ('DUPLICATE_DEVICE_BLOCKED','NETWORK_BURST_SIGNAL')) integrity_flags
       FROM users u
       JOIN city_memberships cm ON cm.user_id=u.id
       JOIN cities c ON c.id=cm.city_id
@@ -390,6 +393,35 @@ router.patch('/qualification/cities/:cityId',async(req,res,next)=>{
   }catch(e){await conn.rollback();if(e.status)return res.status(e.status).json({error:e.message});next(e)}finally{conn.release()}
 });
 
+router.patch('/supporters/:publicId/status',async(req,res,next)=>{
+  const target=String(req.body?.status||'').toUpperCase();
+  if(!['ACTIVE','SUSPENDED'].includes(target))return res.status(400).json({error:'invalid_supporter_status'});
+  const reason=String(req.body?.reason||'').trim().slice(0,255);
+  if(reason.length<5)return res.status(400).json({error:'reason_required'});
+  if(String(req.body?.confirmation||'')!=='CONFIRM SUPPORTER STATUS')return res.status(400).json({error:'supporter_status_confirmation_required'});
+  const conn=await pool.getConnection();
+  try{
+    await conn.beginTransaction();
+    const [[user]]=await conn.query("SELECT id,public_id,status,role FROM users WHERE public_id=? LIMIT 1 FOR UPDATE",[req.params.publicId]);
+    if(!user)throw Object.assign(new Error('supporter_not_found'),{status:404});
+    if(user.role!=='PLAYER')throw Object.assign(new Error('player_only_operation'),{status:409});
+    const from=user.status;
+    if(from===target){await conn.commit();return res.json({ok:true,changed:false,status:target})}
+    await conn.query('UPDATE users SET status=? WHERE id=?',[target,user.id]);
+    if(target==='SUSPENDED'){
+      await conn.query('UPDATE identity_sessions SET revoked_at=UTC_TIMESTAMP() WHERE user_id=? AND revoked_at IS NULL',[user.id]);
+    }
+    await conn.query('INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,target==='SUSPENDED'?'SUPPORTER_SUSPENDED':'SUPPORTER_REINSTATED','USER',String(user.id),JSON.stringify({publicId:user.public_id,from,to:target,reason})]);
+    await conn.commit();
+    res.json({ok:true,changed:true,from,to:target});
+  }catch(e){
+    await conn.rollback();
+    if(e.status)return res.status(e.status).json({error:e.message});
+    next(e);
+  }finally{conn.release()}
+});
+
 router.get('/integrity',async(req,res,next)=>{
   try{
     const days=Math.max(1,Math.min(30,Number(req.query.days)||7));
@@ -406,9 +438,12 @@ router.get('/integrity',async(req,res,next)=>{
       SELECT iie.id,iie.event_type,iie.created_at,iie.user_id,
         LEFT(iie.device_hash,12) device_hint,
         LEFT(iie.network_hash,12) network_hint,
-        iie.metadata_json,u.public_id,u.display_name
+        iie.metadata_json,iie.review_status,iie.review_notes,iie.reviewed_at,
+        ru.display_name reviewed_by_name,
+        u.public_id,u.display_name
       FROM identity_integrity_events iie
       LEFT JOIN users u ON u.id=iie.user_id
+      LEFT JOIN users ru ON ru.id=iie.reviewed_by_user_id
       WHERE iie.event_type IN ('DUPLICATE_DEVICE_BLOCKED','NETWORK_BURST_SIGNAL','DEVICE_RECOVERED')
         AND iie.created_at>=UTC_TIMESTAMP()-INTERVAL ? DAY
       ORDER BY iie.id DESC
@@ -424,6 +459,25 @@ router.get('/integrity',async(req,res,next)=>{
       },
       recent
     });
+  }catch(e){next(e)}
+});
+
+router.patch('/integrity/:eventId/review',async(req,res,next)=>{
+  const eventId=Number(req.params.eventId);
+  const status=String(req.body?.status||'').toUpperCase();
+  const notes=String(req.body?.notes||'').trim().slice(0,500);
+  if(!Number.isInteger(eventId)||eventId<1)return res.status(400).json({error:'invalid_integrity_event'});
+  if(!['REVIEWED','DISMISSED'].includes(status))return res.status(400).json({error:'invalid_review_status'});
+  if(notes.length<3)return res.status(400).json({error:'review_notes_required'});
+  try{
+    const [result]=await pool.query(
+      'UPDATE identity_integrity_events SET review_status=?,review_notes=?,reviewed_by_user_id=?,reviewed_at=UTC_TIMESTAMP() WHERE id=?',
+      [status,notes,req.admin?.user_id||null,eventId]
+    );
+    if(!result.affectedRows)return res.status(404).json({error:'integrity_event_not_found'});
+    await pool.query('INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,status==='DISMISSED'?'INTEGRITY_SIGNAL_DISMISSED':'INTEGRITY_SIGNAL_REVIEWED','INTEGRITY_EVENT',String(eventId),JSON.stringify({status,notes})]);
+    res.json({ok:true,status});
   }catch(e){next(e)}
 });
 
