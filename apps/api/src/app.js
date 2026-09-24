@@ -13,6 +13,8 @@ import tournamentRoutes from './routes/tournament.js';
 import adminTournamentRoutes from './routes/adminTournament.js';
 import adminAuthRoutes from './routes/adminAuth.js';
 import awardRoutes from './routes/awards.js';
+import competitionRoutes from './routes/competitions.js';
+import adminCompetitionRoutes from './routes/adminCompetitions.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -27,10 +29,11 @@ if(config.env!=='production'){
 app.get('/api/health',(_req,res)=>res.json({
   ok:true,
   service:'somali-cup-api',
-  version:'0.3.1-vercel-staging-adapter'
+  version:'0.4.0-multi-tournament-foundation'
 }));
 
 app.use('/api/public',publicRoutes);
+app.use('/api/competitions',competitionRoutes);
 app.use('/api/identity',identityRoutes);
 app.use('/api/qualification',qualificationRoutes);
 app.use('/api/matches',matchRoutes);
@@ -38,6 +41,7 @@ app.use('/api/analytics',analyticsRoutes);
 app.use('/api/tournament',tournamentRoutes);
 app.use('/api/admin/auth',adminAuthRoutes);
 app.use('/api/admin/awards',awardRoutes);
+app.use('/api/admin/competitions',adminCompetitionRoutes);
 app.use('/api/admin/tournament',adminTournamentRoutes);
 app.use('/api/admin',adminRoutes);
 
