@@ -181,6 +181,23 @@ await check('tournament_api',async()=>{
   return body.stages.length+' published stages';
 });
 
+let competitions=null;
+await check('competitions_hub_api',async()=>{
+  const {response,body}=await request('/api/competitions',{expectJson:true});
+  if(response.status!==200||!body||!Array.isArray(body.competitions))throw new Error('invalid competitions response');
+  competitions=body.competitions;
+  const somaliCup=competitions.find(c=>c.slug==='somali-cup');
+  if(!somaliCup)throw new Error('Somali Cup missing from competition hub');
+  if(!somaliCup.language?.person||!somaliCup.language?.join)throw new Error('simple language pack missing');
+  return competitions.length+' competition(s) published';
+});
+
+await check('somali_cup_competition_detail',async()=>{
+  const {response,body}=await request('/api/competitions/somali-cup',{expectJson:true});
+  if(response.status!==200||body?.competition?.slug!=='somali-cup'||!Array.isArray(body?.choices))throw new Error('invalid Somali Cup competition detail');
+  return body.choices.length+' choices';
+});
+
 await check('identity_protected_without_session',async()=>{
   const {response,body}=await request('/api/identity/me',{expectJson:true});
   if(response.status!==401)throw new Error('expected 401; got '+response.status);
