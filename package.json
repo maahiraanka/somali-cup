@@ -1,7 +1,7 @@
 {
   "name": "somali-cup",
   "private": true,
-  "version": "0.4.1-best-city-progression",
+  "version": "0.4.2-competition-creator",
   "type": "module",
   "engines": {
     "node": ">=22"
