@@ -564,6 +564,87 @@ router.patch('/qualification/cities/:cityId',async(req,res,next)=>{
   }catch(e){await conn.rollback();if(e.status)return res.status(e.status).json({error:e.message});next(e)}finally{conn.release()}
 });
 
+router.get('/supporters/:publicId/detail',async(req,res,next)=>{
+  try{
+    const [[user]]=await pool.query(`
+      SELECT u.id,u.public_id,u.display_name,u.nickname,u.email,u.status,u.created_at,u.last_seen_at,
+        cm.id membership_id,cm.season_id,cm.city_id,cm.status membership_status,cm.verification_status,cm.verification_method,cm.goal_number,cm.joined_at,cm.verified_at,
+        c.code city_code,c.name city_name
+      FROM users u
+      LEFT JOIN city_memberships cm ON cm.user_id=u.id
+      LEFT JOIN cities c ON c.id=cm.city_id
+      WHERE u.public_id=? AND u.role='PLAYER'
+      ORDER BY cm.season_id DESC LIMIT 1
+    `,[req.params.publicId]);
+    if(!user)return res.status(404).json({error:'supporter_not_found'});
+
+    const [[assist]]=await pool.query(`
+      SELECT COUNT(*) direct_assists
+      FROM qualification_referrals
+      WHERE season_id=? AND referrer_user_id=?
+    `,[user.season_id,user.id]);
+
+    const [[branch]]=await pool.query(`
+      WITH RECURSIVE branch AS (
+        SELECT qr.referred_user_id,1 depth
+        FROM qualification_referrals qr
+        WHERE qr.season_id=? AND qr.referrer_user_id=?
+        UNION ALL
+        SELECT qr.referred_user_id,b.depth+1
+        FROM qualification_referrals qr
+        JOIN branch b ON qr.referrer_user_id=b.referred_user_id
+        WHERE qr.season_id=? AND b.depth<12
+      )
+      SELECT COUNT(DISTINCT referred_user_id) branch_count,COALESCE(MAX(depth),0) max_depth
+      FROM branch
+    `,[user.season_id,user.id,user.season_id]);
+
+    const [devices]=await pool.query(`
+      SELECT id,LEFT(device_hash,12) device_hint,first_seen_at,last_seen_at
+      FROM season_device_claims WHERE user_id=? ORDER BY last_seen_at DESC
+    `,[user.id]);
+
+    const [integrity]=await pool.query(`
+      SELECT id,event_type,LEFT(device_hash,12) device_hint,LEFT(network_hash,12) network_hint,
+        metadata_json,review_status,review_notes,reviewed_at,created_at
+      FROM identity_integrity_events
+      WHERE user_id=?
+      ORDER BY id DESC LIMIT 100
+    `,[user.id]);
+
+    const [matches]=await pool.query(`
+      SELECT mp.id participation_id,mp.status participation_status,mp.generation,mp.created_at,mp.activated_at,mp.revoked_at,
+        m.public_id match_public_id,m.status match_status,m.round_code,m.starts_at,m.home_score,m.away_score,
+        hc.code home_code,ac.code away_code,c.code supporter_city_code,
+        EXISTS(SELECT 1 FROM scoring_events se WHERE se.participation_id=mp.id AND se.type='GOAL') scored,
+        (SELECT COUNT(*) FROM match_assists ma WHERE ma.assister_participation_id=mp.id) match_assists
+      FROM match_participations mp
+      JOIN matches m ON m.id=mp.match_id
+      JOIN cities hc ON hc.id=m.home_city_id
+      JOIN cities ac ON ac.id=m.away_city_id
+      JOIN cities c ON c.id=mp.city_id
+      WHERE mp.user_id=?
+      ORDER BY m.starts_at DESC,m.id DESC
+      LIMIT 100
+    `,[user.id]);
+
+    res.json({
+      supporter:{
+        ...user,
+        id:Number(user.id),
+        membership_id:user.membership_id?Number(user.membership_id):null,
+        goal_number:Number(user.goal_number||0),
+        direct_assists:Number(assist?.direct_assists||0),
+        branch_count:Number(branch?.branch_count||0),
+        branch_depth:Number(branch?.max_depth||0)
+      },
+      devices,
+      integrity,
+      matches:matches.map(m=>({...m,participation_id:Number(m.participation_id),scored:Boolean(m.scored),match_assists:Number(m.match_assists||0)}))
+    });
+  }catch(e){next(e)}
+});
+
 router.patch('/supporters/:publicId/status',async(req,res,next)=>{
   const target=String(req.body?.status||'').toUpperCase();
   if(!['ACTIVE','SUSPENDED'].includes(target))return res.status(400).json({error:'invalid_supporter_status'});
@@ -698,6 +779,124 @@ router.post('/matches',async(req,res,next)=>{
     await conn.commit();
     res.status(201).json({publicId,status:'SCHEDULED'});
   }catch(e){await conn.rollback();if(e.status)return res.status(e.status).json({error:e.message});next(e)}finally{conn.release()}
+});
+
+router.get('/matches/:publicId/detail',async(req,res,next)=>{
+  try{
+    const [[match]]=await pool.query(`
+      SELECT m.*,hc.code home_code,hc.name home_name,ac.code away_code,ac.name away_name,
+        wc.code winner_code,wc.name winner_name
+      FROM matches m
+      JOIN cities hc ON hc.id=m.home_city_id
+      JOIN cities ac ON ac.id=m.away_city_id
+      LEFT JOIN cities wc ON wc.id=m.winner_city_id
+      WHERE m.public_id=? LIMIT 1
+    `,[req.params.publicId]);
+    if(!match)return res.status(404).json({error:'match_not_found'});
+
+    const [scores]=await pool.query(`
+      SELECT se.id,se.type,se.points,se.reason,se.created_at,se.participation_id,
+        c.code city_code,c.name city_name,
+        u.public_id supporter_public_id,u.display_name supporter_name
+      FROM scoring_events se
+      JOIN cities c ON c.id=se.city_id
+      LEFT JOIN match_participations mp ON mp.id=se.participation_id
+      LEFT JOIN users u ON u.id=mp.user_id
+      WHERE se.match_id=?
+      ORDER BY se.id
+    `,[match.id]);
+
+    const [states]=await pool.query(`
+      SELECT mse.id,mse.from_status,mse.to_status,mse.metadata_json,mse.created_at,
+        u.display_name actor_name,u.email actor_email
+      FROM match_state_events mse
+      LEFT JOIN users u ON u.id=mse.actor_user_id
+      WHERE mse.match_id=?
+      ORDER BY mse.id
+    `,[match.id]);
+
+    const [participants]=await pool.query(`
+      SELECT mp.id,mp.status,mp.generation,mp.created_at,mp.activated_at,mp.revoked_at,
+        u.public_id,u.display_name,u.nickname,c.code city_code,c.name city_name,
+        EXISTS(SELECT 1 FROM scoring_events se WHERE se.participation_id=mp.id AND se.type='GOAL') scored,
+        (SELECT COUNT(*) FROM match_assists ma WHERE ma.assister_participation_id=mp.id) assists,
+        (SELECT COUNT(*) FROM match_participations child WHERE child.parent_participation_id=mp.id) direct_recruits
+      FROM match_participations mp
+      JOIN users u ON u.id=mp.user_id
+      JOIN cities c ON c.id=mp.city_id
+      WHERE mp.match_id=?
+      ORDER BY mp.created_at,mp.id
+    `,[match.id]);
+
+    const [assists]=await pool.query(`
+      SELECT ma.id,ma.created_at,c.code city_code,
+        au.public_id assister_public_id,au.display_name assister_name,
+        su.public_id scorer_public_id,su.display_name scorer_name
+      FROM match_assists ma
+      JOIN cities c ON c.id=ma.city_id
+      JOIN match_participations ap ON ap.id=ma.assister_participation_id
+      JOIN users au ON au.id=ap.user_id
+      JOIN match_participations sp ON sp.id=ma.scorer_participation_id
+      JOIN users su ON su.id=sp.user_id
+      WHERE ma.match_id=?
+      ORDER BY ma.id
+    `,[match.id]);
+
+    const [audit]=await pool.query(`
+      SELECT al.id,al.action,al.metadata_json,al.created_at,u.display_name actor_name
+      FROM audit_log al
+      LEFT JOIN users u ON u.id=al.actor_user_id
+      WHERE al.entity_type='MATCH' AND al.entity_id=?
+      ORDER BY al.id DESC LIMIT 100
+    `,[String(match.id)]);
+
+    res.json({
+      match:{...match,id:Number(match.id)},
+      scores,
+      states,
+      assists,
+      participants:participants.map(p=>({...p,id:Number(p.id),scored:Boolean(p.scored),assists:Number(p.assists||0),direct_recruits:Number(p.direct_recruits||0)})),
+      audit
+    });
+  }catch(e){next(e)}
+});
+
+router.patch('/matches/:publicId/participations/:participationId',async(req,res,next)=>{
+  const participationId=Number(req.params.participationId);
+  const target=String(req.body?.status||'').toUpperCase();
+  const reason=String(req.body?.reason||'').trim().slice(0,255);
+  if(!Number.isInteger(participationId)||participationId<1||!['REGISTERED','REVOKED'].includes(target))return res.status(400).json({error:'invalid_participation_recovery'});
+  if(reason.length<5)return res.status(400).json({error:'reason_required'});
+  if(String(req.body?.confirmation||'')!=='CONFIRM RESERVATION RECOVERY')return res.status(400).json({error:'reservation_recovery_confirmation_required'});
+  const conn=await pool.getConnection();
+  try{
+    await conn.beginTransaction();
+    const [[row]]=await conn.query(`
+      SELECT mp.*,m.id match_id,m.public_id
+      FROM match_participations mp
+      JOIN matches m ON m.id=mp.match_id
+      WHERE mp.id=? AND m.public_id=?
+      LIMIT 1 FOR UPDATE
+    `,[participationId,req.params.publicId]);
+    if(!row)throw Object.assign(new Error('participation_not_found'),{status:404});
+    const [[scored]]=await conn.query("SELECT COUNT(*) total FROM scoring_events WHERE participation_id=? AND type='GOAL'",[participationId]);
+    if(Number(scored.total||0)>0)throw Object.assign(new Error('scored_participation_cannot_be_recovered'),{status:409});
+    if(target==='REVOKED'&&row.status!=='REGISTERED')throw Object.assign(new Error('only_registered_reservation_can_be_revoked'),{status:409});
+    if(target==='REGISTERED'&&row.status!=='REVOKED')throw Object.assign(new Error('only_revoked_reservation_can_be_restored'),{status:409});
+    if(target==='REVOKED'){
+      await conn.query("UPDATE match_participations SET status='REVOKED',revoked_at=UTC_TIMESTAMP() WHERE id=?",[participationId]);
+    }else{
+      await conn.query("UPDATE match_participations SET status='REGISTERED',revoked_at=NULL WHERE id=?",[participationId]);
+    }
+    await conn.query('INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,target==='REVOKED'?'MATCH_RESERVATION_REVOKED':'MATCH_RESERVATION_RESTORED','MATCH',String(row.match_id),JSON.stringify({participationId,from:row.status,to:target,reason})]);
+    await conn.commit();
+    res.json({ok:true,from:row.status,to:target});
+  }catch(e){
+    await conn.rollback();
+    if(e.status)return res.status(e.status).json({error:e.message});
+    next(e);
+  }finally{conn.release()}
 });
 
 router.patch('/matches/:publicId',async(req,res,next)=>{
