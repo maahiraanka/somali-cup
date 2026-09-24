@@ -598,3 +598,16 @@ radial-gradient(circle at 50% 50%,#0c3f64,#071d34 57%,#04101b 76%);border:1px so
 @media(prefers-reduced-motion:reduce){
   .comingSoonAmbient i,.comingSoonAmbient span,.comingSoonPill span{animation:none!important}
 }
+
+
+/* v0.26 recovery + stale-data truth states */
+.inviteRecovery{min-height:72vh;display:grid;place-items:center;padding:24px}
+.inviteRecovery>section{width:min(520px,100%);text-align:center;padding:32px 24px;border-radius:22px;background:linear-gradient(180deg,#071724,#04101a);border:1px solid rgba(76,171,224,.13);box-shadow:0 30px 80px rgba(0,0,0,.34)}
+.inviteRecoveryMark{width:64px;height:64px;margin:0 auto 14px;border-radius:18px;display:grid;place-items:center;background:#0a2233;border:1px solid rgba(84,200,248,.15);color:#67d9ff}
+.inviteRecovery small{font-size:7px;font-weight:1000;letter-spacing:.15em;color:#62d9ff}.inviteRecovery h1{font-size:29px;letter-spacing:-.04em;margin:7px 0}.inviteRecovery p{max-width:410px;margin:0 auto 17px;color:#8199ad;font-size:10px;line-height:1.5}
+.liveRecoveryBanner{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:rgba(98,61,13,.18);border:1px solid rgba(255,188,71,.15);color:#ffd27b}
+.liveRecoveryBanner>svg{flex:none}.liveRecoveryBanner>div{min-width:0;flex:1}.liveRecoveryBanner b,.liveRecoveryBanner span{display:block}.liveRecoveryBanner b{font-size:9px}.liveRecoveryBanner span{font-size:8px;color:#b99a68;margin-top:2px;line-height:1.4}
+.liveRecoveryBanner button{border:1px solid rgba(255,200,92,.18);background:#241906;color:#ffd77d;border-radius:8px;padding:6px 8px;font-size:7px;font-weight:900;cursor:pointer}
+@media(max-width:680px){
+  .inviteRecovery{padding:12px}.inviteRecovery>section{padding:25px 17px}.liveRecoveryBanner{align-items:flex-start}.liveRecoveryBanner button{margin-left:auto}
+}
