@@ -470,3 +470,16 @@ button:active,.goldBtn:active,.glassBtn:active,.heroPrimary:active,.matchInviteP
   *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
   .ambientMotion,.celebrationParticles{display:none!important}
 }
+
+
+/* v0.21 returning supporter mission home */
+.returningMission .homeFixtureStrip{margin:12px 0 0}
+.homeFixtureStrip{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 13px;border-radius:13px;background:#071725;border:1px solid rgba(74,177,228,.12)}
+.homeFixtureStrip>div small,.homeFixtureStrip>div strong,.homeFixtureStrip>div span{display:block}.homeFixtureStrip>div small{font-size:7px;font-weight:1000;letter-spacing:.13em;color:#64d9ff}.homeFixtureStrip>div strong{font-size:17px;margin-top:3px}.homeFixtureStrip>div strong em{font-style:normal;color:#71889c;font-size:10px;margin:0 5px}.homeFixtureStrip>div span{font-size:8px;color:#7b93a8;margin-top:2px}.homeFixtureStrip>b{padding:6px 8px;border-radius:999px;background:#0a2637;color:#71ddff;font-size:7px;letter-spacing:.1em}.homeFixtureStrip.live{border-color:rgba(255,86,106,.17);background:rgba(70,13,24,.18)}.homeFixtureStrip.live>div small,.homeFixtureStrip.live>b{color:#ff6b7f}.homeFixtureStrip.live>b{background:rgba(100,18,31,.32)}
+.returningMissionBoard{margin:18px auto 0;width:min(1180px,calc(100% - 28px));padding:22px;border-radius:22px;background:linear-gradient(180deg,#071624,#04101a);border:1px solid rgba(73,172,225,.14);box-shadow:0 22px 56px rgba(0,0,0,.25)}
+.missionBoardHead{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-bottom:14px}.missionBoardHead small,.missionAction small{font-size:8px;font-weight:1000;letter-spacing:.15em;color:#67d8ff}.missionBoardHead h2{margin:4px 0 0;font-size:26px;letter-spacing:-.035em}
+.missionImpactGrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.missionImpact{padding:15px;border-radius:14px;background:#06131f;border:1px solid rgba(81,164,214,.09)}.missionImpact span,.missionImpact strong,.missionImpact small{display:block}.missionImpact span{font-size:7px;letter-spacing:.12em;color:#6f879a}.missionImpact strong{font-size:28px;margin-top:4px}.missionImpact small{font-size:8px;color:#7890a4;margin-top:3px}.missionImpact.primary{background:radial-gradient(circle at 15% 0%,rgba(255,207,74,.08),transparent 40%),#07131d;border-color:rgba(255,207,74,.12)}.missionImpact.primary strong{color:#ffcf4a}
+.missionAction{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-top:12px;padding:16px;border-radius:14px;background:rgba(13,36,51,.55);border:1px solid rgba(74,169,220,.09)}.missionAction h3{margin:4px 0 3px;font-size:19px}.missionAction p{margin:0;color:#8199ad;font-size:9px;line-height:1.45;max-width:700px}.missionAction .goldBtn{flex:none}
+@media(max-width:760px){
+  .returningMissionBoard{width:calc(100% - 20px);padding:15px;border-radius:18px}.missionBoardHead{align-items:flex-start}.missionBoardHead .glassBtn{display:none}.missionBoardHead h2{font-size:22px}.missionImpactGrid{grid-template-columns:1fr 1fr}.missionImpact strong{font-size:24px}.missionAction{align-items:stretch;flex-direction:column}.missionAction .goldBtn{width:100%;justify-content:center}.homeFixtureStrip{padding:10px}
+}
