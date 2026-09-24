@@ -201,7 +201,9 @@ router.post('/matches',async(req,res,next)=>{
   const roundCode=String(req.body?.roundCode||'').trim().slice(0,40);
   const startsAt=req.body?.startsAt;
   const lobbyOpensAt=req.body?.lobbyOpensAt||null;
-  if(!homeCode||!awayCode||homeCode===awayCode||!roundCode||!startsAt) return res.status(400).json({error:'invalid_fixture'});
+  const durationMinutes=Math.max(1,Math.min(1440,Number(req.body?.durationMinutes)||60));
+  const regulationEndsAt=startsAt?new Date(new Date(startsAt).getTime()+durationMinutes*60000):null;
+  if(!homeCode||!awayCode||homeCode===awayCode||!roundCode||!startsAt||Number.isNaN(regulationEndsAt?.getTime())) return res.status(400).json({error:'invalid_fixture'});
   const conn=await pool.getConnection();
   try{
     await conn.beginTransaction();
@@ -211,10 +213,10 @@ router.post('/matches',async(req,res,next)=>{
     if(cities.length!==2) throw Object.assign(new Error('city_not_found'),{status:404});
     const home=cities.find(c=>c.code===homeCode),away=cities.find(c=>c.code===awayCode);
     const publicId=crypto.randomBytes(13).toString('hex');
-    const [result]=await conn.query(`INSERT INTO matches(public_id,season_id,round_code,home_city_id,away_city_id,starts_at,lobby_opens_at,status)
-      VALUES (?,?,?,?,?,?,?,'SCHEDULED')`,[publicId,season.id,roundCode,home.id,away.id,startsAt,lobbyOpensAt]);
+    const [result]=await conn.query(`INSERT INTO matches(public_id,season_id,round_code,home_city_id,away_city_id,starts_at,regulation_ends_at,lobby_opens_at,status)
+      VALUES (?,?,?,?,?,?,?,?,'SCHEDULED')`,[publicId,season.id,roundCode,home.id,away.id,startsAt,regulationEndsAt,lobbyOpensAt]);
     await conn.query(`INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json)
-      VALUES (NULL,'MATCH_CREATED','MATCH',?,?)`,[String(result.insertId),JSON.stringify({publicId,homeCode,awayCode,roundCode,startsAt,lobbyOpensAt})]);
+      VALUES (NULL,'MATCH_CREATED','MATCH',?,?)`,[String(result.insertId),JSON.stringify({publicId,homeCode,awayCode,roundCode,startsAt,regulationEndsAt,lobbyOpensAt,durationMinutes})]);
     await conn.commit();
     res.status(201).json({publicId,status:'SCHEDULED'});
   }catch(e){await conn.rollback();if(e.status)return res.status(e.status).json({error:e.message});next(e)}finally{conn.release()}
