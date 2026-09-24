@@ -95,6 +95,7 @@ export default function App(){
   const [standings,setStandings]=useState(demoStandings);
   const [season,setSeason]=useState({name:'Somali Cup 2027',status:'QUALIFICATION'});
   const [me,setMe]=useState(null);
+  const [identityChecked,setIdentityChecked]=useState(false);
   const [showJoin,setShowJoin]=useState(false);
   const [joinCity,setJoinCity]=useState(null);
   const [joinedMoment,setJoinedMoment]=useState(null);
@@ -105,17 +106,17 @@ export default function App(){
 
   const refresh=async()=>{
     try{const d=await api('/api/qualification');if(d?.standings?.length){setStandings(d.standings);setSeason(d.season||season)}}catch{}
-    try{const d=await api('/api/identity/me');setMe(d)}catch{}
+    try{const d=await api('/api/identity/me');setMe(d)}catch{setMe(null)}finally{setIdentityChecked(true)}
     try{const d=await api('/api/matches');if(d?.matches?.length)setMatches(d.matches)}catch{}
   };
   useEffect(()=>{refresh()},[]);
   useEffect(()=>{
-    if(me!==null||showJoin)return;
+    if(!identityChecked||me?.membership||showJoin)return;
     const code=new URLSearchParams(window.location.search).get('city')?.toUpperCase();
     if(!code)return;
     const city=standings.find(c=>c.code===code&&c.is_open);
     if(city){setJoinCity(city);setShowJoin(true)}
-  },[standings,me,showJoin]);
+  },[standings,me,showJoin,identityChecked]);
   const top=standings[0];
   const myCity=useMemo(()=>me?.membership?standings.find(c=>c.code===me.membership.code):null,[me,standings]);
   const total=standings.reduce((a,c)=>a+Number(c.verified_supporters||0),0);
@@ -127,6 +128,7 @@ export default function App(){
   const joined=(payload)=>{
     localStorage.setItem('somalicup_session',payload.token);
     setMe({user:payload.user,membership:{...payload.city,season_id:payload.season?.id,season_name:payload.season?.name,status:'ACTIVE',verification_status:'VERIFIED'}});
+    setIdentityChecked(true);
     setShowJoin(false);
     setJoinCity(null);
     setJoinedMoment(payload);
