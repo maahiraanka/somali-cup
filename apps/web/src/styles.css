@@ -242,3 +242,23 @@ border:1px solid rgba(65,195,255,.28);box-shadow:0 30px 70px rgba(0,0,0,.4),inse
 @media(max-width:760px){
   .shareChoice,.matchNextAction{display:grid;padding:18px}.shareChoiceActions{justify-content:stretch}.shareChoiceActions>*{width:100%}.nextActionButton .goldBtn,.nextActionButton .glassBtn{width:100%;min-width:0}
 }
+
+
+/* v0.9 zero-detour join + post-join viral moment */
+.joinedMomentOverlay{position:fixed;inset:0;z-index:170;display:grid;place-items:center;padding:18px;background:
+radial-gradient(circle at 50% 28%,rgba(34,181,255,.16),transparent 28%),
+rgba(1,6,14,.92);backdrop-filter:blur(18px)}
+.joinedMomentCard{width:min(520px,100%);border-radius:28px;padding:34px;background:
+radial-gradient(circle at 50% 0%,rgba(255,207,74,.13),transparent 26%),
+linear-gradient(180deg,#091827,#030b14);border:1px solid rgba(75,190,250,.23);box-shadow:0 40px 100px rgba(0,0,0,.58),0 0 60px rgba(25,154,255,.08);text-align:center;position:relative;overflow:hidden}
+.joinedMomentCard:before{content:"SOMALI CUP";position:absolute;left:50%;top:34%;transform:translate(-50%,-50%) rotate(-7deg);font-size:72px;font-weight:1000;white-space:nowrap;color:rgba(255,255,255,.025);letter-spacing:-.06em}.joinedMomentCard>*{position:relative;z-index:2}
+.joinedBurst{width:84px;height:96px;clip-path:polygon(50% 0,92% 16%,84% 67%,50% 100%,16% 67%,8% 16%);margin:0 auto 14px;background:linear-gradient(180deg,#ffe680,#d79410);color:#06101a;display:grid;place-items:center;font-size:30px;filter:drop-shadow(0 0 24px rgba(255,205,63,.25))}
+.joinedMomentCard>small{color:#56d4ff;font-size:9px;font-weight:1000;letter-spacing:.2em}.joinedMomentCard h2{font-size:42px;line-height:.96;letter-spacing:-.05em;margin:8px 0}.joinedMomentCard h2 em{font-style:normal;color:#ffcf4a}.joinedMomentCard>p{color:#8fa6bb;max-width:390px;margin:0 auto 18px;line-height:1.5}
+.joinedCityStrip{display:flex;align-items:center;gap:14px;text-align:left;padding:14px;border-radius:16px;background:#061421;border:1px solid rgba(75,169,229,.14);margin-bottom:12px}.joinedCityStrip span,.joinedCityStrip strong,.joinedCityStrip small{display:block}.joinedCityStrip span{font-size:8px;color:#5bd5ff;font-weight:1000;letter-spacing:.12em}.joinedCityStrip strong{font-size:22px;margin:3px 0}.joinedCityStrip small{font-size:9px;color:#7d95ac}
+.joinedShareReason{display:flex;align-items:center;gap:11px;text-align:left;padding:13px 14px;border-radius:14px;background:rgba(255,199,48,.055);border:1px solid rgba(255,207,74,.12);margin-bottom:14px}.joinedShareReason>svg{color:#ffcf4a;flex:none}.joinedShareReason b,.joinedShareReason span{display:block}.joinedShareReason b{font-size:11px}.joinedShareReason span{font-size:9px;color:#7f98ae;margin-top:3px;line-height:1.4}
+.joinedPrimary{width:100%;border:0;border-radius:13px;padding:15px;background:linear-gradient(180deg,#ffe47d,#f2b22c);color:#06101b;font-weight:1000;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;box-shadow:0 14px 32px rgba(224,160,31,.2)}.joinedPrimary:disabled{opacity:.55}.joinedSecondary{margin-top:11px;border:0;background:none;color:#75d8ff;font-size:9px;font-weight:900;cursor:pointer;padding:7px}
+.quickCity{position:relative}.quickCity:after{content:"JOIN";position:absolute;right:10px;bottom:48px;padding:5px 7px;border-radius:999px;background:rgba(2,10,19,.78);border:1px solid rgba(76,190,248,.2);color:#7de0ff;font-size:7px;font-weight:1000;letter-spacing:.1em;backdrop-filter:blur(8px)}
+
+@media(max-width:680px){
+  .joinedMomentCard{padding:25px 18px;border-radius:22px}.joinedMomentCard h2{font-size:37px}.joinedBurst{width:72px;height:82px}.joinedMomentCard:before{font-size:54px}.joinedCityStrip{padding:12px}
+}
