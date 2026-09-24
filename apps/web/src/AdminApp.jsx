@@ -229,8 +229,22 @@ function CompetitionsAdmin({d,act,refresh}){
   const [stages,setStages]=useState([]);
   const [stageLoading,setStageLoading]=useState(false);
   const [editing,setEditing]=useState(null);
-  const selected=competitions.find(c=>Number(c.id)===Number(selectedId))||competitions[0]||null;
+  const [showCreator,setShowCreator]=useState(false);
+  const [creatorStep,setCreatorStep]=useState(1);
+  const [creatorBusy,setCreatorBusy]=useState(false);
+  const [creatorError,setCreatorError]=useState('');
+  const [creator,setCreator]=useState({
+    name:'',competitionType:'STAGED',choiceType:'CITY',languagePreset:'CITY',allowNominations:true,publishNow:false,
+    choices:['',''],
+    stages:[
+      {name:'Round 1',code:'ROUND_1',stageType:'QUALIFICATION',ruleType:'TARGET',target:1000,advanceCount:null,groupSize:null},
+      {name:'Group Round',code:'GROUP',stageType:'GROUP',ruleType:'TARGET_OR_TOP_N',target:2500,advanceCount:2,groupSize:4},
+      {name:'Semi Final',code:'SEMI_FINAL',stageType:'SEMI_FINAL',ruleType:'TOP_N',target:null,advanceCount:2,groupSize:null},
+      {name:'Final',code:'FINAL',stageType:'FINAL',ruleType:'HIGHEST_AT_CLOSE',target:null,advanceCount:1,groupSize:null}
+    ]
+  });
 
+  const selected=competitions.find(c=>Number(c.id)===Number(selectedId))||competitions[0]||null;
   const loadStages=async(id)=>{
     if(!id)return;
     setStageLoading(true);
@@ -259,61 +273,168 @@ function CompetitionsAdmin({d,act,refresh}){
     await loadStages(selected.id);
   };
 
-  if(!selected)return <div className="adminEmpty"><Trophy/><div><b>No competitions yet</b><p>Create your first competition through the API foundation, then manage its rounds here.</p></div></div>;
+  const resetCreator=()=>{
+    setCreatorStep(1);setCreatorError('');
+    setCreator({
+      name:'',competitionType:'STAGED',choiceType:'CITY',languagePreset:'CITY',allowNominations:true,publishNow:false,
+      choices:['',''],
+      stages:[
+        {name:'Round 1',code:'ROUND_1',stageType:'QUALIFICATION',ruleType:'TARGET',target:1000,advanceCount:null,groupSize:null},
+        {name:'Group Round',code:'GROUP',stageType:'GROUP',ruleType:'TARGET_OR_TOP_N',target:2500,advanceCount:2,groupSize:4},
+        {name:'Semi Final',code:'SEMI_FINAL',stageType:'SEMI_FINAL',ruleType:'TOP_N',target:null,advanceCount:2,groupSize:null},
+        {name:'Final',code:'FINAL',stageType:'FINAL',ruleType:'HIGHEST_AT_CLOSE',target:null,advanceCount:1,groupSize:null}
+      ]
+    });
+  };
+
+  const openCreator=()=>{resetCreator();setShowCreator(true)};
+  const closeCreator=()=>{setShowCreator(false);resetCreator()};
+  const choiceWord=creator.choiceType==='CITY'?'city':creator.choiceType==='UNIVERSITY'?'university':creator.choiceType==='CLUB'?'club':creator.choiceType==='BUSINESS'?'business':creator.choiceType==='PERSON'?'person':creator.choiceType==='COMMUNITY'?'community':'choice';
+  const validChoices=creator.choices.map(x=>x.trim()).filter(Boolean);
+  const canNext=creatorStep===1?creator.name.trim().length>=3:
+    creatorStep===2?Boolean(creator.choiceType&&creator.languagePreset):
+    creatorStep===3?validChoices.length>=2:
+    creatorStep===4?creator.stages.length>=1:true;
+
+  const setChoiceType=type=>{
+    const preset=type==='CITY'?'CITY':type==='UNIVERSITY'?'UNIVERSITY':type==='CLUB'?'CLUB':type==='PERSON'?'FAN':'SIMPLE';
+    setCreator({...creator,choiceType:type,languagePreset:preset});
+  };
+
+  const submitCreator=async()=>{
+    setCreatorBusy(true);setCreatorError('');
+    try{
+      const payload={
+        ...creator,
+        choices:validChoices.map((name,i)=>({name,code:(name.toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,20)||('CHOICE_'+(i+1)))}))
+      };
+      const result=await adminApi('/api/admin/competitions/create-complete',{method:'POST',body:JSON.stringify(payload)});
+      setShowCreator(false);resetCreator();
+      await refresh();
+      setSelectedId(result.competition.id);
+      await loadStages(result.competition.id);
+    }catch(e){setCreatorError(humanErrorAdmin(e))}
+    finally{setCreatorBusy(false)}
+  };
 
   return <>
     <section className="competitionAdminHero">
-      <div><small>MULTI-TOURNAMENT CONTROL</small><h2>{selected.name}</h2><p>{nice(selected.competition_type)} · {nice(selected.choice_type)} · {fmt(selected.choice_count)} choices</p></div>
-      <select value={selected.id} onChange={e=>{const id=Number(e.target.value);setSelectedId(id);loadStages(id)}}>{competitions.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select>
-    </section>
-
-    <section className="adminPanel">
-      <div className="adminPanelAction"><PanelHead eyebrow="PUBLIC SETTINGS" title="Competition"/><div className="competitionAdminButtons">
-        <button onClick={()=>act(()=>adminApi('/api/admin/competitions/'+selected.id,{method:'PATCH',body:JSON.stringify({allowNominations:!selected.allow_nominations})}),selected.allow_nominations?'Suggestions closed':'Suggestions opened')}>{selected.allow_nominations?'CLOSE SUGGESTIONS':'ALLOW SUGGESTIONS'}</button>
-      </div></div>
-      <div className="competitionAdminSummary">
-        <div><span>Status</span><strong>{nice(selected.status)}</strong></div>
-        <div><span>Language</span><strong>{nice(selected.language_preset)}</strong></div>
-        <div><span>Choices</span><strong>{fmt(selected.choice_count)}</strong></div>
-        <div><span>Suggestions waiting</span><strong>{fmt(selected.pending_nominations)}</strong></div>
+      <div><small>MULTI-TOURNAMENT CONTROL</small><h2>{selected?.name||'Competitions'}</h2><p>{selected?nice(selected.competition_type)+' · '+nice(selected.choice_type)+' · '+fmt(selected.choice_count)+' choices':'Create your first competition without touching code.'}</p></div>
+      <div className="competitionAdminHeroActions">
+        {selected&&<select value={selected.id} onChange={e=>{const id=Number(e.target.value);setSelectedId(id);loadStages(id)}}>{competitions.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select>}
+        <button className="adminPrimary" onClick={openCreator}><Plus size={15}/> CREATE COMPETITION</button>
       </div>
     </section>
 
-    <section className="adminPanel">
-      <div className="adminPanelAction"><PanelHead eyebrow="ROUNDS" title="How this competition moves"/><span className="opsHint">Closing a live round moves qualified choices forward</span></div>
-      {stageLoading?<div className="adminLoading compact"><RefreshCw className="spin"/> Loading rounds…</div>:<div className="competitionStageAdminList">
-        {stages.map(stage=>{
-          const form=editing?.id===stage.id?editing:stage;
-          return <div className={'competitionStageAdmin '+String(stage.status||'').toLowerCase()} key={stage.id}>
-            <div className="competitionStageAdminHead">
-              <div><span>{stage.sequence_no}</span><div><small>{nice(stage.stage_type)}</small><h3>{stage.name}</h3><p>{nice(stage.rule_type)} · {fmt(stage.choices?.length)} choices</p></div></div>
-              <b>{stage.status}</b>
+    {!selected?<div className="adminEmpty"><Trophy/><div><b>No competitions yet</b><p>Press Create Competition to build one in five simple steps.</p></div></div>:<>
+      <section className="adminPanel">
+        <div className="adminPanelAction"><PanelHead eyebrow="PUBLIC SETTINGS" title="Competition"/><div className="competitionAdminButtons">
+          <button onClick={()=>act(()=>adminApi('/api/admin/competitions/'+selected.id,{method:'PATCH',body:JSON.stringify({allowNominations:!selected.allow_nominations})}),selected.allow_nominations?'Suggestions closed':'Suggestions opened')}>{selected.allow_nominations?'CLOSE SUGGESTIONS':'ALLOW SUGGESTIONS'}</button>
+        </div></div>
+        <div className="competitionAdminSummary">
+          <div><span>Status</span><strong>{nice(selected.status)}</strong></div>
+          <div><span>Language</span><strong>{nice(selected.language_preset)}</strong></div>
+          <div><span>Choices</span><strong>{fmt(selected.choice_count)}</strong></div>
+          <div><span>Suggestions waiting</span><strong>{fmt(selected.pending_nominations)}</strong></div>
+        </div>
+      </section>
+
+      <section className="adminPanel">
+        <div className="adminPanelAction"><PanelHead eyebrow="ROUNDS" title="How this competition moves"/><span className="opsHint">Closing a live round moves qualified choices forward</span></div>
+        {stageLoading?<div className="adminLoading compact"><RefreshCw className="spin"/> Loading rounds…</div>:<div className="competitionStageAdminList">
+          {stages.map(stage=>{
+            const form=editing?.id===stage.id?editing:stage;
+            return <div className={'competitionStageAdmin '+String(stage.status||'').toLowerCase()} key={stage.id}>
+              <div className="competitionStageAdminHead">
+                <div><span>{stage.sequence_no}</span><div><small>{nice(stage.stage_type)}</small><h3>{stage.name}</h3><p>{nice(stage.rule_type)} · {fmt(stage.choices?.length)} choices</p></div></div>
+                <b>{stage.status}</b>
+              </div>
+              <div className="competitionStageNumbers">
+                <div><span>Target</span><strong>{stage.target?fmt(stage.target):'—'}</strong></div>
+                <div><span>Move on</span><strong>{stage.advance_count?fmt(stage.advance_count):'By rule'}</strong></div>
+                <div><span>Group size</span><strong>{stage.group_size?fmt(stage.group_size):'—'}</strong></div>
+                <div><span>Choices</span><strong>{fmt(stage.choices?.length)}</strong></div>
+              </div>
+              {editing?.id===stage.id&&<div className="competitionStageEditor">
+                <label><span>Round name</span><input value={form.name||''} onChange={e=>setEditing({...form,name:e.target.value})}/></label>
+                <label><span>Rule</span><select value={form.rule_type||form.ruleType||'TARGET'} onChange={e=>setEditing({...form,rule_type:e.target.value})}><option value="TARGET">Reach target</option><option value="TOP_N">Top number move on</option><option value="TARGET_OR_TOP_N">Target or top number</option><option value="HIGHEST_AT_CLOSE">Highest support wins</option></select></label>
+                <label><span>Supporter target</span><input type="number" value={form.target??''} onChange={e=>setEditing({...form,target:e.target.value===''?null:Number(e.target.value)})}/></label>
+                <label><span>How many move on</span><input type="number" value={form.advance_count??form.advanceCount??''} onChange={e=>setEditing({...form,advance_count:e.target.value===''?null:Number(e.target.value)})}/></label>
+                <label><span>Group size</span><input type="number" value={form.group_size??form.groupSize??''} onChange={e=>setEditing({...form,group_size:e.target.value===''?null:Number(e.target.value)})}/></label>
+              </div>}
+              <div className="competitionStageActions">
+                <button onClick={()=>editing?.id===stage.id?saveStage(stage):setEditing({...stage})}>{editing?.id===stage.id?<><Save size={14}/> SAVE</>:<><Pencil size={14}/> EDIT ROUND</>}</button>
+                {stage.status==='DRAFT'&&<button onClick={async()=>{if(window.confirm('Open '+stage.name+' now?')){await act(()=>adminApi('/api/admin/competitions/'+selected.id+'/stages/'+stage.id+'/open',{method:'POST'}),'Round opened');await loadStages(selected.id)}}}><Radio size={14}/> OPEN ROUND</button>}
+                {stage.status==='OPEN'&&<button className="danger" onClick={async()=>{if(window.confirm('Close '+stage.name+' and move qualified choices to the next round?')){await act(()=>adminApi('/api/admin/competitions/'+selected.id+'/stages/'+stage.id+'/close',{method:'POST'}),'Round closed and qualified choices moved on');await loadStages(selected.id)}}}><CheckCircle2 size={14}/> CLOSE & MOVE ON</button>}
+              </div>
             </div>
-            <div className="competitionStageNumbers">
-              <div><span>Target</span><strong>{stage.target?fmt(stage.target):'—'}</strong></div>
-              <div><span>Move on</span><strong>{stage.advance_count?fmt(stage.advance_count):'By rule'}</strong></div>
-              <div><span>Group size</span><strong>{stage.group_size?fmt(stage.group_size):'—'}</strong></div>
-              <div><span>Choices</span><strong>{fmt(stage.choices?.length)}</strong></div>
-            </div>
-            {editing?.id===stage.id&&<div className="competitionStageEditor">
-              <label><span>Round name</span><input value={form.name||''} onChange={e=>setEditing({...form,name:e.target.value})}/></label>
-              <label><span>Rule</span><select value={form.rule_type||form.ruleType||'TARGET'} onChange={e=>setEditing({...form,rule_type:e.target.value})}><option value="TARGET">Reach target</option><option value="TOP_N">Top number move on</option><option value="TARGET_OR_TOP_N">Target or top number</option><option value="HIGHEST_AT_CLOSE">Highest support wins</option></select></label>
-              <label><span>Supporter target</span><input type="number" value={form.target??''} onChange={e=>setEditing({...form,target:e.target.value===''?null:Number(e.target.value)})}/></label>
-              <label><span>How many move on</span><input type="number" value={form.advance_count??form.advanceCount??''} onChange={e=>setEditing({...form,advance_count:e.target.value===''?null:Number(e.target.value)})}/></label>
-              <label><span>Group size</span><input type="number" value={form.group_size??form.groupSize??''} onChange={e=>setEditing({...form,group_size:e.target.value===''?null:Number(e.target.value)})}/></label>
-            </div>}
-            <div className="competitionStageActions">
-              <button onClick={()=>editing?.id===stage.id?saveStage(stage):setEditing({...stage})}>{editing?.id===stage.id?<><Save size={14}/> SAVE</>:<><Pencil size={14}/> EDIT ROUND</>}</button>
-              {stage.status==='DRAFT'&&<button onClick={async()=>{if(window.confirm('Open '+stage.name+' now?')){await act(()=>adminApi('/api/admin/competitions/'+selected.id+'/stages/'+stage.id+'/open',{method:'POST'}),'Round opened');await loadStages(selected.id)}}}><Radio size={14}/> OPEN ROUND</button>}
-              {stage.status==='OPEN'&&<button className="danger" onClick={async()=>{if(window.confirm('Close '+stage.name+' and move qualified cities to the next round?')){await act(()=>adminApi('/api/admin/competitions/'+selected.id+'/stages/'+stage.id+'/close',{method:'POST'}),'Round closed and qualified cities moved on');await loadStages(selected.id)}}}><CheckCircle2 size={14}/> CLOSE & MOVE ON</button>}
-            </div>
+          })}
+        </div>}
+      </section>
+    </>}
+
+    {showCreator&&<div className="competitionCreatorOverlay">
+      <section className="competitionCreator">
+        <button className="creatorClose" onClick={closeCreator}><X/></button>
+        <div className="creatorHeader"><small>CREATE COMPETITION</small><h2>{creatorStep===1?'Name it':creatorStep===2?'Choose what is competing':creatorStep===3?'Add the choices':creatorStep===4?'Set the rounds':'Check and create'}</h2><p>Simple setup. You can change the details later.</p></div>
+        <div className="creatorSteps">{[1,2,3,4,5].map(n=><div className={creatorStep===n?'active':creatorStep>n?'done':''} key={n}><span>{creatorStep>n?<Check size={12}/>:n}</span><b>{['Name','Type','Choices','Rounds','Create'][n-1]}</b></div>)}</div>
+
+        {creatorStep===1&&<div className="creatorBody">
+          <label><span>Competition name</span><input autoFocus value={creator.name} onChange={e=>setCreator({...creator,name:e.target.value})} placeholder="Example: Best City in Somalia"/></label>
+          <div className="creatorHint"><Trophy size={18}/><div><b>Keep the name simple</b><p>People should understand the competition immediately.</p></div></div>
+        </div>}
+
+        {creatorStep===2&&<div className="creatorBody">
+          <span className="creatorQuestion">What will people support?</span>
+          <div className="creatorTypeGrid">
+            {[['CITY','🏙️','Cities'],['UNIVERSITY','🎓','Universities'],['CLUB','⚽','Clubs'],['PERSON','👤','People'],['BUSINESS','🏪','Businesses'],['COMMUNITY','🤝','Communities'],['CUSTOM','✨','Something else']].map(([id,icon,label])=><button className={creator.choiceType===id?'selected':''} key={id} onClick={()=>setChoiceType(id)}><span>{icon}</span><b>{label}</b></button>)}
           </div>
-        })}
-      </div>}
-    </section>
+          <label className="creatorToggle"><input type="checkbox" checked={creator.allowNominations} onChange={e=>setCreator({...creator,allowNominations:e.target.checked})}/><span>Let people suggest a missing {choiceWord}</span></label>
+        </div>}
+
+        {creatorStep===3&&<div className="creatorBody">
+          <span className="creatorQuestion">Add the {choiceWord}s</span>
+          <div className="creatorChoiceList">
+            {creator.choices.map((value,index)=><div key={index}><span>{index+1}</span><input value={value} onChange={e=>{const next=[...creator.choices];next[index]=e.target.value;setCreator({...creator,choices:next})}} placeholder={'Name of '+choiceWord}/>{creator.choices.length>2&&<button onClick={()=>setCreator({...creator,choices:creator.choices.filter((_,i)=>i!==index)})}><X size={14}/></button>}</div>)}
+          </div>
+          <button className="creatorAdd" onClick={()=>setCreator({...creator,choices:[...creator.choices,'']})}><Plus size={14}/> ADD ANOTHER {choiceWord.toUpperCase()}</button>
+        </div>}
+
+        {creatorStep===4&&<div className="creatorBody">
+          <span className="creatorQuestion">How should it move?</span>
+          <div className="creatorRoundList">
+            {creator.stages.map((stage,index)=><div className="creatorRound" key={stage.code+index}>
+              <div className="creatorRoundTop"><span>{index+1}</span><input value={stage.name} onChange={e=>{const next=[...creator.stages];next[index]={...stage,name:e.target.value};setCreator({...creator,stages:next})}}/></div>
+              <div className="creatorRoundFields">
+                <label><span>Rule</span><select value={stage.ruleType} onChange={e=>{const next=[...creator.stages];next[index]={...stage,ruleType:e.target.value};setCreator({...creator,stages:next})}}><option value="TARGET">Reach target</option><option value="TOP_N">Top number move on</option><option value="TARGET_OR_TOP_N">Target or top number</option><option value="HIGHEST_AT_CLOSE">Highest support wins</option></select></label>
+                <label><span>Target</span><input type="number" value={stage.target??''} onChange={e=>{const next=[...creator.stages];next[index]={...stage,target:e.target.value===''?null:Number(e.target.value)};setCreator({...creator,stages:next})}} placeholder="Optional"/></label>
+                <label><span>Move on</span><input type="number" value={stage.advanceCount??''} onChange={e=>{const next=[...creator.stages];next[index]={...stage,advanceCount:e.target.value===''?null:Number(e.target.value)};setCreator({...creator,stages:next})}} placeholder="Optional"/></label>
+                {stage.stageType==='GROUP'&&<label><span>Group size</span><input type="number" value={stage.groupSize??4} onChange={e=>{const next=[...creator.stages];next[index]={...stage,groupSize:Number(e.target.value)||4};setCreator({...creator,stages:next})}}/></label>}
+              </div>
+            </div>)}
+          </div>
+        </div>}
+
+        {creatorStep===5&&<div className="creatorBody">
+          <div className="creatorReview">
+            <div><span>Name</span><strong>{creator.name}</strong></div>
+            <div><span>People will support</span><strong>{nice(creator.choiceType)}</strong></div>
+            <div><span>Choices</span><strong>{fmt(validChoices.length)}</strong></div>
+            <div><span>Rounds</span><strong>{fmt(creator.stages.length)}</strong></div>
+            <div><span>Suggestions</span><strong>{creator.allowNominations?'Allowed':'Closed'}</strong></div>
+          </div>
+          <label className="creatorLaunchChoice"><input type="checkbox" checked={creator.publishNow} onChange={e=>setCreator({...creator,publishNow:e.target.checked})}/><div><b>Launch it now</b><span>If off, it will be saved as a draft.</span></div></label>
+          {creatorError&&<div className="adminFormError"><AlertTriangle size={15}/>{creatorError}</div>}
+        </div>}
+
+        <div className="creatorFooter">
+          <button className="adminTextButton" disabled={creatorStep===1||creatorBusy} onClick={()=>setCreatorStep(Math.max(1,creatorStep-1))}>BACK</button>
+          {creatorStep<5?<button className="adminPrimary" disabled={!canNext} onClick={()=>setCreatorStep(creatorStep+1)}>NEXT <ChevronRight size={15}/></button>:<button className="adminPrimary" disabled={creatorBusy} onClick={submitCreator}>{creatorBusy?'CREATING…':'CREATE COMPETITION'} <Rocket size={15}/></button>}
+        </div>
+      </section>
+    </div>}
   </>;
 }
-
 function LaunchReadiness({d,act}){
   const status=d?.overall||'BLOCKED';
   const [runningCheck,setRunningCheck]=useState('');
