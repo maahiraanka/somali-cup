@@ -507,8 +507,8 @@ export default function App(){
       <button className={view==='profile'?'active':''} onClick={()=>me?.membership?setView('profile'):requestJoin()}><Users size={18}/><span>{me?.membership?'Me':'Join'}</span></button>
     </nav>}
 
-    {showJoin&&!me?.membership&&standings.length>0&&<JoinExperience standings={standings.filter(c=>c.is_open)} initialCity={joinCity} onClose={()=>{setShowJoin(false);setJoinCity(null)}} onJoined={joined}/>}
-    {showJoin&&!me?.membership&&standings.length===0&&!initialLoading&&<LiveDataState overlay title="Joining is temporarily unavailable" body="We couldn’t load the verified city list, so Somali Cup won’t guess or show sample data." onRetry={refresh} onClose={()=>{setShowJoin(false);setJoinCity(null)}}/>}
+    {showJoin&&!me?.membership&&standings.filter(c=>c.is_open).length>0&&<JoinExperience standings={standings.filter(c=>c.is_open)} initialCity={joinCity?.is_open===false?null:joinCity} onClose={()=>{setShowJoin(false);setJoinCity(null)}} onJoined={joined}/>}
+    {showJoin&&!me?.membership&&standings.filter(c=>c.is_open).length===0&&!initialLoading&&<LiveDataState overlay title="Joining is temporarily unavailable" body={standings.length?'No cities are open for joining right now.':'We couldn’t load the verified city list, so Somali Cup won’t guess or show sample data.'} onRetry={refresh} onClose={()=>{setShowJoin(false);setJoinCity(null)}}/>}
     {joinedMoment&&<JoinedMoment payload={joinedMoment} city={{...(standings.find(c=>c.code===joinedMoment.city.code)||{}),...joinedMoment.city}} onDone={()=>{setJoinedMoment(null);setView(new URLSearchParams(window.location.search).get('match')?'matches':'profile')}}/>}
     {assistMoment&&<AssistMoment moment={assistMoment} city={standings.find(c=>c.code===assistMoment.membership?.code)||assistMoment.membership} onDone={()=>setAssistMoment(null)}/>}
     {notice&&<div className="toast"><Check size={16}/>{notice}</div>}
@@ -1526,7 +1526,11 @@ function JoinExperience({standings,initialCity,onClose,onJoined}){
         <button className="goldBtn full" disabled={!city} onClick={()=>setStep(2)}>CONTINUE WITH {city?.name?.toUpperCase()||'CITY'} <ArrowRight size={16}/></button>
       </>}
 
-      {step===2&&<>
+      {step===2&&!city&&<>
+        <div className="joinTitle"><small>JOIN YOUR CITY</small><h2>Choose a city first.</h2><p>Your city could not be selected. Go back and choose one of the open cities.</p></div>
+        <button className="goldBtn full" onClick={()=>setStep(1)}>BACK TO CITIES</button>
+      </>}
+      {step===2&&city&&<>
         <div className="joinTitle"><small>STEP 2 OF 2</small><h2>Join {city.name}.</h2><p>Add your name. Then your city gets your Goal.</p></div>
         <div className="joinSelectedCity"><CityThumb city={city} size="lg"/><div><small>YOU ARE JOINING</small><h3>{city.name}</h3><span>{fmt(Math.max(0,Number(city.qualification_target||0)-Number(city.verified_supporters||0)))} Goals needed</span></div></div>
         <label className="singleNameField">Your name<input value={displayName} onChange={e=>setDisplayName(e.target.value)} autoFocus placeholder="Your name"/></label>

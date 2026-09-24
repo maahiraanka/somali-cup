@@ -1,7 +1,7 @@
 {
   "name": "somali-cup",
   "private": true,
-  "version": "0.4.2-competition-creator",
+  "version": "0.4.3-blank-page-hotfix",
   "type": "module",
   "engines": {
     "node": ">=22"
