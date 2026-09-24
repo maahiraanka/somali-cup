@@ -570,6 +570,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
   const [benchPulse,setBenchPulse]=useState(0);
   const [showMatchDepth,setShowMatchDepth]=useState(false);
   const [scoreMoment,setScoreMoment]=useState(null);
+  const [matchAssistMoment,setMatchAssistMoment]=useState(null);
   const liveRef=useRef(null);
   const momentTimerRef=useRef(null);
   const load=async(match=selected,{quiet=false}={})=>{
@@ -601,8 +602,30 @@ function MatchCenter({matches,me,onNeedIdentity}){
       if(!liveRef.current)setLive({match,counts:{homeActive:0,awayActive:0,registered:0,total:0},activity:[]});
     }
     if(me){
-      try{const d=await api(`/api/matches/${match.publicId}/me`);setMine(d.participation)}
-      catch{setMine(null)}
+      try{
+        const d=await api(`/api/matches/${match.publicId}/me`);
+        const p=d.participation;
+        if(p){
+          const key=`somalicup_match_assist_${match.publicId}_${me?.user?.publicId||'supporter'}`;
+          const raw=localStorage.getItem(key);
+          const latest=p.latestAssist;
+          if(latest?.id){
+            if(raw!==null&&Number(latest.id)>Number(raw)){
+              setMatchAssistMoment({
+                latest,
+                assists:Number(p.assists||0),
+                branch:Number(p.downstream_joins||0),
+                indirect:Number(p.indirect_joins||0),
+                city:{code:p.city_code,name:p.city_name}
+              });
+            }
+            localStorage.setItem(key,String(latest.id));
+          }else if(raw===null){
+            localStorage.setItem(key,'0');
+          }
+        }
+        setMine(p);
+      }catch{setMine(null)}
     }else setMine(null)
   };
   useEffect(()=>{
@@ -616,6 +639,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
   useEffect(()=>{
     liveRef.current=null;
     setScoreMoment(null);
+    setMatchAssistMoment(null);
     load(selected,{quiet:true});
   },[selected?.publicId,Boolean(me)]);
 
@@ -646,18 +670,21 @@ function MatchCenter({matches,me,onNeedIdentity}){
   const leader=homeScore===awayScore?null:(homeScore>awayScore?home:away);
   const trailing=homeScore===awayScore?null:(homeScore>awayScore?away:home);
   const leadMargin=Math.abs(homeScore-awayScore);
-  const benchFilled=Math.min(3,Number(mine?.assists??mine?.direct_joins??0));
+  const directAssists=Number(mine?.assists??mine?.direct_joins??0);
+  const branchTotal=Number(mine?.downstream_joins||0);
+  const extendedBranch=Math.max(0,Number(mine?.indirect_joins??(branchTotal-directAssists)));
+  const benchFilled=Math.min(3,directAssists);
   const commentary=(live?.activity||[]).slice(0,5);
   const join=async()=>{if(!me){onNeedIdentity();return}setBusy(true);setMsg('');try{const inviteToken=new URLSearchParams(window.location.search).get('invite')||'';const d=await api(`/api/matches/${match.publicId}/join`,{method:'POST',body:JSON.stringify({inviteToken})});setMine(d.participation);setMsg(d.created?'Place reserved.':'You are already registered.');await load(match)}catch(e){setMsg(e.message.replaceAll('_',' '))}finally{setBusy(false)}};
   const activate=async()=>{setBusy(true);setMsg('');try{const d=await api(`/api/matches/${match.publicId}/activate`,{method:'POST',body:'{}'});setMsg(d.goalAdded?'GOAL — your verified entry moved the score.':'Your Goal is already counted.');await load(match)}catch(e){setMsg(e.message.replaceAll('_',' '))}finally{setBusy(false)}};
-  const copyLink=async()=>{const token=mine?.share_token||mine?.shareToken;if(!token)return;const from=encodeURIComponent(me?.user?.nickname||me?.user?.displayName||'');const url=`${window.location.origin}/?match=${match.publicId}&invite=${token}${from?'&from='+from:''}`;try{await navigator.clipboard.writeText(url);setBenchPulse(v=>v+1);setMsg('Bench link copied — bring your people into the match.')}catch{setMsg(url)}};
+  const copyLink=async()=>{const token=mine?.share_token||mine?.shareToken;if(!token)return false;const from=encodeURIComponent(me?.user?.nickname||me?.user?.displayName||'');const url=`${window.location.origin}/?match=${match.publicId}&invite=${token}${from?'&from='+from:''}`;try{await navigator.clipboard.writeText(url);setBenchPulse(v=>v+1);setMsg('Match invite copied — bring one more person in.');return true}catch{setMsg(url);return false}};
   const myMatchCity=me?.membership?.code===home.code?home:me?.membership?.code===away.code?away:null;
   const shareMoment=async(type)=>{
     const city=myMatchCity||leader||home;
     const presets={
       callup:{eyebrow:'MATCH CALL-UP',title:`${city.name.toUpperCase()} NEEDS YOU`,subtitle:`${home.name} ${homeScore} — ${awayScore} ${away.name}`,footer:'Join my city in the Somali Cup match'},
       goal:{eyebrow:'GOAL · VERIFIED',title:'I SCORED FOR MY CITY',subtitle:`${city.name} · Somali Cup 2027`,footer:'One verified supporter. One goal.'},
-      assist:{eyebrow:'ASSIST · VERIFIED',title:'I BROUGHT MY PEOPLE',subtitle:`${mine?.assists??mine?.direct_joins??0} assists · ${mine?.downstream_joins??0} branch impact`,footer:`${city.name} is stronger together`},
+      assist:{eyebrow:'ASSIST · VERIFIED',title:'I BROUGHT MY PEOPLE',subtitle:`${directAssists} direct ${directAssists===1?'Assist':'Assists'} · Branch ${branchTotal}`,footer:extendedBranch?`${extendedBranch} more came through my chain`:`${city.name} is stronger together`},
       fulltime:{eyebrow:'FULL TIME',title:`${(match.winner?.name||leader?.name||city.name).toUpperCase()}`,subtitle:`${home.code} ${homeScore} — ${awayScore} ${away.code}`,footer:'Somali Cup · The city story continues'},
       motm:{eyebrow:'MAN OF THE MATCH',title:'THE IMPACT RACE',subtitle:`${mine?.assists??mine?.direct_joins??0} assists · ${mine?.downstream_joins??0} branch`,footer:'Verified impact. Real supporters.'}
     };
@@ -731,7 +758,14 @@ function MatchCenter({matches,me,onNeedIdentity}){
     <section className="benchAndCommentary">
       <div className="callBenchCard">
         <div className="benchHead"><div><small>CALL THE BENCH</small><h3>Bring 3 people into your squad.</h3></div><UserPlus size={22}/></div>
-        <p>Share your match link. If someone joins through you, that is your Assist. If they bring others, your Branch grows. Every person still scores only their own Goal.</p>
+        <p>Share your match link. If someone joins through you and scores their verified Goal, that is your Assist. If they bring others, your Branch grows.</p>
+        {mine&&<div className="matchBranchBreakdown">
+          <div><span>DIRECT ASSISTS</span><strong>{fmt(directAssists)}</strong></div>
+          <i/>
+          <div><span>MORE THROUGH YOUR CHAIN</span><strong>{fmt(extendedBranch)}</strong></div>
+          <i/>
+          <div className="branchTotal"><span>YOUR BRANCH</span><strong>{fmt(branchTotal)}</strong></div>
+        </div>}
         <div className="benchSlots">
           {[0,1,2].map(i=><div key={i} className={i<benchFilled?'filled':''}>{i<benchFilled?<><Check size={17}/><span>IN</span></>:<><UserPlus size={17}/><span>OPEN</span></>}</div>)}
         </div>
@@ -752,7 +786,36 @@ function MatchCenter({matches,me,onNeedIdentity}){
       <div className="fullTimeScore"><span>{home.code}</span><b>{homeScore} — {awayScore}</b><span>{away.code}</span></div>
       <button className="goldBtn" onClick={()=>shareMoment('fulltime')}><Share2 size={16}/> Share Full-Time Result</button>
     </section>}
+    {matchAssistMoment&&<MatchAssistMoment moment={matchAssistMoment} onCall={copyLink} onDone={()=>setMatchAssistMoment(null)}/>}
     {msg&&<div className="matchMsg">{msg}</div>}
+  </div>
+}
+
+function MatchAssistMoment({moment,onCall,onDone}){
+  const [copying,setCopying]=useState(false);
+  const [copied,setCopied]=useState(false);
+  const callAgain=async()=>{
+    setCopying(true);
+    try{setCopied(Boolean(await onCall()))}finally{setCopying(false)}
+  };
+  const assists=Number(moment?.assists||0);
+  const branch=Number(moment?.branch||0);
+  const indirect=Number(moment?.indirect||0);
+  return <div className="matchAssistOverlay">
+    <section className="matchAssistCard">
+      <div className="matchAssistBadge"><UserPlus size={27}/></div>
+      <small>MATCH ASSIST · VERIFIED</small>
+      <h2>You got<br/><em>the Assist.</em></h2>
+      <p><b>{moment?.latest?.name||'Someone'}</b> entered through your call-up and scored a verified Goal for {moment?.city?.name}.</p>
+      <div className="matchAssistImpact">
+        <div><span>DIRECT ASSISTS</span><strong>{fmt(assists)}</strong></div>
+        <div><span>MORE THROUGH CHAIN</span><strong>{fmt(indirect)}</strong></div>
+        <div><span>YOUR BRANCH</span><strong>{fmt(branch)}</strong></div>
+      </div>
+      <div className="matchAssistMeaning"><Zap size={18}/><div><b>Your call-up changed the match.</b><span>Call one more person. Their verified Goal can become your next Assist.</span></div></div>
+      <button className="joinedPrimary" disabled={copying} onClick={callAgain}>{copying?'COPYING…':copied?'MATCH LINK COPIED':'CALL ONE MORE'} <UserPlus size={17}/></button>
+      <button className="joinedSecondary" onClick={onDone}>Back to the match</button>
+    </section>
   </div>
 }
 
