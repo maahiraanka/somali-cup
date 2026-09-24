@@ -388,3 +388,85 @@ linear-gradient(180deg,#0a1820,#030b13);border:1px solid rgba(255,207,74,.16);bo
   .matchBranchBreakdown{grid-template-columns:1fr 1fr 1fr;gap:7px}.matchBranchBreakdown>i{display:none}.matchBranchBreakdown span{font-size:6px}.matchBranchBreakdown strong{font-size:19px}
   .matchAssistCard{padding:24px 18px;border-radius:22px}.matchAssistCard h2{font-size:37px}.matchAssistCard:before{font-size:66px}.matchAssistImpact strong{font-size:22px}
 }
+
+
+/* v0.20 Somali Cup Motion System v1 */
+.ambientMotion{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden;opacity:.58}
+.ambientMotion i,.ambientMotion span{position:absolute;border-radius:999px;filter:blur(0);will-change:transform,opacity}
+.ambientMotion i:nth-child(1){width:420px;height:420px;left:-180px;top:10%;background:radial-gradient(circle,rgba(51,197,255,.08),transparent 68%);animation:ambientDriftA 15s ease-in-out infinite alternate}
+.ambientMotion i:nth-child(2){width:360px;height:360px;right:-140px;top:34%;background:radial-gradient(circle,rgba(255,205,71,.065),transparent 68%);animation:ambientDriftB 18s ease-in-out infinite alternate}
+.ambientMotion i:nth-child(3){width:280px;height:280px;left:38%;bottom:-120px;background:radial-gradient(circle,rgba(73,230,157,.05),transparent 70%);animation:ambientDriftC 20s ease-in-out infinite alternate}
+.ambientMotion span{width:3px;height:3px;background:rgba(110,217,255,.45);box-shadow:0 0 14px rgba(110,217,255,.5)}
+.ambientMotion span:nth-of-type(1){left:18%;top:38%;animation:ambientParticle 7s linear infinite}
+.ambientMotion span:nth-of-type(2){right:24%;top:64%;animation:ambientParticle 9s linear infinite 1.4s}
+.appShell,.mainStage{position:relative;z-index:1}
+
+button,.goldBtn,.glassBtn,.heroPrimary,.matchInvitePrimary,.quickCity,.heroRaceRow,.leaderRow,.cityPoster{transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,background-color .18s ease,opacity .18s ease}
+button:active,.goldBtn:active,.glassBtn:active,.heroPrimary:active,.matchInvitePrimary:active{transform:scale(.975)}
+@media(hover:hover){
+  .goldBtn:hover,.heroPrimary:hover,.matchInvitePrimary:hover{transform:translateY(-2px);box-shadow:0 16px 34px rgba(255,197,58,.16)}
+  .quickCity:hover,.heroRaceRow:hover,.leaderRow:hover,.cityPoster:hover{transform:translateY(-2px)}
+}
+.motionProgress{transition:width .75s cubic-bezier(.2,.75,.25,1)}
+.motionNumber{display:inline-block;min-width:.5ch;font-variant-numeric:tabular-nums;will-change:contents}
+.liveBadge>span,.inviteLive.live i,.statePulse{animation:livePulse 1.45s ease-in-out infinite}
+.motionEntrance{animation:motionEntrance .34s cubic-bezier(.2,.8,.2,1) both}
+
+.matchSide.scoredNow{animation:scoringSidePulse 1.15s ease-out}
+.matchSide.scoredNow:after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;background:radial-gradient(circle at 50% 50%,rgba(255,211,74,.18),transparent 62%);animation:scoreFlash .95s ease-out both}
+.scoreBoard>strong .motionNumber{animation:scoreDigitPop .34s ease-out}
+
+.celebrationParticles{position:fixed;inset:0;z-index:181;pointer-events:none;overflow:hidden}
+.celebrationParticles i{--angle:calc(var(--i) * 36deg);position:absolute;left:50%;top:42%;width:7px;height:7px;border-radius:50%;background:#ffcf4a;box-shadow:0 0 14px currentColor;animation:particleBurst 1s ease-out both;transform:rotate(var(--angle)) translateY(0)}
+.celebrationParticles.green i{background:#58eaa0}.celebrationParticles.gold i{background:#ffcf4a}
+.celebrationParticles i:nth-child(3n){width:4px;height:14px;border-radius:8px;background:#5fd9ff}
+.celebrationParticles i:nth-child(4n){background:#fff2aa}
+.celebrationParticles.fireworks i{animation-duration:1.5s}
+.celebrationParticles.fireworks i:nth-child(even){top:32%;animation-name:fireworkBurst}
+.celebrationParticles.fireworks i:nth-child(odd){top:46%;animation-name:fireworkBurstAlt}
+.milestoneMoment:after{content:"MILESTONE";position:absolute;right:18px;top:18px;padding:6px 9px;border-radius:999px;background:rgba(255,204,67,.08);border:1px solid rgba(255,204,67,.2);color:#ffd666;font-size:7px;font-weight:1000;letter-spacing:.13em;animation:milestoneGlow 1.2s ease-in-out infinite alternate}
+
+.joinedBurst{animation:joinedBurstPop .65s cubic-bezier(.2,.9,.25,1) both}
+.assistIcon,.matchAssistBadge{animation:rewardBadgePulse 1.8s ease-in-out infinite}
+.joinedPrimary{position:relative;overflow:hidden}
+.joinedPrimary:after{content:"";position:absolute;top:-30%;left:-45%;width:30%;height:160%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.32),transparent);transform:skewX(-18deg);animation:ctaShine 3.8s ease-in-out infinite}
+
+@keyframes ambientDriftA{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(90px,45px,0) scale(1.08)}}
+@keyframes ambientDriftB{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(-80px,60px,0) scale(1.06)}}
+@keyframes ambientDriftC{from{transform:translate3d(0,0,0) scale(.96)}to{transform:translate3d(40px,-70px,0) scale(1.08)}}
+@keyframes ambientParticle{0%{opacity:0;transform:translateY(25px) scale(.7)}20%{opacity:.8}80%{opacity:.45}100%{opacity:0;transform:translateY(-90px) scale(1.25)}}
+@keyframes livePulse{0%,100%{opacity:.55;box-shadow:0 0 0 0 rgba(69,209,255,0)}50%{opacity:1;box-shadow:0 0 0 5px rgba(69,209,255,.045)}}
+@keyframes motionEntrance{from{opacity:0;transform:translateY(14px) scale(.975)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes scoringSidePulse{0%{transform:scale(1)}28%{transform:scale(1.012)}100%{transform:scale(1)}}
+@keyframes scoreFlash{0%{opacity:0}22%{opacity:1}100%{opacity:0}}
+@keyframes scoreDigitPop{0%{transform:scale(.88);opacity:.45}65%{transform:scale(1.1);opacity:1}100%{transform:scale(1)}}
+@keyframes particleBurst{
+  0%{opacity:0;transform:rotate(var(--angle)) translateY(0) scale(.4)}
+  18%{opacity:1}
+  100%{opacity:0;transform:rotate(var(--angle)) translateY(-220px) scale(1)}
+}
+@keyframes fireworkBurst{
+  0%{opacity:0;transform:rotate(var(--angle)) translateY(0) scale(.3)}
+  15%{opacity:1}
+  100%{opacity:0;transform:rotate(var(--angle)) translateY(-360px) scale(1.1)}
+}
+@keyframes fireworkBurstAlt{
+  0%{opacity:0;transform:rotate(calc(var(--angle) + 18deg)) translateY(0) scale(.3)}
+  15%{opacity:1}
+  100%{opacity:0;transform:rotate(calc(var(--angle) + 18deg)) translateY(-290px) scale(1)}
+}
+@keyframes milestoneGlow{from{box-shadow:0 0 0 rgba(255,203,61,0)}to{box-shadow:0 0 28px rgba(255,203,61,.1)}}
+@keyframes joinedBurstPop{0%{opacity:0;transform:scale(.25) rotate(-18deg)}55%{opacity:1;transform:scale(1.18) rotate(4deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes rewardBadgePulse{0%,100%{transform:scale(1);filter:brightness(1)}50%{transform:scale(1.045);filter:brightness(1.12)}}
+@keyframes ctaShine{0%,74%{transform:translateX(-180%) skewX(-18deg)}88%,100%{transform:translateX(520%) skewX(-18deg)}}
+
+@media(max-width:680px){
+  .ambientMotion{opacity:.38}
+  .ambientMotion i:nth-child(1){width:280px;height:280px}.ambientMotion i:nth-child(2){width:240px;height:240px}.ambientMotion i:nth-child(3){display:none}
+  .celebrationParticles i{width:5px;height:5px}
+}
+
+@media(prefers-reduced-motion:reduce){
+  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}
+  .ambientMotion,.celebrationParticles{display:none!important}
+}
