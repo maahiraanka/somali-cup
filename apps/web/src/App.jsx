@@ -34,6 +34,9 @@ function api(path,opts={}){const token=localStorage.getItem('somalicup_session')
 const imgFor=c=>cityImages[c?.code]||heroImage;
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[m]));
 async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer='Different cities. One people.',accent='#ffcf4a'}){
+  const titleSize=String(title||'').length>24?58:String(title||'').length>18?68:82;
+  const subtitleSize=String(subtitle||'').length>44?28:String(subtitle||'').length>30?32:38;
+  const footerSize=String(footer||'').length>46?30:String(footer||'').length>34?36:46;
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
     <defs>
       <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#020914"/><stop offset=".55" stop-color="#071b30"/><stop offset="1" stop-color="#020914"/></linearGradient>
@@ -47,8 +50,8 @@ async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer
     <text x="72" y="195" fill="#fff" font-family="Arial,sans-serif" font-size="66" font-weight="900">SOMALI</text>
     <text x="72" y="262" fill="${accent}" font-family="Arial,sans-serif" font-size="66" font-weight="900">CUP</text>
     <rect x="72" y="340" width="936" height="2" fill="#2aaee8" opacity=".35"/>
-    <text x="72" y="520" fill="#fff" font-family="Arial,sans-serif" font-size="82" font-weight="900" filter="url(#shadow)">${esc(title)}</text>
-    <text x="72" y="610" fill="#a9bfd2" font-family="Arial,sans-serif" font-size="38" font-weight="600">${esc(subtitle)}</text>
+    <text x="72" y="520" fill="#fff" font-family="Arial,sans-serif" font-size="${titleSize}" font-weight="900" filter="url(#shadow)">${esc(title)}</text>
+    <text x="72" y="610" fill="#a9bfd2" font-family="Arial,sans-serif" font-size="${subtitleSize}" font-weight="600">${esc(subtitle)}</text>
     <g transform="translate(72 760)">
       <rect width="936" height="420" rx="48" fill="#071827" stroke="#2fcaff" stroke-opacity=".28" stroke-width="3"/>
       <circle cx="170" cy="165" r="102" fill="#0d2b45" stroke="${accent}" stroke-width="8"/>
@@ -59,7 +62,7 @@ async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer
       <rect x="70" y="340" width="796" height="2" fill="#274b66"/>
       <text x="70" y="390" fill="${accent}" font-family="Arial,sans-serif" font-size="25" font-weight="800" letter-spacing="4">VERIFIED SUPPORTER</text>
     </g>
-    <text x="72" y="1480" fill="#fff" font-family="Arial,sans-serif" font-size="46" font-weight="800">${esc(footer)}</text>
+    <text x="72" y="1480" fill="#fff" font-family="Arial,sans-serif" font-size="${footerSize}" font-weight="800">${esc(footer)}</text>
     <rect x="72" y="1540" width="650" height="112" rx="56" fill="${accent}"/>
     <text x="397" y="1611" text-anchor="middle" fill="#07101a" font-family="Arial,sans-serif" font-size="34" font-weight="900">JOIN ${esc(city?.name?.toUpperCase()||'YOUR CITY')}</text>
     <text x="72" y="1710" fill="#8eb2ca" font-family="Arial,sans-serif" font-size="28">somalicup.com/?city=${esc(city?.code||'')}</text>
@@ -145,7 +148,7 @@ export default function App(){
   const leaveViralLanding=()=>{setViralCity(null);window.history.replaceState({},'',window.location.pathname);setView('home')};
 
   return <div className="appShell">
-    <header className="topbar">
+    {!viralCity&&<>    <header className="topbar">
       <button className="brandButton" onClick={()=>setView('home')}><Logo/></button>
       <nav className={mobileNav?'nav open':'nav'}>
         {['home','cities','matches'].map(v=><button key={v} className={view===v?'active':''} onClick={()=>{setView(v);setMobileNav(false)}}>{v[0].toUpperCase()+v.slice(1)}</button>)}
@@ -156,7 +159,7 @@ export default function App(){
         {me?<button className="profilePill" onClick={()=>setView('profile')}><span>{(me.user.nickname||me.user.displayName||'?')[0]}</span><b>{me.user.nickname||me.user.displayName}</b></button>:<button className="miniCta" onClick={requestJoin}>Join</button>}
         <button className="mobileMenu" onClick={()=>setMobileNav(!mobileNav)}><Menu/></button>
       </div>
-    </header>
+    </header></>}
 
     <main className={viralCity&&!me?.membership?'mainStage viralStage':'mainStage'}>
       {viralCity&&!me?.membership?<ViralCityLanding city={viralCity} standings={standings} onJoin={()=>requestJoin(viralCity)} onOther={leaveViralLanding}/>:<>
@@ -202,6 +205,7 @@ function ViralCityLanding({city,standings,onJoin,onOther}){
         <div className="viralLandingProgress"><div><span>{fmt(city.verified_supporters)} / {fmt(city.qualification_target)}</span><b>{Number(city.progress_pct||0).toFixed(0)}%</b></div><Progress value={city.progress_pct}/></div>
         {gap>0&&<div className="viralUrgency"><Zap size={16}/><span><b>{fmt(gap)} supporters</b> separate {city.name} from #{leader.rank} {leader.name}.</span></div>}
         <button className="viralJoinButton" onClick={onJoin}>I REPRESENT {city.name.toUpperCase()} <ArrowRight size={18}/></button>
+        <span className="viralJoinMicro">Choose once · enter your name · you’re in</span>
         <button className="viralOtherCity" onClick={onOther}>I represent another city</button>
         <div className="viralTrust"><ShieldCheck size={15}/><span>One person. One city. One season.</span></div>
       </div>
