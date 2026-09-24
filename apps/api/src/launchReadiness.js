@@ -24,9 +24,9 @@ export async function getLaunchReadiness(){
   const mysql8=vm&&Number(vm[1])>=8;
   add('mysql_8','MySQL compatibility',mysql8?'PASS':'BLOCKER',rawVersion||'Unknown version','DATABASE');
 
-  const [[migration]]=await pool.query("SELECT COUNT(*) total FROM schema_migrations WHERE filename='016_restart_safe_seed.sql'");
+  const [[migration]]=await pool.query("SELECT COUNT(*) total FROM schema_migrations WHERE filename='017_integrity_review_ops.sql'");
   add('migrations','Latest migration applied',Number(migration?.total||0)>0?'PASS':'BLOCKER',
-    Number(migration?.total||0)>0?'016_restart_safe_seed.sql applied':'Latest migration missing','DATABASE');
+    Number(migration?.total||0)>0?'017_integrity_review_ops.sql applied':'Latest migration missing','DATABASE');
 
   const [[cities]]=await pool.query(`
     SELECT COUNT(*) total,
