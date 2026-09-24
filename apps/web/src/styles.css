@@ -231,3 +231,14 @@ border:1px solid rgba(65,195,255,.28);box-shadow:0 30px 70px rgba(0,0,0,.4),inse
   .firstVisitFlow{padding:20px}.flowSteps{grid-template-columns:1fr}.flowSteps>div{min-height:auto}.quickCityGrid{grid-template-columns:1fr}.quickCityImage{height:145px}.viralLoopVisual{grid-template-columns:1fr;gap:7px}.viralLoopVisual>svg{transform:rotate(90deg);margin:auto}.viralLoopVisual>div:last-child{grid-column:auto}.homeMatchTease{display:grid}.homeMatchTease .glassBtn{width:100%}
   .joinPanel{padding:20px 16px}.simpleJoinProgress{margin-top:30px}.simpleCityPicker{max-height:390px}.joinFooterBtns{flex-direction:column-reverse}.postJoinPromise{text-align:center}
 }
+
+
+/* v0.8 next-action screens */
+.shareChoice{display:flex;align-items:center;justify-content:space-between;gap:22px;padding:22px;border-radius:18px;border:1px solid rgba(255,207,74,.14);background:radial-gradient(circle at 14% 50%,rgba(255,202,48,.08),transparent 24%),linear-gradient(90deg,#08131d,#04101a)}.shareChoice small{color:#ffcf4a;font-size:8px;font-weight:1000;letter-spacing:.15em}.shareChoice h3{font-size:23px;margin:5px 0 4px}.shareChoice p{margin:0;max-width:680px;color:#7f98b0;font-size:10px;line-height:1.55}.shareChoiceActions{display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end}.heroTextLink.light{color:#bdefff}
+
+.matchNextAction{display:flex;align-items:center;justify-content:space-between;gap:26px;padding:22px 24px;border-radius:17px;border:1px solid rgba(255,207,74,.17);background:radial-gradient(circle at 8% 50%,rgba(255,203,59,.085),transparent 23%),linear-gradient(90deg,#08131d,#04101a);box-shadow:0 18px 45px rgba(0,0,0,.22)}.nextActionCopy small{color:#ffcf4a;font-size:8px;font-weight:1000;letter-spacing:.16em}.nextActionCopy h3{font-size:25px;margin:6px 0 4px;letter-spacing:-.03em}.nextActionCopy p{margin:0;color:#8098b0;font-size:10px;line-height:1.55;max-width:720px}.nextActionButton{flex:none}.nextActionButton .goldBtn,.nextActionButton .glassBtn{min-width:190px}
+.matchDepthToggle{display:flex;justify-content:center;padding:2px 0}.matchDepthToggle button{border:0;background:none;color:#6dcfff;font-size:9px;font-weight:900;display:flex;align-items:center;gap:5px;cursor:pointer;padding:7px 10px}
+
+@media(max-width:760px){
+  .shareChoice,.matchNextAction{display:grid;padding:18px}.shareChoiceActions{justify-content:stretch}.shareChoiceActions>*{width:100%}.nextActionButton .goldBtn,.nextActionButton .glassBtn{width:100%;min-width:0}
+}
