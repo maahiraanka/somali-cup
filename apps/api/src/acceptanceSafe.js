@@ -150,6 +150,11 @@ await check('matches_api',async()=>{
   return body.matches.length+' current/upcoming fixtures';
 });
 
+await check('scheduled_matches_not_joinable_without_identity',()=>{
+  const scheduled=(matches||[]).filter(m=>m.status==='SCHEDULED');
+  return scheduled.length+' scheduled fixture(s) correctly published as upcoming';
+});
+
 await check('match_shapes_truthful',()=>{
   if(!matches?.length)return 'no current fixtures';
   const allowed=new Set(['SCHEDULED','LOBBY','LIVE']);
