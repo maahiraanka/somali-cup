@@ -78,7 +78,7 @@ async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer
   });
   const file=new File([pngBlob],'somali-cup-status.png',{type:'image/png'});
   if(navigator.share&&navigator.canShare?.({files:[file]})){
-    try{await navigator.share({title:'Somali Cup',text:subtitle,files:[file]});return 'shared'}catch(e){if(e?.name==='AbortError')return 'cancelled'}
+    try{await navigator.share({title:'Somali Cup',text:`${subtitle}\nJoin ${city?.name||'your city'}: ${window.location.origin}/?city=${city?.code||''}`,files:[file]});return 'shared'}catch(e){if(e?.name==='AbortError')return 'cancelled'}
   }
   const url=URL.createObjectURL(pngBlob);
   const a=document.createElement('a');a.href=url;a.download='somali-cup-status.png';document.body.appendChild(a);a.click();a.remove();
@@ -96,6 +96,8 @@ export default function App(){
   const [season,setSeason]=useState({name:'Somali Cup 2027',status:'QUALIFICATION'});
   const [me,setMe]=useState(null);
   const [showJoin,setShowJoin]=useState(false);
+  const [joinCity,setJoinCity]=useState(null);
+  const [joinedMoment,setJoinedMoment]=useState(null);
   const [notice,setNotice]=useState('');
   const [matches,setMatches]=useState(demoMatches);
   const [selectedCity,setSelectedCity]=useState(null);
@@ -107,18 +109,30 @@ export default function App(){
     try{const d=await api('/api/matches');if(d?.matches?.length)setMatches(d.matches)}catch{}
   };
   useEffect(()=>{refresh()},[]);
+  useEffect(()=>{
+    if(me!==null||showJoin)return;
+    const code=new URLSearchParams(window.location.search).get('city')?.toUpperCase();
+    if(!code)return;
+    const city=standings.find(c=>c.code===code&&c.is_open);
+    if(city){setJoinCity(city);setShowJoin(true)}
+  },[standings,me,showJoin]);
   const top=standings[0];
   const myCity=useMemo(()=>me?.membership?standings.find(c=>c.code===me.membership.code):null,[me,standings]);
   const total=standings.reduce((a,c)=>a+Number(c.verified_supporters||0),0);
-  const requestJoin=()=>{if(me?.membership){setNotice(`You already represent ${me.membership.name} this season.`);setTimeout(()=>setNotice(''),2600);return}setShowJoin(true)};
+  const requestJoin=(city=null)=>{
+    if(me?.membership){setNotice(`You already represent ${me.membership.name} this season.`);setTimeout(()=>setNotice(''),2600);return}
+    setJoinCity(city||null);
+    setShowJoin(true);
+  };
   const joined=(payload)=>{
     localStorage.setItem('somalicup_session',payload.token);
     setMe({user:payload.user,membership:{...payload.city,season_id:payload.season?.id,season_name:payload.season?.name,status:'ACTIVE',verification_status:'VERIFIED'}});
     setShowJoin(false);
-    setView('profile');
+    setJoinCity(null);
+    setJoinedMoment(payload);
     setNotice(`You're in. You represent ${payload.city.name}.`);
     refresh();
-    setTimeout(()=>setNotice(''),2800);
+    setTimeout(()=>setNotice(''),2200);
   };
   const openCity=(c)=>{setSelectedCity(c);setView('city');window.scrollTo({top:0,behavior:'smooth'})};
 
@@ -140,7 +154,7 @@ export default function App(){
       {view==='home'&&<Home standings={standings} top={top} total={total} season={season} myCity={myCity} onJoin={requestJoin} openCity={openCity} goQualification={()=>setView('qualification')} goMatches={()=>setView('matches')}/>}
       {view==='qualification'&&<Qualification standings={standings} season={season} onJoin={requestJoin} openCity={openCity}/>}
       {view==='cities'&&<Cities standings={standings} openCity={openCity} onJoin={requestJoin}/>}
-      {view==='city'&&selectedCity&&<CityPage city={standings.find(c=>c.code===selectedCity.code)||selectedCity} me={me} onBack={()=>setView('cities')} onJoin={requestJoin}/>}
+      {view==='city'&&selectedCity&&<CityPage city={standings.find(c=>c.code===selectedCity.code)||selectedCity} me={me} onBack={()=>setView('cities')} onJoin={requestJoin}/>} 
       {view==='matches'&&<MatchCenter matches={matches} me={me} onNeedIdentity={requestJoin}/>}
       {view==='profile'&&<SupporterProfile me={me} city={myCity} season={season} onJoin={requestJoin} onCity={()=>myCity&&openCity(myCity)} onMatches={()=>setView('matches')}/>}
     </main>
@@ -153,7 +167,8 @@ export default function App(){
       <button className={view==='profile'?'active':''} onClick={()=>me?.membership?setView('profile'):requestJoin()}><Users size={18}/><span>{me?.membership?'Me':'Join'}</span></button>
     </nav>
 
-    {showJoin&&!me?.membership&&<JoinExperience standings={standings.filter(c=>c.is_open)} onClose={()=>setShowJoin(false)} onJoined={joined}/>}
+    {showJoin&&!me?.membership&&<JoinExperience standings={standings.filter(c=>c.is_open)} initialCity={joinCity} onClose={()=>{setShowJoin(false);setJoinCity(null)}} onJoined={joined}/>}
+    {joinedMoment&&<JoinedMoment payload={joinedMoment} city={standings.find(c=>c.code===joinedMoment.city.code)||joinedMoment.city} onDone={()=>{setJoinedMoment(null);setView('profile')}}/>}
     {notice&&<div className="toast"><Check size={16}/>{notice}</div>}
   </div>
 }
@@ -213,7 +228,7 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
       <div className="quickCityGrid">
         {standings.slice(0,6).map(c=>{
           const need=Math.max(0,Number(c.qualification_target||0)-Number(c.verified_supporters||0));
-          return <button key={c.code} onClick={()=>openCity(c)} className="quickCity">
+          return <button key={c.code} onClick={()=>onJoin(c)} className="quickCity">
             <div className="quickCityImage" style={{backgroundImage:`linear-gradient(180deg,rgba(2,8,18,.02),rgba(2,8,18,.92)),url("${imgFor(c)}")`}}>
               <span>#{c.rank}</span>
               <div><b>{c.name}</b><small>{need?fmt(need)+' more needed':'Target reached'}</small></div>
@@ -264,7 +279,7 @@ function CityPage({city,me,onBack,onJoin}){
   return <div className="pageWrap">
     <button className="backBtn" onClick={onBack}><ArrowLeft size={15}/> All Cities</button>
     <section className="cityFeature" style={{backgroundImage:`linear-gradient(90deg,rgba(2,8,18,.98),rgba(2,8,18,.52),rgba(2,8,18,.8)),url("${imgFor(city)}")`}}>
-      <div><span className="rankChip">#{city.rank} · {city.tier}</span><h1>{city.name}</h1><p>{city.country} · {city.status}</p><div className="cityFeatureStats"><div><strong>{fmt(city.verified_supporters)}</strong><span>Verified supporters</span></div><div><strong>{fmt(city.qualification_target)}</strong><span>Qualification target</span></div><div><strong>{Number(city.progress_pct||0).toFixed(0)}%</strong><span>Progress</span></div></div>{mine?<div className="mineBadge"><Check/> You represent {city.name}</div>:<button className="goldBtn" onClick={onJoin}>Represent {city.name} <ArrowRight size={16}/></button>}</div>
+      <div><span className="rankChip">#{city.rank} · {city.tier}</span><h1>{city.name}</h1><p>{city.country} · {city.status}</p><div className="cityFeatureStats"><div><strong>{fmt(city.verified_supporters)}</strong><span>Verified supporters</span></div><div><strong>{fmt(city.qualification_target)}</strong><span>Qualification target</span></div><div><strong>{Number(city.progress_pct||0).toFixed(0)}%</strong><span>Progress</span></div></div>{mine?<div className="mineBadge"><Check/> You represent {city.name}</div>:<button className="goldBtn" onClick={()=>onJoin(city)}>Represent {city.name} <ArrowRight size={16}/></button>}</div>
     </section>
     <section className="cityShareBand">
       <div><small>SHARE THE RACE</small><h3>Put {city.name} on your WhatsApp Status.</h3><p>Turn your city’s qualification push into a premium Somali Cup poster.</p></div>
@@ -475,9 +490,40 @@ function MatchCenter({matches,me,onNeedIdentity}){
   </div>
 }
 
-function JoinExperience({standings,onClose,onJoined}){
-  const [step,setStep]=useState(1);
-  const [city,setCity]=useState(null);
+function JoinedMoment({payload,city,onDone}){
+  const [sharing,setSharing]=useState(false);
+  const supporters=Number(city.verified_supporters||0);
+  const target=Number(city.qualification_target||500);
+  const remaining=Math.max(0,target-supporters);
+  const share=async()=>{
+    setSharing(true);
+    try{
+      await sharePoster({
+        city,
+        eyebrow:'I’M IN · SOMALI CUP 2027',
+        title:`I REPRESENT ${city.name.toUpperCase()}`,
+        subtitle:`${supporters?fmt(supporters)+' verified supporters':'My support now counts'}`,
+        footer:remaining?`${fmt(remaining)} more supporters needed — join ${city.name}`:`${city.name} reached its target`
+      });
+    }finally{setSharing(false)}
+  };
+  return <div className="joinedMomentOverlay">
+    <section className="joinedMomentCard">
+      <div className="joinedBurst">★</div>
+      <small>YOU’RE IN</small>
+      <h2>You represent<br/><em>{city.name}.</em></h2>
+      <p>Your support now counts in the Somali Cup qualification race.</p>
+      <div className="joinedCityStrip"><CityThumb city={city} size="lg"/><div><span>YOUR CITY</span><strong>{city.name}</strong><small>{remaining?fmt(remaining)+' more needed to reach the target':'Qualification target reached'}</small></div></div>
+      <div className="joinedShareReason"><Share2 size={18}/><div><b>Now bring one more person.</b><span>Your ready-made Status poster carries {city.name} into the next conversation.</span></div></div>
+      <button className="joinedPrimary" disabled={sharing} onClick={share}>{sharing?'CREATING POSTER…':`SHARE ${city.name.toUpperCase()}`} <Share2 size={17}/></button>
+      <button className="joinedSecondary" onClick={onDone}>Go to my supporter pass</button>
+    </section>
+  </div>
+}
+
+function JoinExperience({standings,initialCity,onClose,onJoined}){
+  const [step,setStep]=useState(initialCity?2:1);
+  const [city,setCity]=useState(initialCity||null);
   const [displayName,setDisplayName]=useState('');
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
