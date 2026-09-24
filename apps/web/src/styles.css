@@ -774,3 +774,6 @@ linear-gradient(135deg,#061b18,#04101a);border:1px solid rgba(72,201,165,.18)}
 @media(max-width:680px){
   .mainStage{padding:10px}.hubTop,.bestCityTop{padding:10px 2px 14px}.hubTopRight{display:none}.hubHero,.bestCityHero{min-height:auto;padding:26px 20px;border-radius:20px}.hubHeroCopy h1{font-size:54px}.hubHeroCopy p,.bestCityHero p{font-size:13px}.hubHeroStat{padding:18px}.hubHeroStat strong{font-size:54px}.hubCards{grid-template-columns:1fr}.hubCard{min-height:330px}.hubCardIcon{margin-top:28px}.hubSimple,.bestCityHow{grid-template-columns:1fr}.bestCityTop>div{display:none}.mySupportPill{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.bestCityHero h1{font-size:50px}.bestCitySectionHead{align-items:flex-start;flex-direction:column}.bestCitySectionHead>button{padding:0}.bestCityCard{grid-template-columns:30px 48px minmax(0,1fr)}.bestCityCard .cityThumb.md{width:48px;height:48px}.bestCityJoin,.bestCityMine{grid-column:3;justify-self:start}.simpleModal>section{padding:24px 17px}
 }
+
+.bestCityShare{margin:10px 0 0;border:1px solid rgba(101,227,170,.18);background:rgba(20,72,53,.3);color:#8ce8b9;border-radius:11px;padding:10px 13px;display:inline-flex;align-items:center;gap:7px;font-size:8px;font-weight:1000;cursor:pointer}
+.bestCityShare:hover{background:rgba(24,91,65,.38)}
