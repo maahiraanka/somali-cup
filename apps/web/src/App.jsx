@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
-import {ArrowLeft,ArrowRight,BarChart3,Check,ChevronRight,Clock3,Globe2,Heart,Link2,LockKeyhole,MapPin,Menu,Play,Radio,Search,Share2,ShieldCheck,Sparkles,Trophy,UserPlus,Users,X,Zap} from 'lucide-react';
+import {AlertTriangle,ArrowLeft,ArrowRight,BarChart3,Check,ChevronRight,Clock3,Globe2,Heart,Link2,LockKeyhole,MapPin,Menu,Play,Radio,Search,Share2,ShieldCheck,Sparkles,Trophy,UserPlus,Users,X,Zap} from 'lucide-react';
 
 const heroImage='https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=2200&q=90';
 const cityImages={
@@ -18,7 +18,45 @@ const cityImages={
 const flag=(country)=>({Australia:'🇦🇺','United Kingdom':'🇬🇧',Canada:'🇨🇦',Kenya:'🇰🇪','United States':'🇺🇸',Somalia:'🇸🇴',Sweden:'🇸🇪',Norway:'🇳🇴','United Arab Emirates':'🇦🇪'})[country]||'🌍';
 const fmt=n=>Number(n||0).toLocaleString();
 const matchStatusPollDelay=status=>status==='LIVE'?8000:status==='LOBBY'?15000:30000;
-function api(path,opts={}){const token=localStorage.getItem('somalicup_session');const headers={'Content-Type':'application/json',...(opts.headers||{})};if(token)headers.Authorization=`Bearer ${token}`;return fetch(path,{...opts,headers}).then(async r=>{const body=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(body.error||'request_failed'),{status:r.status,body});return body})}
+function api(path,opts={}){
+  const token=localStorage.getItem('somalicup_session');
+  const headers={'Content-Type':'application/json',...(opts.headers||{})};
+  if(token)headers.Authorization=`Bearer ${token}`;
+  const controller=new AbortController();
+  const timeout=setTimeout(()=>controller.abort(),12000);
+  return fetch(path,{...opts,headers,signal:controller.signal})
+    .then(async r=>{
+      const body=await r.json().catch(()=>({}));
+      if(!r.ok)throw Object.assign(new Error(body.error||'request_failed'),{status:r.status,body});
+      return body;
+    })
+    .catch(e=>{
+      if(e?.name==='AbortError')throw Object.assign(new Error('request_timeout'),{status:408});
+      throw e;
+    })
+    .finally(()=>clearTimeout(timeout));
+}
+function humanError(e,fallback='Something went wrong. Please try again.'){
+  const code=String(e?.body?.error||e?.message||'');
+  const map={
+    request_timeout:'The connection took too long. Try again.',
+    request_failed:'We could not reach Somali Cup. Try again.',
+    match_not_found:'This match is no longer available.',
+    match_not_live:'This match is not live yet.',
+    match_not_open:'This match has not opened yet.',
+    invite_not_found:'That match invite is no longer valid.',
+    invite_not_found_or_revoked:'That match invite is no longer valid.',
+    invite_revoked:'That match invite is no longer valid.',
+    participation_not_found:'Reserve your place before entering the match.',
+    not_registered:'Reserve your place before entering the match.',
+    already_active:'Your Goal is already counted.',
+    city_not_open:'That city is not open for joining right now.',
+    qualification_not_open:'Qualification is not open right now.',
+    device_already_registered:'This device already has a Somali Cup identity for this season.',
+    invalid_admin_session:'Your admin session expired. Sign in again.'
+  };
+  return map[code]||fallback;
+}
 function analyticsId(){
   let id=localStorage.getItem('somalicup_anon');
   if(!id){id=crypto.randomUUID?.()||('sc-'+Date.now()+'-'+Math.random().toString(36).slice(2));localStorage.setItem('somalicup_anon',id)}
@@ -189,6 +227,7 @@ export default function App(){
   const [joinCity,setJoinCity]=useState(null);
   const [viralCity,setViralCity]=useState(null);
   const [viralMatch,setViralMatch]=useState(null);
+  const [viralMatchError,setViralMatchError]=useState('');
   const [joinedMoment,setJoinedMoment]=useState(null);
   const [assistMoment,setAssistMoment]=useState(null);
   const [notice,setNotice]=useState('');
@@ -227,10 +266,12 @@ export default function App(){
       const publicId=d?.user?.publicId;
       if(publicId){
         const key=`somalicup_last_assist_${publicId}`;
-        const seen=Number(localStorage.getItem(key)||0);
+        const rawSeen=localStorage.getItem(key);
         if(latest?.id){
-          if(seen&&Number(latest.id)>seen)setAssistMoment({latest,impact:d.qualificationImpact,membership:d.membership,user:d.user});
+          if(rawSeen!==null&&Number(latest.id)>Number(rawSeen))setAssistMoment({latest,impact:d.qualificationImpact,membership:d.membership,user:d.user});
           localStorage.setItem(key,String(latest.id));
+        }else if(rawSeen===null){
+          localStorage.setItem(key,'0');
         }
       }
       setMe(d)
@@ -290,11 +331,12 @@ export default function App(){
     const params=new URLSearchParams(window.location.search);
     const matchId=(params.get('match')||'').trim();
     const invite=(params.get('invite')||'').trim();
-    if(!matchId||!invite){setViralMatch(null);return}
+    if(!matchId||!invite){setViralMatch(null);setViralMatchError('');return}
     let cancelled=false;
+    setViralMatchError('');
     api(`/api/matches/${encodeURIComponent(matchId)}/invite/${encodeURIComponent(invite)}`)
       .then(d=>{if(!cancelled){setViralMatch(d);const key='sc_match_invite_'+matchId+'_'+invite;if(!sessionStorage.getItem(key)){sessionStorage.setItem(key,'1');trackEvent('MATCH_INVITE_LANDING',{matchPublicId:matchId,cityCode:d?.invite?.city?.code||'',source:'match_invite'})}}})
-      .catch(()=>{if(!cancelled)setViralMatch(null)});
+      .catch(e=>{if(!cancelled){setViralMatch(null);setViralMatchError(humanError(e,'That match invite is no longer available.'))}});
     return()=>{cancelled=true}
   },[]);
   const top=standings[0];
@@ -313,6 +355,7 @@ export default function App(){
   };
   const joined=(payload)=>{
     localStorage.setItem('somalicup_session',payload.token);
+    if(payload?.user?.publicId)localStorage.setItem(`somalicup_last_assist_${payload.user.publicId}`,'0');
     setMe({user:payload.user,membership:{...payload.city,season_id:payload.season?.id,season_name:payload.season?.name,status:'ACTIVE',verification_status:'VERIFIED'}});
     setIdentityChecked(true);
     setShowJoin(false);
@@ -344,7 +387,7 @@ export default function App(){
         setNotice(`You're in the ${me.membership.name} match squad.`);
         setTimeout(()=>setNotice(''),2200);
       }catch(e){
-        setNotice(e.message.replaceAll('_',' '));
+        setNotice(humanError(e,'We could not enter this match. Try again.'));
         setTimeout(()=>setNotice(''),2600);
       }finally{setInviteBusy(false)}
     }
@@ -371,7 +414,7 @@ export default function App(){
 
     <AmbientMotion/>
     <main className={(viralCity&&!me?.membership)||viralMatch?'mainStage viralStage':'mainStage'}>
-      {viralMatch?<ViralMatchLanding data={viralMatch} me={me} matches={matches} busy={inviteBusy} onIdentity={()=>requestJoin()} onEnter={enterInvitedMatch} onLeave={leaveMatchInvite}/>:viralCity&&!me?.membership?<ViralCityLanding city={viralCity} standings={standings} fromName={viralFrom} onJoin={()=>requestJoin(viralCity)} onOther={leaveViralLanding}/>:initialLoading?<LiveDataState loading onRetry={refresh}/>:<>
+      {viralMatch?<ViralMatchLanding data={viralMatch} me={me} matches={matches} busy={inviteBusy} onIdentity={()=>requestJoin()} onEnter={enterInvitedMatch} onLeave={leaveMatchInvite}/>:viralMatchError?<InviteRecovery message={viralMatchError} onHome={leaveMatchInvite}/>:viralCity&&!me?.membership?<ViralCityLanding city={viralCity} standings={standings} fromName={viralFrom} onJoin={()=>requestJoin(viralCity)} onOther={leaveViralLanding}/>:initialLoading?<LiveDataState loading onRetry={refresh}/>:<>
         {view==='home'&&(qualificationUnavailable?<LiveDataState title="Live city race unavailable" body="We couldn’t load the verified city standings. No demo numbers are being shown." onRetry={refresh}/>:<Home standings={standings} top={top} total={total} season={season} myCity={myCity} me={me} matches={matches} onJoin={requestJoin} openCity={openCity} goQualification={()=>setView('qualification')} goMatches={()=>setView('matches')}/>)}
         {view==='qualification'&&(qualificationUnavailable?<LiveDataState title="Live table unavailable" body="The verified qualification table could not be loaded." onRetry={refresh}/>:<Qualification standings={standings} season={season} onJoin={requestJoin} openCity={openCity}/>)}
         {view==='cities'&&(qualificationUnavailable?<LiveDataState title="City data unavailable" body="We couldn’t load the verified city list." onRetry={refresh}/>:<Cities standings={standings} openCity={openCity} onJoin={requestJoin}/>)}
@@ -408,6 +451,18 @@ function LiveDataState({loading=false,title='Loading verified Somali Cup data',b
     {onClose&&<button className="joinedSecondary" onClick={onClose}>Close</button>}
   </section>;
   return overlay?<div className="liveDataOverlay">{content}</div>:<div className="liveDataWrap">{content}</div>
+}
+
+function InviteRecovery({message,onHome}){
+  return <div className="inviteRecovery">
+    <section>
+      <div className="inviteRecoveryMark"><Link2 size={24}/></div>
+      <small>MATCH INVITE</small>
+      <h1>This link can’t open the match.</h1>
+      <p>{message}</p>
+      <button className="goldBtn" onClick={onHome}>GO TO SOMALI CUP <ArrowRight size={16}/></button>
+    </section>
+  </div>
 }
 
 function ViralMatchLanding({data,me,matches,busy,onIdentity,onEnter,onLeave}){
@@ -763,6 +818,8 @@ function MatchCenter({matches,me,onNeedIdentity}){
   const [showMatchDepth,setShowMatchDepth]=useState(false);
   const [scoreMoment,setScoreMoment]=useState(null);
   const [matchAssistMoment,setMatchAssistMoment]=useState(null);
+  const [liveError,setLiveError]=useState('');
+  const [lastLiveAt,setLastLiveAt]=useState(null);
   const liveRef=useRef(null);
   const momentTimerRef=useRef(null);
   const load=async(match=selected,{quiet=false}={})=>{
@@ -790,8 +847,11 @@ function MatchCenter({matches,me,onNeedIdentity}){
       }
       liveRef.current=fresh;
       setLive(fresh);
-    }catch{
-      if(!liveRef.current)setLive({match,counts:{homeActive:0,awayActive:0,registered:0,total:0},activity:[]});
+      setLiveError('');
+      setLastLiveAt(new Date());
+    }catch(e){
+      setLiveError(humanError(e,'We could not refresh the verified live score.'));
+      if(!liveRef.current)setLive(null);
     }
     if(me){
       try{
@@ -838,16 +898,25 @@ function MatchCenter({matches,me,onNeedIdentity}){
   useEffect(()=>{
     if(!selected)return;
     let cancelled=false;
-    const tick=()=>{if(!cancelled&&document.visibilityState==='visible')load(selected)};
-    const interval=setInterval(tick,matchStatusPollDelay(liveRef.current?.match?.status||selected?.status));
-    const onFocus=()=>tick();
+    let timer=null;
+    const schedule=()=>{
+      if(cancelled)return;
+      const delay=matchStatusPollDelay(liveRef.current?.match?.status||selected?.status);
+      timer=setTimeout(async()=>{
+        if(!cancelled&&document.visibilityState==='visible')await load(selected);
+        schedule();
+      },delay);
+    };
+    const onFocus=()=>{if(!cancelled)load(selected)};
+    schedule();
     window.addEventListener('focus',onFocus);
-    return()=>{cancelled=true;clearInterval(interval);window.removeEventListener('focus',onFocus)}
+    return()=>{cancelled=true;clearTimeout(timer);window.removeEventListener('focus',onFocus)}
   },[selected?.publicId,Boolean(me)]);
 
   useEffect(()=>()=>clearTimeout(momentTimerRef.current),[]);
   const match=live?.match||selected;
   if(!match)return <div className="pageWrap"><section className="pageHero compact"><h1>No fixtures yet.</h1></section></div>;
+  if(liveError&&!live)return <LiveDataState title="Live score unavailable" body={liveError+' No sample score is being shown.'} onRetry={()=>load(selected,{quiet:true})}/>;
   const home=match.home||{code:match.home_code,name:match.home_name,country:'Somalia',score:match.home_score||0};
   const away=match.away||{code:match.away_code,name:match.away_name,country:'Somalia',score:match.away_score||0};
   const homeScore=Number(home.score||0),awayScore=Number(away.score||0);
@@ -867,8 +936,8 @@ function MatchCenter({matches,me,onNeedIdentity}){
   const extendedBranch=Math.max(0,Number(mine?.indirect_joins??(branchTotal-directAssists)));
   const benchFilled=Math.min(3,directAssists);
   const commentary=(live?.activity||[]).slice(0,5);
-  const join=async()=>{if(!me){onNeedIdentity();return}setBusy(true);setMsg('');try{const inviteToken=new URLSearchParams(window.location.search).get('invite')||'';const d=await api(`/api/matches/${match.publicId}/join`,{method:'POST',body:JSON.stringify({inviteToken})});setMine(d.participation);setMsg(d.created?'Place reserved.':'You are already registered.');await load(match)}catch(e){setMsg(e.message.replaceAll('_',' '))}finally{setBusy(false)}};
-  const activate=async()=>{setBusy(true);setMsg('');try{const d=await api(`/api/matches/${match.publicId}/activate`,{method:'POST',body:'{}'});setMsg(d.goalAdded?'GOAL — your verified entry moved the score.':'Your Goal is already counted.');await load(match)}catch(e){setMsg(e.message.replaceAll('_',' '))}finally{setBusy(false)}};
+  const join=async()=>{if(!me){onNeedIdentity();return}setBusy(true);setMsg('');try{const inviteToken=new URLSearchParams(window.location.search).get('invite')||'';const d=await api(`/api/matches/${match.publicId}/join`,{method:'POST',body:JSON.stringify({inviteToken})});setMine(d.participation);setMsg(d.created?'Place reserved.':'You are already registered.');await load(match)}catch(e){setMsg(humanError(e,'We could not reserve your place. Try again.'))}finally{setBusy(false)}};
+  const activate=async()=>{setBusy(true);setMsg('');try{const d=await api(`/api/matches/${match.publicId}/activate`,{method:'POST',body:'{}'});setMsg(d.goalAdded?'GOAL — your verified entry moved the score.':'Your Goal is already counted.');await load(match)}catch(e){setMsg(humanError(e,'We could not count your Goal. Try again.'))}finally{setBusy(false)}};
   const copyLink=async()=>{const token=mine?.share_token||mine?.shareToken;if(!token)return false;const from=encodeURIComponent(me?.user?.nickname||me?.user?.displayName||'');const previewBase=window.location.pathname.startsWith('/preview')?'/preview':'';const url=`${window.location.origin}${previewBase}/?match=${match.publicId}&invite=${token}${from?'&from='+from:''}`;try{await navigator.clipboard.writeText(url);setBenchPulse(v=>v+1);setMsg('Match invite copied — bring one more person in.');return true}catch{setMsg(url);return false}};
   const myMatchCity=me?.membership?.code===home.code?home:me?.membership?.code===away.code?away:null;
   const shareMoment=async(type)=>{
@@ -887,6 +956,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
   };
 
   return <div className="matchExperience">
+    {liveError&&live&&<div className="liveRecoveryBanner"><AlertTriangle size={15}/><div><b>Live refresh interrupted</b><span>{liveError}{lastLiveAt?` · Last verified update ${lastLiveAt.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`:''}</span></div><button onClick={()=>load(selected,{quiet:true})}>Retry</button></div>}
     <section className="broadcastHero">
       <div className={`matchSide homeSide ${scoreMoment?.code===home.code?'scoredNow':''}`} style={{backgroundImage:`linear-gradient(90deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(home)}")`}}><CityThumb city={home} size="lg"/><h2>{home.name}</h2><small>{home.code}</small></div>
       <div className="scoreBoard"><div className={"liveBadge "+(match.status==='LIVE'?'red':'')}><span/> {match.tiebreakMode==='SUDDEN_DEATH'?'SUDDEN DEATH':match.status}</div><small>{match.roundCode||match.round_code}</small><strong><MotionNumber value={home.score}/> <em>–</em> <MotionNumber value={away.score}/></strong><span className="matchClock">{match.tiebreakMode==='SUDDEN_DEATH'?'NEXT VERIFIED GOAL WINS':match.status==='LIVE'?'VERIFIED SCORE':match.status==='LOBBY'?'LOBBY OPEN':match.status==='SCHEDULED'?'UPCOMING':match.status}</span>{scoreMoment&&<div className="scoreMoment"><span>VERIFIED GOAL</span><b>{scoreMoment.city} scored.</b><small>{scoreMoment.message}</small></div>}</div>
@@ -1127,7 +1197,7 @@ function JoinExperience({standings,initialCity,onClose,onJoined}){
       if(e?.body?.error==='device_already_registered'){
         const cityName=e.body?.city?.name;
         setError(cityName?`This device already represents ${cityName} this season.`:'This device already has a Somali Cup supporter identity for this season.');
-      }else setError(e.message.replaceAll('_',' '))
+      }else setError(humanError(e,'We could not complete your join. Try again.'))
     }
     finally{setBusy(false)}
   };
