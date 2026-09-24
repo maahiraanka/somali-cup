@@ -229,6 +229,11 @@ function CompetitionsAdmin({d,act,refresh}){
   const [stages,setStages]=useState([]);
   const [stageLoading,setStageLoading]=useState(false);
   const [editing,setEditing]=useState(null);
+  const [choices,setChoices]=useState([]);
+  const [editingCompetition,setEditingCompetition]=useState(null);
+  const [editingChoice,setEditingChoice]=useState(null);
+  const [newChoice,setNewChoice]=useState('');
+  const [contentBusy,setContentBusy]=useState(false);
   const [showCreator,setShowCreator]=useState(false);
   const [creatorStep,setCreatorStep]=useState(1);
   const [creatorBusy,setCreatorBusy]=useState(false);
@@ -252,7 +257,13 @@ function CompetitionsAdmin({d,act,refresh}){
     catch{setStages([])}
     finally{setStageLoading(false)}
   };
-  useEffect(()=>{if(selected?.id){setSelectedId(selected.id);loadStages(selected.id)}},[selected?.id]);
+  const loadChoices=async(id)=>{
+    if(!id){setChoices([]);return}
+    try{const x=await adminApi('/api/admin/competitions/'+id+'/choices');setChoices(x.choices||[])}
+    catch{setChoices([])}
+  };
+  const loadCompetitionData=async id=>Promise.all([loadStages(id),loadChoices(id)]);
+  useEffect(()=>{if(selected?.id){setSelectedId(selected.id);loadCompetitionData(selected.id)}},[selected?.id]);
 
   const saveStage=async(stage)=>{
     const form=editing?.id===stage.id?editing:stage;
@@ -271,6 +282,92 @@ function CompetitionsAdmin({d,act,refresh}){
     );
     setEditing(null);
     await loadStages(selected.id);
+  };
+
+  const saveCompetition=async()=>{
+    if(!selected||!editingCompetition)return;
+    setContentBusy(true);
+    try{
+      await adminApi('/api/admin/competitions/'+selected.id+'/details',{
+        method:'PATCH',
+        body:JSON.stringify({
+          name:editingCompetition.name,
+          shortName:editingCompetition.short_name,
+          status:editingCompetition.status,
+          languagePreset:editingCompetition.language_preset,
+          allowNominations:Boolean(editingCompetition.allow_nominations)
+        })
+      });
+      setEditingCompetition(null);
+      await refresh();
+    }catch(e){setCreatorError(humanErrorAdmin(e))}
+    finally{setContentBusy(false)}
+  };
+
+  const deleteCompetition=async()=>{
+    if(!selected||selected.slug==='somali-cup')return;
+    const confirmation=window.prompt('Type DELETE '+selected.name+' to permanently delete this competition and its public activity.');
+    if(confirmation!=='DELETE '+selected.name)return;
+    setContentBusy(true);
+    try{
+      await adminApi('/api/admin/competitions/'+selected.id,{method:'DELETE',body:JSON.stringify({confirmation})});
+      setSelectedId(null);setStages([]);setChoices([]);
+      await refresh();
+    }catch(e){setCreatorError(humanErrorAdmin(e))}
+    finally{setContentBusy(false)}
+  };
+
+  const addChoice=async()=>{
+    const name=newChoice.trim();
+    if(!selected||name.length<2)return;
+    setContentBusy(true);
+    try{
+      await adminApi('/api/admin/competitions/'+selected.id+'/choices',{method:'POST',body:JSON.stringify({name})});
+      setNewChoice('');
+      await loadCompetitionData(selected.id);
+      await refresh();
+    }catch(e){setCreatorError(humanErrorAdmin(e))}
+    finally{setContentBusy(false)}
+  };
+
+  const saveChoice=async choice=>{
+    if(!selected||!editingChoice)return;
+    setContentBusy(true);
+    try{
+      await adminApi('/api/admin/competitions/'+selected.id+'/choices/'+choice.id,{
+        method:'PATCH',
+        body:JSON.stringify({name:editingChoice.name,shortName:editingChoice.short_name,status:editingChoice.status,target:editingChoice.target})
+      });
+      setEditingChoice(null);
+      await loadCompetitionData(selected.id);
+      await refresh();
+    }catch(e){setCreatorError(humanErrorAdmin(e))}
+    finally{setContentBusy(false)}
+  };
+
+  const deleteChoice=async choice=>{
+    if(!selected||selected.slug==='somali-cup')return;
+    const confirmation=window.prompt('Type DELETE '+choice.name+' to permanently delete this choice and its public activity.');
+    if(confirmation!=='DELETE '+choice.name)return;
+    setContentBusy(true);
+    try{
+      await adminApi('/api/admin/competitions/'+selected.id+'/choices/'+choice.id,{method:'DELETE',body:JSON.stringify({confirmation})});
+      await loadCompetitionData(selected.id);
+      await refresh();
+    }catch(e){setCreatorError(humanErrorAdmin(e))}
+    finally{setContentBusy(false)}
+  };
+
+  const resetPublicContent=async()=>{
+    const confirmation=window.prompt('This will remove all public competition content and rebuild Somali Cup + Best City. Type RESET PUBLIC CONTENT to continue.');
+    if(confirmation!=='RESET PUBLIC CONTENT')return;
+    setContentBusy(true);setCreatorError('');
+    try{
+      await adminApi('/api/admin/competitions/reset-defaults',{method:'POST',body:JSON.stringify({confirmation})});
+      setSelectedId(null);setStages([]);setChoices([]);setEditingCompetition(null);setEditingChoice(null);
+      await refresh();
+    }catch(e){setCreatorError(humanErrorAdmin(e))}
+    finally{setContentBusy(false)}
   };
 
   const resetCreator=()=>{
@@ -321,7 +418,7 @@ function CompetitionsAdmin({d,act,refresh}){
     <section className="competitionAdminHero">
       <div><small>MULTI-TOURNAMENT CONTROL</small><h2>{selected?.name||'Competitions'}</h2><p>{selected?nice(selected.competition_type)+' · '+nice(selected.choice_type)+' · '+fmt(selected.choice_count)+' choices':'Create your first competition without touching code.'}</p></div>
       <div className="competitionAdminHeroActions">
-        {selected&&<select value={selected.id} onChange={e=>{const id=Number(e.target.value);setSelectedId(id);loadStages(id)}}>{competitions.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select>}
+        {selected&&<select value={selected.id} onChange={e=>{const id=Number(e.target.value);setSelectedId(id);loadCompetitionData(id)}}>{competitions.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select>}
         <button className="adminPrimary" onClick={openCreator}><Plus size={15}/> CREATE COMPETITION</button>
       </div>
     </section>
@@ -329,13 +426,41 @@ function CompetitionsAdmin({d,act,refresh}){
     {!selected?<div className="adminEmpty"><Trophy/><div><b>No competitions yet</b><p>Press Create Competition to build one in five simple steps.</p></div></div>:<>
       <section className="adminPanel">
         <div className="adminPanelAction"><PanelHead eyebrow="PUBLIC SETTINGS" title="Competition"/><div className="competitionAdminButtons">
+          <button onClick={()=>setEditingCompetition(editingCompetition?null:{...selected})}><Pencil size={13}/> {editingCompetition?'CANCEL':'EDIT'}</button>
           <button onClick={()=>act(()=>adminApi('/api/admin/competitions/'+selected.id,{method:'PATCH',body:JSON.stringify({allowNominations:!selected.allow_nominations})}),selected.allow_nominations?'Suggestions closed':'Suggestions opened')}>{selected.allow_nominations?'CLOSE SUGGESTIONS':'ALLOW SUGGESTIONS'}</button>
+          {selected.slug!=='somali-cup'&&<button className="danger" onClick={deleteCompetition} disabled={contentBusy}>DELETE</button>}
         </div></div>
+        {editingCompetition&&<div className="competitionEditGrid">
+          <label><span>Name</span><input value={editingCompetition.name||''} onChange={e=>setEditingCompetition({...editingCompetition,name:e.target.value})}/></label>
+          <label><span>Short name</span><input value={editingCompetition.short_name||''} onChange={e=>setEditingCompetition({...editingCompetition,short_name:e.target.value})}/></label>
+          <label><span>Status</span><select value={editingCompetition.status||'DRAFT'} onChange={e=>setEditingCompetition({...editingCompetition,status:e.target.value})}><option>DRAFT</option><option>OPEN</option><option>LIVE</option><option>COMPLETE</option><option>ARCHIVED</option></select></label>
+          <label><span>Language</span><select value={editingCompetition.language_preset||'SIMPLE'} onChange={e=>setEditingCompetition({...editingCompetition,language_preset:e.target.value})}><option>CUP</option><option>CITY</option><option>UNIVERSITY</option><option>CLUB</option><option>FAN</option><option>SIMPLE</option></select></label>
+          <button className="adminPrimary" onClick={saveCompetition} disabled={contentBusy}><Save size={13}/> SAVE CHANGES</button>
+        </div>}
         <div className="competitionAdminSummary">
           <div><span>Status</span><strong>{nice(selected.status)}</strong></div>
           <div><span>Language</span><strong>{nice(selected.language_preset)}</strong></div>
           <div><span>Choices</span><strong>{fmt(selected.choice_count)}</strong></div>
           <div><span>Suggestions waiting</span><strong>{fmt(selected.pending_nominations)}</strong></div>
+        </div>
+      </section>
+
+      <section className="adminPanel">
+        <div className="adminPanelAction"><PanelHead eyebrow="CHOICES" title="Manage what people can support"/><span className="opsHint">Add, edit, pause or delete choices</span></div>
+        <div className="competitionAddChoice"><input value={newChoice} onChange={e=>setNewChoice(e.target.value)} placeholder={'Add a '+String(selected.choice_type||'choice').toLowerCase()}/><button onClick={addChoice} disabled={contentBusy||newChoice.trim().length<2}><Plus size={13}/> ADD</button></div>
+        <div className="competitionChoiceAdminList">
+          {choices.map(choice=><div className="competitionChoiceAdmin" key={choice.id}>
+            {editingChoice?.id===choice.id?<div className="competitionChoiceEdit">
+              <input value={editingChoice.name||''} onChange={e=>setEditingChoice({...editingChoice,name:e.target.value})}/>
+              <select value={editingChoice.status||'ACTIVE'} onChange={e=>setEditingChoice({...editingChoice,status:e.target.value})}><option>ACTIVE</option><option>PAUSED</option><option>ELIMINATED</option><option>WINNER</option></select>
+              <input type="number" value={editingChoice.target??''} placeholder="Target" onChange={e=>setEditingChoice({...editingChoice,target:e.target.value===''?null:Number(e.target.value)})}/>
+              <button onClick={()=>saveChoice(choice)} disabled={contentBusy}><Save size={13}/> SAVE</button>
+              <button onClick={()=>setEditingChoice(null)}>CANCEL</button>
+            </div>:<>
+              <div><strong>{choice.name}</strong><span>{choice.code} · {fmt(choice.supporter_count)} supporters · {nice(choice.status)}</span></div>
+              <div className="competitionChoiceActions"><button onClick={()=>setEditingChoice({...choice})}><Pencil size={13}/> EDIT</button>{selected.slug!=='somali-cup'&&<button className="danger" onClick={()=>deleteChoice(choice)} disabled={contentBusy}>DELETE</button>}</div>
+            </>}
+          </div>)}
         </div>
       </section>
 
@@ -371,6 +496,12 @@ function CompetitionsAdmin({d,act,refresh}){
           })}
         </div>}
       </section>
+
+      <section className="adminPanel dangerZone">
+        <div><small>CONTENT RECOVERY</small><h3>Reset public content</h3><p>Remove all public competition content and rebuild the default Somali Cup and Best City setup. Admin accounts, audit history and security evidence are kept.</p></div>
+        <button className="danger" onClick={resetPublicContent} disabled={contentBusy}><RefreshCw size={14}/> RESET & REBUILD</button>
+      </section>
+      {creatorError&&<div className="adminError"><AlertTriangle size={16}/>{creatorError}</div>}
     </>}
 
     {showCreator&&<div className="competitionCreatorOverlay">
