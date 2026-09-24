@@ -194,8 +194,12 @@ export default function App(){
 
 function ViralCityLanding({city,standings,fromName,onJoin,onOther}){
   const need=Math.max(0,Number(city.qualification_target||0)-Number(city.verified_supporters||0));
-  const leader=standings[0];
-  const gap=leader&&leader.code!==city.code?Math.max(0,Number(leader.verified_supporters||0)-Number(city.verified_supporters||0)):0;
+  const idx=Math.max(0,standings.findIndex(c=>c.code===city.code));
+  const rival=idx===0?standings[1]:standings[idx-1];
+  const cityGoals=Number(city.verified_supporters||0);
+  const rivalGoals=Number(rival?.verified_supporters||0);
+  const relation=!rival?'NONE':cityGoals>rivalGoals?'LEADING':cityGoals<rivalGoals?'BEHIND':'TIED';
+  const gap=rival?Math.abs(cityGoals-rivalGoals):0;
   return <div className="viralLanding">
     <section className="viralLandingHero" style={{backgroundImage:`linear-gradient(180deg,rgba(1,7,16,.2),rgba(1,7,16,.96)),url("${imgFor(city)}")`}}>
       <div className="viralLandingTop"><Logo/><span><i/> LIVE QUALIFICATION</span></div>
@@ -209,7 +213,7 @@ function ViralCityLanding({city,standings,fromName,onJoin,onOther}){
           <div><span>GOALS NEEDED</span><strong>{fmt(need)}</strong></div>
         </div>
         <div className="viralLandingProgress"><div><span>{fmt(city.verified_supporters)} / {fmt(city.qualification_target)}</span><b>{Number(city.progress_pct||0).toFixed(0)}%</b></div><Progress value={city.progress_pct}/></div>
-        {gap>0&&<div className="viralUrgency"><Zap size={16}/><span><b>{fmt(gap)} Goals</b> separate {city.name} from #{leader.rank} {leader.name}.</span></div>}
+        {rival&&<div className={"viralUrgency "+relation.toLowerCase()}><Zap size={16}/><span>{relation==='LEADING'?<><b>{city.name} leads {rival.name} by {fmt(gap)} {gap===1?'Goal':'Goals'}.</b> Protect the lead.</>:relation==='BEHIND'?<><b>{city.name} is {fmt(gap)} {gap===1?'Goal':'Goals'} behind {rival.name}.</b> Your Goal cuts the gap.</>:<><b>{city.name} is level with {rival.name}.</b> The next Goal takes the lead.</>}</span></div>}
         <button className="viralJoinButton" onClick={onJoin}>I REPRESENT {city.name.toUpperCase()} <ArrowRight size={18}/></button>
         <span className="viralJoinMicro">Join once · score 1 Goal · then bring one person for the Assist</span>
         <button className="viralOtherCity" onClick={onOther}>I represent another city</button>
@@ -222,11 +226,15 @@ function ViralCityLanding({city,standings,fromName,onJoin,onOther}){
 function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification,goMatches}){
   const leaders=standings.slice(0,5);
   const remaining=myCity?Math.max(0,Number(myCity.qualification_target||0)-Number(myCity.verified_supporters||0)):0;
+  const myIndex=myCity?standings.findIndex(c=>c.code===myCity.code):-1;
+  const myRival=myIndex===0?standings[1]:myIndex>0?standings[myIndex-1]:null;
+  const myGap=myRival?Math.abs(Number(myCity.verified_supporters||0)-Number(myRival.verified_supporters||0)):0;
+  const myRelation=!myRival?'NONE':Number(myCity.verified_supporters||0)>Number(myRival.verified_supporters||0)?'LEADING':Number(myCity.verified_supporters||0)<Number(myRival.verified_supporters||0)?'BEHIND':'TIED';
   const shareMyCity=()=>myCity&&sharePoster({
     city:myCity,
     title:`I REPRESENT ${myCity.name.toUpperCase()}`,
     subtitle:`${fmt(myCity.verified_supporters)} Goals scored · ${Number(myCity.progress_pct||0).toFixed(0)}% to qualification`,
-    footer:`${remaining?fmt(remaining)+' more supporters needed':'Qualification target reached'}`
+    footer:`${remaining?fmt(remaining)+' Goals needed':'Qualification target reached'}`
   });
 
   return <div className="simpleHome">
@@ -243,7 +251,8 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
           <div className="returningCity">
             <div className="returningCityTop"><CityThumb city={myCity} size="md"/><div><small>YOU REPRESENT</small><strong>{myCity.name}</strong><span>#{myCity.rank} in qualification</span></div></div>
             <div className="returningProgress"><div><span>{fmt(myCity.verified_supporters)} / {fmt(myCity.qualification_target)}</span><b>{remaining?fmt(remaining)+' Goals needed':'TARGET REACHED'}</b></div><Progress value={myCity.progress_pct}/></div>
-            <button className="heroPrimary" onClick={shareMyCity}><Share2 size={18}/> SHARE {myCity.name.toUpperCase()}</button>
+            {myRival&&<div className={"returningRival "+myRelation.toLowerCase()}>{myRelation==='LEADING'?<><b>Lead {myRival.name} by {fmt(myGap)}.</b> Protect it.</>:myRelation==='BEHIND'?<><b>{fmt(myGap)} behind {myRival.name}.</b> Close the gap.</>:<><b>Level with {myRival.name}.</b> Next Goal leads.</>}</div>}
+            <button className="heroPrimary" onClick={shareMyCity}><Share2 size={18}/> {myRelation==='LEADING'?'PROTECT THE LEAD':myRelation==='BEHIND'?'CLOSE THE GAP':myRelation==='TIED'?'TAKE THE LEAD':'SHARE '+myCity.name.toUpperCase()}</button>
           </div>
         </>}
       </div>
@@ -543,6 +552,12 @@ function JoinedMoment({payload,city,onDone}){
   const remaining=Math.max(0,target-supporters);
   const nextNumber=supporters+1;
   const supporterName=payload.user?.nickname||payload.user?.displayName||'';
+  const rivalry=payload.rivalry;
+  const rivalryLine=!rivalry?'':rivalry.relation==='LEADING'
+    ?`${city.name} leads ${rivalry.rival.name} by ${rivalry.gap} ${rivalry.gap===1?'Goal':'Goals'} — protect the lead.`
+    :rivalry.relation==='BEHIND'
+      ?`${city.name} is ${rivalry.gap} ${rivalry.gap===1?'Goal':'Goals'} behind ${rivalry.rival.name} — close the gap.`
+      :`${city.name} is level with ${rivalry.rival.name} — the next Goal takes the lead.`;
   const share=async()=>{
     setSharing(true);
     try{
@@ -551,7 +566,7 @@ function JoinedMoment({payload,city,onDone}){
         eyebrow:'I’M IN · SOMALI CUP 2027',
         title:`I REPRESENT ${city.name.toUpperCase()}`,
         subtitle:`${supporters?'Goal #'+fmt(supporters)+' for '+city.name:'My Goal now counts'}`,
-        footer:remaining?`I scored Goal #${fmt(supporters)} — help ${city.name} score Goal #${fmt(nextNumber)}`:`${city.name} reached its target`,
+        footer:rivalryLine||(remaining?`I scored Goal #${fmt(supporters)} — help ${city.name} score Goal #${fmt(nextNumber)}`:`${city.name} reached its target`),
         fromName:supporterName
       });
     }finally{setSharing(false)}
@@ -562,9 +577,9 @@ function JoinedMoment({payload,city,onDone}){
       <small>YOU’RE IN</small>
       <h2>You represent<br/><em>{city.name}.</em></h2>
       <div className="joinedNumber"><span>YOU SCORED</span><strong>GOAL #{fmt(supporters)}</strong><small>for {city.name}</small></div>
-      <p>Your verified join added one Goal to {city.name}. Now keep the chain moving.</p>
+      <p>You scored 1 Goal for {city.name}. {rivalryLine||'Now go for the Assist.'}</p>
       <div className="joinedCityStrip"><CityThumb city={city} size="lg"/><div><span>YOUR CITY</span><strong>{city.name}</strong><small>{remaining?fmt(remaining)+' more needed to reach the target':'Qualification target reached'}</small></div></div>
-      <div className="joinedShareReason"><Share2 size={18}/><div><b>Help {city.name} score Goal #{fmt(nextNumber)}.</b><span>Bring one person through your link. If they join, you get the Assist and they score the next Goal.</span></div></div>
+      <div className="joinedShareReason"><Share2 size={18}/><div><b>{rivalry?.relation==='LEADING'?`Protect the lead. Make Goal #${fmt(nextNumber)} happen.`:rivalry?.relation==='BEHIND'?`Close the gap. Make Goal #${fmt(nextNumber)} happen.`:rivalry?.relation==='TIED'?`Take the lead. Make Goal #${fmt(nextNumber)} happen.`:`Help ${city.name} score Goal #${fmt(nextNumber)}.`}</b><span>Bring one person through your link. If they join, you get the Assist and they score the next Goal.</span></div></div>
       <button className="joinedPrimary" disabled={sharing} onClick={share}>{sharing?'CREATING POSTER…':`SHARE ${city.name.toUpperCase()}`} <Share2 size={17}/></button>
       <button className="joinedSecondary" onClick={onDone}>Go to my supporter pass</button>
     </section>
