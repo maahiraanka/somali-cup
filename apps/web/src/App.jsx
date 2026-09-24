@@ -1,19 +1,38 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
+import QRCode from 'qrcode';
 import {AlertTriangle,ArrowLeft,ArrowRight,BarChart3,Check,ChevronRight,Globe2,Link2,LockKeyhole,MapPin,Menu,Play,Radio,Search,Share2,ShieldCheck,Sparkles,Trophy,UserPlus,Users,X,Zap} from 'lucide-react';
 
-const heroImage='https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=2200&q=90';
-const cityImages={
-  MOG:'https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=1000&q=88',
-  HAR:'https://images.unsplash.com/photo-1486325212027-8081e485255e?auto=format&fit=crop&w=1000&q=88',
-  KIS:'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1000&q=88',
-  GAR:'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1000&q=88',
-  BOS:'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1000&q=88',
-  BAI:'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1000&q=88',
-  BLW:'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1000&q=88',
-  GAL:'https://images.unsplash.com/photo-1511818966892-d7d671e672a2?auto=format&fit=crop&w=1000&q=88',
-  JOW:'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1000&q=88',
-  BUR:'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?auto=format&fit=crop&w=1000&q=88'
+const cityThemes={
+  MOG:['#18baf7','#0b5ea8'],HAR:['#32d0c6','#167c88'],KIS:['#1fc7e8','#087ca2'],GAR:['#d9aa3b','#8b5a16'],
+  BOS:['#4fc7ff','#1a6d9f'],BAI:['#efb34f','#9a641d'],BLW:['#5fd9b0','#17775e'],GAL:['#8fb7ff','#4a63aa'],
+  JOW:['#46d69b','#19795e'],BUR:['#6bcff6','#325f99']
 };
+const safeSvg=v=>String(v??'').replace(/[&<>]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
+function cityArt(city={code:'SC',name:'Somali Cup'}){
+  const code=String(city?.code||'SC').toUpperCase();
+  const name=city?.name||'Somali Cup';
+  const [a,b]=cityThemes[code]||['#23c9ff','#155f9e'];
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="900" viewBox="0 0 1200 900">
+    <defs>
+      <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#020914"/><stop offset=".55" stop-color="${b}"/><stop offset="1" stop-color="#020914"/></linearGradient>
+      <radialGradient id="r"><stop stop-color="${a}" stop-opacity=".42"/><stop offset="1" stop-color="${a}" stop-opacity="0"/></radialGradient>
+      <pattern id="p" width="72" height="72" patternUnits="userSpaceOnUse"><path d="M36 0L72 36 36 72 0 36Z" fill="none" stroke="#fff" stroke-opacity=".035" stroke-width="2"/></pattern>
+    </defs>
+    <rect width="1200" height="900" fill="url(#g)"/>
+    <rect width="1200" height="900" fill="url(#p)"/>
+    <circle cx="920" cy="160" r="360" fill="url(#r)"/>
+    <path d="M0 710 C210 615 390 760 600 680S980 580 1200 660V900H0Z" fill="#020813" fill-opacity=".84"/>
+    <g transform="translate(870 180)" fill="none" stroke="#fff" stroke-opacity=".42" stroke-width="6">
+      <path d="M0-92 22-28 90-28 35 12 56 78 0 38-56 78-35 12-90-28-22-28Z"/>
+    </g>
+    <text x="72" y="118" fill="#9bdfff" font-family="Arial,sans-serif" font-size="28" font-weight="700" letter-spacing="8">SOMALI CUP CITY</text>
+    <text x="72" y="610" fill="#fff" font-family="Arial,sans-serif" font-size="164" font-weight="900" opacity=".96">${safeSvg(code)}</text>
+    <text x="74" y="680" fill="#d7e7f2" font-family="Arial,sans-serif" font-size="52" font-weight="700">${safeSvg(name)}</text>
+    <text x="76" y="732" fill="#88a7ba" font-family="Arial,sans-serif" font-size="24" letter-spacing="5">SOMALIA · DIFFERENT CITIES. ONE PEOPLE.</text>
+  </svg>`;
+  return 'data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(svg);
+}
+const heroImage=cityArt({code:'SC',name:'Somali Cup'});
 
 const flag=(country)=>({Australia:'🇦🇺','United Kingdom':'🇬🇧',Canada:'🇨🇦',Kenya:'🇰🇪','United States':'🇺🇸',Somalia:'🇸🇴',Sweden:'🇸🇪',Norway:'🇳🇴','United Arab Emirates':'🇦🇪'})[country]||'🌍';
 const fmt=n=>Number(n||0).toLocaleString();
@@ -79,43 +98,68 @@ function trackEvent(eventName,{cityCode='',matchPublicId='',source='',metadata={
   }).catch(()=>{});
 }
 
-const imgFor=c=>cityImages[c?.code]||heroImage;
+const imgFor=c=>c?.code?cityArt(c):heroImage;
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[m]));
-async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer='Different cities. One people.',accent='#ffcf4a',fromName='',refPublicId=''}){
+async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer='Different cities. One people.',accent='#ffcf4a',fromName='',refPublicId='',shareUrl=''}) {
+  const fromParam=fromName?`&from=${encodeURIComponent(fromName)}`:'';
+  const refParam=refPublicId?`&ref=${encodeURIComponent(refPublicId)}`:'';
+  const previewBase=window.location.pathname.startsWith('/preview')?'/preview':'';
+  const viralUrl=shareUrl||`${window.location.origin}${previewBase}/?city=${encodeURIComponent(city?.code||'')}&src=status${fromParam}${refParam}`;
+  const qrDataUrl=await QRCode.toDataURL(viralUrl,{width:240,margin:1,errorCorrectionLevel:'M',color:{dark:'#06101b',light:'#ffffff'}});
   const titleSize=String(title||'').length>24?58:String(title||'').length>18?68:82;
   const subtitleSize=String(subtitle||'').length>44?28:String(subtitle||'').length>30?32:38;
-  const footerSize=String(footer||'').length>46?30:String(footer||'').length>34?36:46;
+  const footerSize=String(footer||'').length>46?29:String(footer||'').length>34?34:42;
+  const code=city?.code||'SC';
+  const name=city?.name||'Somali Cup';
+  const [cityAccent,cityDeep]=cityThemes[code]||['#23c9ff','#155f9e'];
   const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
     <defs>
-      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#020914"/><stop offset=".55" stop-color="#071b30"/><stop offset="1" stop-color="#020914"/></linearGradient>
-      <radialGradient id="glow"><stop stop-color="${accent}" stop-opacity=".32"/><stop offset="1" stop-color="${accent}" stop-opacity="0"/></radialGradient>
+      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#020914"/><stop offset=".52" stop-color="${cityDeep}"/><stop offset="1" stop-color="#020914"/></linearGradient>
+      <radialGradient id="glow"><stop stop-color="${cityAccent}" stop-opacity=".28"/><stop offset="1" stop-color="${cityAccent}" stop-opacity="0"/></radialGradient>
+      <pattern id="pat" width="86" height="86" patternUnits="userSpaceOnUse"><path d="M43 0 86 43 43 86 0 43Z" fill="none" stroke="#fff" stroke-opacity=".035" stroke-width="2"/></pattern>
       <filter id="shadow"><feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000" flood-opacity=".55"/></filter>
     </defs>
     <rect width="1080" height="1920" fill="url(#bg)"/>
-    <circle cx="825" cy="290" r="480" fill="url(#glow)"/>
-    <path d="M0 1420 C220 1320 410 1490 650 1380 S890 1260 1080 1320 L1080 1920 L0 1920Z" fill="#03101d"/>
-    <text x="72" y="110" fill="#8dcff0" font-family="Arial,sans-serif" font-size="28" font-weight="700" letter-spacing="7">${esc(eyebrow)}</text>
-    <text x="72" y="195" fill="#fff" font-family="Arial,sans-serif" font-size="66" font-weight="900">SOMALI</text>
-    <text x="72" y="262" fill="${accent}" font-family="Arial,sans-serif" font-size="66" font-weight="900">CUP</text>
-    <rect x="72" y="340" width="936" height="2" fill="#2aaee8" opacity=".35"/>
-    <text x="72" y="520" fill="#fff" font-family="Arial,sans-serif" font-size="${titleSize}" font-weight="900" filter="url(#shadow)">${esc(title)}</text>
-    <text x="72" y="610" fill="#a9bfd2" font-family="Arial,sans-serif" font-size="${subtitleSize}" font-weight="600">${esc(subtitle)}</text>
-    <g transform="translate(72 760)">
-      <rect width="936" height="420" rx="48" fill="#071827" stroke="#2fcaff" stroke-opacity=".28" stroke-width="3"/>
-      <circle cx="170" cy="165" r="102" fill="#0d2b45" stroke="${accent}" stroke-width="8"/>
-      <text x="170" y="185" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-size="68" font-weight="900">${esc(city?.code||'SC')}</text>
-      <text x="330" y="150" fill="#8dcff0" font-family="Arial,sans-serif" font-size="26" font-weight="700" letter-spacing="5">REPRESENTING</text>
-      <text x="330" y="225" fill="#fff" font-family="Arial,sans-serif" font-size="62" font-weight="900">${esc(city?.name||'Somali Cup')}</text>
-      <text x="330" y="280" fill="#93a9be" font-family="Arial,sans-serif" font-size="30">Somalia</text>
-      <rect x="70" y="340" width="796" height="2" fill="#274b66"/>
-      <text x="70" y="390" fill="${accent}" font-family="Arial,sans-serif" font-size="25" font-weight="800" letter-spacing="4">VERIFIED SUPPORTER</text>
+    <rect width="1080" height="1920" fill="url(#pat)"/>
+    <circle cx="870" cy="260" r="520" fill="url(#glow)"/>
+    <path d="M0 1390 C230 1290 430 1470 680 1350 S930 1240 1080 1300V1920H0Z" fill="#020812" fill-opacity=".9"/>
+    <g transform="translate(882 185)" fill="none" stroke="#fff" stroke-opacity=".34" stroke-width="6"><path d="M0-78 19-24 76-24 30 10 47 64 0 31-47 64-30 10-76-24-19-24Z"/></g>
+
+    <text x="70" y="105" fill="#9edfff" font-family="Arial,sans-serif" font-size="25" font-weight="700" letter-spacing="7">${esc(eyebrow)}</text>
+    <text x="70" y="190" fill="#fff" font-family="Arial,sans-serif" font-size="62" font-weight="900">SOMALI</text>
+    <text x="70" y="252" fill="${accent}" font-family="Arial,sans-serif" font-size="62" font-weight="900">CUP</text>
+    <text x="70" y="302" fill="#7895aa" font-family="Arial,sans-serif" font-size="22" letter-spacing="4">DIFFERENT CITIES · ONE PEOPLE</text>
+
+    <rect x="70" y="350" width="940" height="2" fill="#65d9ff" opacity=".24"/>
+    <text x="70" y="505" fill="#fff" font-family="Arial,sans-serif" font-size="${titleSize}" font-weight="900" filter="url(#shadow)">${esc(title)}</text>
+    <text x="70" y="590" fill="#b0c6d7" font-family="Arial,sans-serif" font-size="${subtitleSize}" font-weight="600">${esc(subtitle)}</text>
+
+    <g transform="translate(70 700)">
+      <rect width="940" height="400" rx="42" fill="#061522" fill-opacity=".9" stroke="#65d9ff" stroke-opacity=".2" stroke-width="3"/>
+      <circle cx="170" cy="158" r="100" fill="#0a263c" stroke="${cityAccent}" stroke-width="8"/>
+      <text x="170" y="182" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-size="70" font-weight="900">${esc(code)}</text>
+      <text x="326" y="125" fill="#8fdfff" font-family="Arial,sans-serif" font-size="23" font-weight="700" letter-spacing="5">REPRESENTING</text>
+      <text x="326" y="205" fill="#fff" font-family="Arial,sans-serif" font-size="60" font-weight="900">${esc(name)}</text>
+      <text x="326" y="258" fill="#93aabd" font-family="Arial,sans-serif" font-size="28">Somalia</text>
+      <rect x="64" y="322" width="812" height="2" fill="#274b66"/>
+      <text x="64" y="367" fill="${accent}" font-family="Arial,sans-serif" font-size="23" font-weight="800" letter-spacing="4">VERIFIED SOMALI CUP MOMENT</text>
     </g>
-    <text x="72" y="1480" fill="#fff" font-family="Arial,sans-serif" font-size="${footerSize}" font-weight="800">${esc(footer)}</text>
-    <rect x="72" y="1540" width="650" height="112" rx="56" fill="${accent}"/>
-    <text x="397" y="1611" text-anchor="middle" fill="#07101a" font-family="Arial,sans-serif" font-size="34" font-weight="900">JOIN ${esc(city?.name?.toUpperCase()||'YOUR CITY')}</text>
-    <text x="72" y="1710" fill="#8eb2ca" font-family="Arial,sans-serif" font-size="28">somalicup.com/?city=${esc(city?.code||'')}</text>
-    <text x="72" y="1815" fill="#31516d" font-family="Arial,sans-serif" font-size="28" font-weight="700" letter-spacing="5">ONE CITY • ONE SEASON • ONE CUP</text>
+
+    <text x="70" y="1280" fill="#fff" font-family="Arial,sans-serif" font-size="${footerSize}" font-weight="800">${esc(footer)}</text>
+
+    <g transform="translate(70 1370)">
+      <rect width="940" height="330" rx="38" fill="#f7fbff"/>
+      <image href="${qrDataUrl}" x="52" y="44" width="240" height="240"/>
+      <text x="338" y="112" fill="#07101a" font-family="Arial,sans-serif" font-size="26" font-weight="800" letter-spacing="3">SCAN TO JOIN</text>
+      <text x="338" y="170" fill="#07101a" font-family="Arial,sans-serif" font-size="38" font-weight="900">${esc(name.toUpperCase())}</text>
+      <text x="338" y="220" fill="#526779" font-family="Arial,sans-serif" font-size="24">Open the verified Somali Cup link.</text>
+      <text x="338" y="266" fill="#0c83b9" font-family="Arial,sans-serif" font-size="23" font-weight="800">somalicup.com</text>
+    </g>
+
+    <text x="70" y="1795" fill="#8eb0c5" font-family="Arial,sans-serif" font-size="24">ONE VERIFIED PERSON = ONE GOAL</text>
+    <text x="70" y="1850" fill="#385770" font-family="Arial,sans-serif" font-size="24" font-weight="700" letter-spacing="4">ONE CITY · ONE SEASON · ONE CUP</text>
   </svg>`;
+
   const svgBlob=new Blob([svg],{type:'image/svg+xml'});
   const svgUrl=URL.createObjectURL(svgBlob);
   const pngBlob=await new Promise((resolve,reject)=>{
@@ -129,20 +173,18 @@ async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer
     image.onerror=()=>{URL.revokeObjectURL(svgUrl);reject(new Error('poster_render_failed'))};
     image.src=svgUrl;
   });
-  const file=new File([pngBlob],'somali-cup-status.png',{type:'image/png'});
-  const fromParam=fromName?`&from=${encodeURIComponent(fromName)}`:'';
-  const refParam=refPublicId?`&ref=${encodeURIComponent(refPublicId)}`:'';
-  const previewBase=window.location.pathname.startsWith('/preview')?'/preview':'';
-  const viralUrl=`${window.location.origin}${previewBase}/?city=${encodeURIComponent(city?.code||'')}&src=status${fromParam}${refParam}`;
-  const lead=fromName?`${fromName} is backing ${city?.name}.\n`:'';
-  const shareText=`${lead}${subtitle}\nJoin ${city?.name||'your city'}: ${viralUrl}`;
+  const file=new File([pngBlob],`somali-cup-${String(code).toLowerCase()}-status.png`,{type:'image/png'});
+  const lead=fromName?`${fromName} is backing ${name}.\n`:'';
+  const shareText=`${lead}${subtitle}\nOpen Somali Cup: ${viralUrl}`;
+
   if(navigator.share&&navigator.canShare?.({files:[file]})){
     try{
       await navigator.share({title:'Somali Cup',text:shareText,files:[file]});
-      trackEvent('SHARE_COMPLETED',{cityCode:city?.code||'',source:'native_share',metadata:{outcome:'shared'}});
-      return 'shared'
+      trackEvent('SHARE_COMPLETED',{cityCode:code,source:'native_share',metadata:{outcome:'shared'}});
+      return 'shared';
     }catch(e){if(e?.name==='AbortError')return 'cancelled'}
   }
+
   let linkCopied=false;
   try{
     if(navigator.clipboard?.writeText){
@@ -151,10 +193,10 @@ async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer
     }
   }catch{}
   const url=URL.createObjectURL(pngBlob);
-  const a=document.createElement('a');a.href=url;a.download='somali-cup-status.png';document.body.appendChild(a);a.click();a.remove();
+  const a=document.createElement('a');a.href=url;a.download=file.name;document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1200);
   const outcome=linkCopied?'downloaded_link_copied':'downloaded';
-  trackEvent('SHARE_COMPLETED',{cityCode:city?.code||'',source:'poster_fallback',metadata:{outcome}});
+  trackEvent('SHARE_COMPLETED',{cityCode:code,source:'poster_fallback',metadata:{outcome}});
   return outcome;
 }
 
@@ -938,7 +980,14 @@ function MatchCenter({matches,me,onNeedIdentity}){
   const commentary=(live?.activity||[]).slice(0,5);
   const join=async()=>{if(!me){onNeedIdentity();return}setBusy(true);setMsg('');try{const inviteToken=new URLSearchParams(window.location.search).get('invite')||'';const d=await api(`/api/matches/${match.publicId}/join`,{method:'POST',body:JSON.stringify({inviteToken})});setMine(d.participation);setMsg(d.created?'Place reserved.':'You are already registered.');await load(match)}catch(e){setMsg(humanError(e,'We could not reserve your place. Try again.'))}finally{setBusy(false)}};
   const activate=async()=>{setBusy(true);setMsg('');try{const d=await api(`/api/matches/${match.publicId}/activate`,{method:'POST',body:'{}'});setMsg(d.goalAdded?'GOAL — your verified entry moved the score.':'Your Goal is already counted.');await load(match)}catch(e){setMsg(humanError(e,'We could not count your Goal. Try again.'))}finally{setBusy(false)}};
-  const copyLink=async()=>{const token=mine?.share_token||mine?.shareToken;if(!token)return false;const from=encodeURIComponent(me?.user?.nickname||me?.user?.displayName||'');const previewBase=window.location.pathname.startsWith('/preview')?'/preview':'';const url=`${window.location.origin}${previewBase}/?match=${match.publicId}&invite=${token}${from?'&from='+from:''}`;try{await navigator.clipboard.writeText(url);setBenchPulse(v=>v+1);setMsg('Match invite copied — bring one more person in.');return true}catch{setMsg(url);return false}};
+  const personalMatchUrl=()=>{
+    const token=mine?.share_token||mine?.shareToken;
+    if(!token)return '';
+    const from=encodeURIComponent(me?.user?.nickname||me?.user?.displayName||'');
+    const previewBase=window.location.pathname.startsWith('/preview')?'/preview':'';
+    return `${window.location.origin}${previewBase}/?match=${match.publicId}&invite=${token}${from?'&from='+from:''}`;
+  };
+  const copyLink=async()=>{const url=personalMatchUrl();if(!url)return false;try{await navigator.clipboard.writeText(url);setBenchPulse(v=>v+1);setMsg('Match invite copied — bring one more person in.');return true}catch{setMsg(url);return false}};
   const myMatchCity=me?.membership?.code===home.code?home:me?.membership?.code===away.code?away:null;
   const shareMoment=async(type)=>{
     const city=myMatchCity||leader||home;
@@ -949,7 +998,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
       fulltime:{eyebrow:'FULL TIME',title:`${(match.winner?.name||leader?.name||city.name).toUpperCase()}`,subtitle:`${home.code} ${homeScore} — ${awayScore} ${away.code}`,footer:'Somali Cup · The city story continues'}
     };
     try{
-      const result=await sharePoster({city,...presets[type],fromName:me?.user?.nickname||me?.user?.displayName||'',refPublicId:me?.user?.publicId||''});
+      const result=await sharePoster({city,...presets[type],fromName:me?.user?.nickname||me?.user?.displayName||'',refPublicId:me?.user?.publicId||'',shareUrl:personalMatchUrl()});
       setMsg(shareResultMessage(result));
     }catch{setMsg('Could not create poster on this device.')}
   };
