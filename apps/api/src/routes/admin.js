@@ -429,12 +429,22 @@ router.get('/integrity',async(req,res,next)=>{
 
 router.get('/matches',async(_req,res,next)=>{
   try{
+    const [[season]]=await pool.query("SELECT id,name,status FROM seasons WHERE status IN ('QUALIFICATION','GROUP','KNOCKOUT','FINAL','COMPLETE') ORDER BY id DESC LIMIT 1");
+    const [cities]=await pool.query("SELECT code,name FROM cities WHERE is_active=1 ORDER BY name");
     const [rows]=await pool.query(`
-      SELECT m.public_id,m.round_code,m.status,m.starts_at,m.lobby_opens_at,m.home_score,m.away_score,m.score_version,
-        hc.code home_code,hc.name home_name,ac.code away_code,ac.name away_name
-      FROM matches m JOIN cities hc ON hc.id=m.home_city_id JOIN cities ac ON ac.id=m.away_city_id
-      ORDER BY m.starts_at DESC,m.id DESC LIMIT 100`);
-    res.json({matches:rows});
+      SELECT m.public_id,m.round_code,m.status,m.starts_at,m.lobby_opens_at,m.regulation_ends_at,m.ends_at,m.finalised_at,
+        m.home_score,m.away_score,m.score_version,m.tiebreak_mode,m.winner_city_id,
+        hc.code home_code,hc.name home_name,ac.code away_code,ac.name away_name,
+        wc.code winner_code,wc.name winner_name,
+        (SELECT COUNT(*) FROM match_participations mp WHERE mp.match_id=m.id) participation_total,
+        (SELECT COUNT(*) FROM scoring_events se WHERE se.match_id=m.id AND se.type='GOAL') verified_goals
+      FROM matches m
+      JOIN cities hc ON hc.id=m.home_city_id
+      JOIN cities ac ON ac.id=m.away_city_id
+      LEFT JOIN cities wc ON wc.id=m.winner_city_id
+      ORDER BY FIELD(m.status,'LIVE','LOBBY','SCHEDULED','FINAL','CANCELLED'),m.starts_at ASC,m.id DESC
+      LIMIT 100`);
+    res.json({season,cities,matches:rows.map(x=>({...x,participation_total:Number(x.participation_total||0),verified_goals:Number(x.verified_goals||0)}))});
   }catch(e){next(e)}
 });
 
@@ -459,7 +469,7 @@ router.post('/matches',async(req,res,next)=>{
     const [result]=await conn.query(`INSERT INTO matches(public_id,season_id,round_code,home_city_id,away_city_id,starts_at,regulation_ends_at,lobby_opens_at,status)
       VALUES (?,?,?,?,?,?,?,?,'SCHEDULED')`,[publicId,season.id,roundCode,home.id,away.id,startsAt,regulationEndsAt,lobbyOpensAt]);
     await conn.query(`INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json)
-      VALUES (NULL,'MATCH_CREATED','MATCH',?,?)`,[String(result.insertId),JSON.stringify({publicId,homeCode,awayCode,roundCode,startsAt,regulationEndsAt,lobbyOpensAt,durationMinutes})]);
+      VALUES (?,'MATCH_CREATED','MATCH',?,?)`,[req.admin?.user_id||null,String(result.insertId),JSON.stringify({publicId,homeCode,awayCode,roundCode,startsAt,regulationEndsAt,lobbyOpensAt,durationMinutes})]);
     await conn.commit();
     res.status(201).json({publicId,status:'SCHEDULED'});
   }catch(e){await conn.rollback();if(e.status)return res.status(e.status).json({error:e.message});next(e)}finally{conn.release()}
