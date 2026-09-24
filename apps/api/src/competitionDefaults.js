@@ -25,6 +25,7 @@ export async function clearPublicCompetitionContent(conn){
   await conn.query('DELETE FROM qualification_referrals');
   await conn.query('DELETE FROM qualification_events');
   await conn.query('DELETE FROM city_memberships');
+  await conn.query('DELETE FROM season_cities');
   await conn.query('DELETE FROM season_device_claims');
   await conn.query('DELETE FROM identity_integrity_events');
   await conn.query('DELETE FROM funnel_events');
