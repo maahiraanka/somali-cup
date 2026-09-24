@@ -8,6 +8,7 @@ import identityRoutes from './routes/identity.js';
 import qualificationRoutes from './routes/qualification.js';
 import adminRoutes from './routes/admin.js';
 import matchRoutes from './routes/matches.js';
+import analyticsRoutes from './routes/analytics.js';
 
 const app = express();
 app.disable('x-powered-by');
@@ -29,6 +30,7 @@ app.use('/api/public',publicRoutes);
 app.use('/api/identity',identityRoutes);
 app.use('/api/qualification',qualificationRoutes);
 app.use('/api/matches',matchRoutes);
+app.use('/api/analytics',analyticsRoutes);
 app.use('/api/admin',adminRoutes);
 
 app.use('/api',(req,res)=>res.status(404).json({error:'api_not_found'}));
