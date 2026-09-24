@@ -799,17 +799,22 @@ function AwardsAdmin({d,confirmed,act}){
 }
 
 function AuditAdmin({d}){return <section className="adminPanel"><PanelHead eyebrow="IMMUTABLE HISTORY" title="Control actions"/><AuditRows rows={d?.audit||[]}/></section>}
-function AuditRows({rows}){return <div className="adminAuditRows rich">{rows.length?rows.map(r=>{
-  const diff=auditDiffText(r.metadata_json);
-  return <div key={r.id}>
-    <Activity size={15}/>
-    <div><b>{nice(r.action)}</b><small>{r.entity_type} · {r.entity_id} · {r.actor_name||'System'}</small>
-      {(diff.before!==undefined||diff.after!==undefined)&&<div className="auditDiff"><span>{diff.before||'—'}</span><ChevronRight size={11}/><strong>{diff.after||'—'}</strong></div>}
-      {diff.summary&&<em>{diff.summary}</em>}
-      {diff.reason&&<em>Reason: {diff.reason}</em>}
+function AuditRows({rows}){
+  if(!rows.length)return <div className="adminAuditRows rich"><Empty compact title="No audit events yet" body="Operational changes will appear here."/></div>;
+  return <div className="adminAuditRows rich">{rows.map(r=>{
+    const diff=auditDiffText(r.metadata_json);
+    return <div key={r.id}>
+      <Activity size={15}/>
+      <div>
+        <b>{nice(r.action)}</b>
+        <small>{r.entity_type} · {r.entity_id} · {r.actor_name||'System'}</small>
+        {(diff.before!==undefined||diff.after!==undefined)&&<div className="auditDiff"><span>{diff.before||'—'}</span><ChevronRight size={11}/><strong>{diff.after||'—'}</strong></div>}
+        {diff.summary&&<em>{diff.summary}</em>}
+        {diff.reason&&<em>Reason: {diff.reason}</em>}
+      </div>
+      <span>{new Date(r.created_at).toLocaleString()}</span>
     </div>
-    <span>{new Date(r.created_at).toLocaleString()}</span>
-  </div>
-}):<Empty compact title="No audit events yet" body="Operational changes will appear here."/></div>}
+  })}</div>
+}
 function PanelHead({eyebrow,title}){return <div className="adminPanelHead"><small>{eyebrow}</small><h2>{title}</h2></div>}
 function Empty({title,body,compact=false}){return <div className={'adminEmpty '+(compact?'compact':'')}><LockKeyhole size={compact?17:25}/><div><b>{title}</b><p>{body}</p></div></div>}
