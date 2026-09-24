@@ -55,37 +55,27 @@ await check('competition_referrals_table',()=>pool.query("SELECT competition_id,
 await check('competition_stages_table',()=>pool.query("SELECT competition_id,code,stage_type,status,rule_type,target,advance_count FROM competition_stages LIMIT 1"));
 await check('competition_stage_choices_table',()=>pool.query("SELECT stage_id,choice_id,result_status,entry_supporter_count FROM competition_stage_choices LIMIT 1"));
 await check('competition_stage_events_table',()=>pool.query("SELECT competition_id,stage_id,event_type FROM competition_stage_events LIMIT 1"));
-await check('best_city_rounds_seeded',async()=>{
-  const [[r]]=await pool.query(`
-    SELECT COUNT(*) total,SUM(status='OPEN') open_rounds
-    FROM competition_stages cs
-    JOIN competitions cp ON cp.id=cs.competition_id
-    WHERE cp.slug='best-city-somalia'
-  `);
-  if(Number(r?.total||0)!==4)throw new Error('Best City must have 4 rounds');
-  if(Number(r?.open_rounds||0)!==1)throw new Error('Best City must have exactly one open round');
-});
 await check('competition_creator_schema_ready',async()=>{
   await pool.query("SELECT id,slug,status FROM competitions LIMIT 1");
   await pool.query("SELECT id,competition_id,code FROM competition_choices LIMIT 1");
   await pool.query("SELECT id,competition_id,sequence_no,status FROM competition_stages LIMIT 1");
   await pool.query("SELECT stage_id,choice_id FROM competition_stage_choices LIMIT 1");
 });
-await check('best_city_competition_seed',async()=>{
-  const [[r]]=await pool.query("SELECT id FROM competitions WHERE slug='best-city-somalia' AND language_preset='CITY' LIMIT 1");
-  if(!r)throw new Error('Best City competition seed missing');
+await check('public_content_empty_migration_applied',async()=>{
+  const [[r]]=await pool.query("SELECT filename FROM schema_migrations WHERE filename='023_empty_public_data.sql' LIMIT 1");
+  if(!r)throw new Error('empty public data migration not applied');
 });
-await check('public_content_reset_migration_applied',async()=>{
-  const [[r]]=await pool.query("SELECT filename FROM schema_migrations WHERE filename='022_reset_public_competition_content.sql' LIMIT 1");
-  if(!r)throw new Error('public content reset migration not applied');
-});
-await check('default_public_content_present',async()=>{
-  const [[r]]=await pool.query("SELECT SUM(slug='somali-cup') somali_cup,SUM(slug='best-city-somalia') best_city FROM competitions");
-  if(Number(r?.somali_cup||0)!==1||Number(r?.best_city||0)!==1)throw new Error('default public competitions missing');
-});
-await check('somali_cup_competition_backfill',async()=>{
-  const [[r]]=await pool.query("SELECT id FROM competitions WHERE slug='somali-cup' LIMIT 1");
-  if(!r)throw new Error('Somali Cup competition backfill missing');
+await check('public_content_is_empty',async()=>{
+  const [[r]]=await pool.query(`
+    SELECT
+      (SELECT COUNT(*) FROM cities) cities,
+      (SELECT COUNT(*) FROM city_memberships) supporters,
+      (SELECT COUNT(*) FROM matches) matches,
+      (SELECT COUNT(*) FROM competitions) competitions,
+      (SELECT COUNT(*) FROM competition_choices) choices
+  `);
+  const nonZero=Object.entries(r||{}).filter(([,v])=>Number(v)!==0);
+  if(nonZero.length)throw new Error('expected empty public content: '+nonZero.map(([k,v])=>k+'='+v).join(','));
 });
 await check('match_lifecycle_columns',()=>pool.query("SELECT regulation_ends_at,tiebreak_mode,tiebreak_started_at FROM matches LIMIT 1"));
 await check('tournament_stage_rules',()=>pool.query("SELECT tie_policy,match_duration_minutes FROM tournament_stages LIMIT 1"));
