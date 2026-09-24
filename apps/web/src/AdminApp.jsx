@@ -109,7 +109,8 @@ const nav=[
   ['operations','Operations',Power],
   ['cities','Cities & Qualification',Flag],
   ['matches','Matches',Radio],
-  ['tournament','Tournament',Trophy],
+  ['competitions','Competitions',Trophy],
+  ['tournament','Somali Cup Builder',Trophy],
   ['supporters','Supporters',Users],
   ['integrity','Integrity',ShieldCheck],
   ['analytics','Viral Analytics',BarChart3],
@@ -143,6 +144,7 @@ export default function AdminApp(){
     operations:'/api/admin/operations',
     cities:'/api/admin/qualification',
     matches:'/api/admin/matches',
+    competitions:'/api/admin/competitions',
     tournament:'/api/admin/tournament-config',
     supporters:'/api/admin/supporters'+(query?'?q='+encodeURIComponent(query):''),
     integrity:'/api/admin/integrity?days=7',
@@ -207,6 +209,7 @@ export default function AdminApp(){
           view==='operations'?<OperationsAdmin d={data.operations} act={act}/>:
           view==='cities'?<CitiesAdmin d={data.cities} act={act}/>:
           view==='matches'?<MatchesAdmin d={data.matches} act={act}/>:
+          view==='competitions'?<CompetitionsAdmin d={data.competitions} act={act} refresh={refresh}/>:
           view==='tournament'?<TournamentAdmin d={data.tournament} act={act}/>:
           view==='supporters'?<SupportersAdmin d={data.supporters} query={query} setQuery={setQuery} refresh={refresh} act={act}/>:
           view==='integrity'?<IntegrityAdmin d={data.integrity} act={act}/>:
@@ -217,6 +220,98 @@ export default function AdminApp(){
       </main>
     </section>
   </div>
+}
+
+
+function CompetitionsAdmin({d,act,refresh}){
+  const competitions=d?.competitions||[];
+  const [selectedId,setSelectedId]=useState(null);
+  const [stages,setStages]=useState([]);
+  const [stageLoading,setStageLoading]=useState(false);
+  const [editing,setEditing]=useState(null);
+  const selected=competitions.find(c=>Number(c.id)===Number(selectedId))||competitions[0]||null;
+
+  const loadStages=async(id)=>{
+    if(!id)return;
+    setStageLoading(true);
+    try{const x=await adminApi('/api/admin/competitions/'+id+'/stages');setStages(x.stages||[])}
+    catch{setStages([])}
+    finally{setStageLoading(false)}
+  };
+  useEffect(()=>{if(selected?.id){setSelectedId(selected.id);loadStages(selected.id)}},[selected?.id]);
+
+  const saveStage=async(stage)=>{
+    const form=editing?.id===stage.id?editing:stage;
+    await act(
+      ()=>adminApi('/api/admin/competitions/'+selected.id+'/stages/'+stage.id,{
+        method:'PATCH',
+        body:JSON.stringify({
+          name:form.name,
+          ruleType:form.rule_type||form.ruleType,
+          target:form.target,
+          advanceCount:form.advance_count??form.advanceCount,
+          groupSize:form.group_size??form.groupSize
+        })
+      }),
+      'Round updated'
+    );
+    setEditing(null);
+    await loadStages(selected.id);
+  };
+
+  if(!selected)return <div className="adminEmpty"><Trophy/><div><b>No competitions yet</b><p>Create your first competition through the API foundation, then manage its rounds here.</p></div></div>;
+
+  return <>
+    <section className="competitionAdminHero">
+      <div><small>MULTI-TOURNAMENT CONTROL</small><h2>{selected.name}</h2><p>{nice(selected.competition_type)} · {nice(selected.choice_type)} · {fmt(selected.choice_count)} choices</p></div>
+      <select value={selected.id} onChange={e=>{const id=Number(e.target.value);setSelectedId(id);loadStages(id)}}>{competitions.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select>
+    </section>
+
+    <section className="adminPanel">
+      <div className="adminPanelAction"><PanelHead eyebrow="PUBLIC SETTINGS" title="Competition"/><div className="competitionAdminButtons">
+        <button onClick={()=>act(()=>adminApi('/api/admin/competitions/'+selected.id,{method:'PATCH',body:JSON.stringify({allowNominations:!selected.allow_nominations})}),selected.allow_nominations?'Suggestions closed':'Suggestions opened')}>{selected.allow_nominations?'CLOSE SUGGESTIONS':'ALLOW SUGGESTIONS'}</button>
+      </div></div>
+      <div className="competitionAdminSummary">
+        <div><span>Status</span><strong>{nice(selected.status)}</strong></div>
+        <div><span>Language</span><strong>{nice(selected.language_preset)}</strong></div>
+        <div><span>Choices</span><strong>{fmt(selected.choice_count)}</strong></div>
+        <div><span>Suggestions waiting</span><strong>{fmt(selected.pending_nominations)}</strong></div>
+      </div>
+    </section>
+
+    <section className="adminPanel">
+      <div className="adminPanelAction"><PanelHead eyebrow="ROUNDS" title="How this competition moves"/><span className="opsHint">Closing a live round moves qualified choices forward</span></div>
+      {stageLoading?<div className="adminLoading compact"><RefreshCw className="spin"/> Loading rounds…</div>:<div className="competitionStageAdminList">
+        {stages.map(stage=>{
+          const form=editing?.id===stage.id?editing:stage;
+          return <div className={'competitionStageAdmin '+String(stage.status||'').toLowerCase()} key={stage.id}>
+            <div className="competitionStageAdminHead">
+              <div><span>{stage.sequence_no}</span><div><small>{nice(stage.stage_type)}</small><h3>{stage.name}</h3><p>{nice(stage.rule_type)} · {fmt(stage.choices?.length)} choices</p></div></div>
+              <b>{stage.status}</b>
+            </div>
+            <div className="competitionStageNumbers">
+              <div><span>Target</span><strong>{stage.target?fmt(stage.target):'—'}</strong></div>
+              <div><span>Move on</span><strong>{stage.advance_count?fmt(stage.advance_count):'By rule'}</strong></div>
+              <div><span>Group size</span><strong>{stage.group_size?fmt(stage.group_size):'—'}</strong></div>
+              <div><span>Choices</span><strong>{fmt(stage.choices?.length)}</strong></div>
+            </div>
+            {editing?.id===stage.id&&<div className="competitionStageEditor">
+              <label><span>Round name</span><input value={form.name||''} onChange={e=>setEditing({...form,name:e.target.value})}/></label>
+              <label><span>Rule</span><select value={form.rule_type||form.ruleType||'TARGET'} onChange={e=>setEditing({...form,rule_type:e.target.value})}><option value="TARGET">Reach target</option><option value="TOP_N">Top number move on</option><option value="TARGET_OR_TOP_N">Target or top number</option><option value="HIGHEST_AT_CLOSE">Highest support wins</option></select></label>
+              <label><span>Supporter target</span><input type="number" value={form.target??''} onChange={e=>setEditing({...form,target:e.target.value===''?null:Number(e.target.value)})}/></label>
+              <label><span>How many move on</span><input type="number" value={form.advance_count??form.advanceCount??''} onChange={e=>setEditing({...form,advance_count:e.target.value===''?null:Number(e.target.value)})}/></label>
+              <label><span>Group size</span><input type="number" value={form.group_size??form.groupSize??''} onChange={e=>setEditing({...form,group_size:e.target.value===''?null:Number(e.target.value)})}/></label>
+            </div>}
+            <div className="competitionStageActions">
+              <button onClick={()=>editing?.id===stage.id?saveStage(stage):setEditing({...stage})}>{editing?.id===stage.id?<><Save size={14}/> SAVE</>:<><Pencil size={14}/> EDIT ROUND</>}</button>
+              {stage.status==='DRAFT'&&<button onClick={async()=>{if(window.confirm('Open '+stage.name+' now?')){await act(()=>adminApi('/api/admin/competitions/'+selected.id+'/stages/'+stage.id+'/open',{method:'POST'}),'Round opened');await loadStages(selected.id)}}}><Radio size={14}/> OPEN ROUND</button>}
+              {stage.status==='OPEN'&&<button className="danger" onClick={async()=>{if(window.confirm('Close '+stage.name+' and move qualified cities to the next round?')){await act(()=>adminApi('/api/admin/competitions/'+selected.id+'/stages/'+stage.id+'/close',{method:'POST'}),'Round closed and qualified cities moved on');await loadStages(selected.id)}}}><CheckCircle2 size={14}/> CLOSE & MOVE ON</button>}
+            </div>
+          </div>
+        })}
+      </div>}
+    </section>
+  </>;
 }
 
 function LaunchReadiness({d,act}){
