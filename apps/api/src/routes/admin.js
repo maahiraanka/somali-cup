@@ -1,8 +1,51 @@
 import crypto from 'node:crypto';
 import { Router } from 'express';
+import { execFile } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { pool } from '../db/pool.js';
 import { requireAdminKey } from '../auth.js';
 import { getLaunchReadiness } from '../launchReadiness.js';
+const execFileAsync=promisify(execFile);
+const __dirname=path.dirname(fileURLToPath(import.meta.url));
+const apiRoot=path.resolve(__dirname,'..');
+const launchRuns=new Set();
+
+async function runLaunchScript(kind){
+  const scripts={
+    preflight:'preflight.js',
+    safe:'acceptanceSafe.js',
+    controlled:'acceptanceControlled.js'
+  };
+  const file=scripts[kind];
+  if(!file)throw Object.assign(new Error('invalid_launch_check'),{status:400});
+  if(launchRuns.has(kind))throw Object.assign(new Error('launch_check_already_running'),{status:409});
+  launchRuns.add(kind);
+  try{
+    const env={...process.env};
+    if(kind==='controlled'){
+      env.ACCEPTANCE_MUTATIONS='I_UNDERSTAND_THIS_CREATES_TEMPORARY_RECORDS';
+      if(process.env.ADMIN_BOOTSTRAP_KEY)env.ACCEPTANCE_ADMIN_KEY=process.env.ADMIN_BOOTSTRAP_KEY;
+    }
+    const {stdout,stderr}=await execFileAsync(process.execPath,[path.join(apiRoot,file)],{
+      env,timeout:180000,maxBuffer:1024*1024
+    });
+    return {ok:true,stdout:String(stdout||'').slice(-16000),stderr:String(stderr||'').slice(-8000)};
+  }catch(e){
+    const err=Object.assign(new Error('launch_check_failed'),{status:409});
+    err.payload={
+      error:'launch_check_failed',
+      exitCode:e.code??null,
+      stdout:String(e.stdout||'').slice(-16000),
+      stderr:String(e.stderr||'').slice(-8000)
+    };
+    throw err;
+  }finally{
+    launchRuns.delete(kind);
+  }
+}
+
 const router=Router();
 router.use(requireAdminKey);
 
@@ -11,6 +54,32 @@ router.get('/launch-readiness',async(_req,res,next)=>{
   try{
     res.json(await getLaunchReadiness());
   }catch(e){next(e)}
+});
+
+router.post('/launch-checks/:kind',async(req,res,next)=>{
+  const kind=String(req.params.kind||'').toLowerCase();
+  if(!['preflight','safe','controlled'].includes(kind))return res.status(404).json({error:'launch_check_not_found'});
+  if(kind==='controlled'){
+    const confirmation=String(req.body?.confirmation||'');
+    if(confirmation!=='RUN CONTROLLED ACCEPTANCE'){
+      return res.status(400).json({error:'controlled_acceptance_confirmation_required'});
+    }
+  }
+  try{
+    const result=await runLaunchScript(kind);
+    await pool.query(`
+      INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json)
+      VALUES (?,'LAUNCH_CHECK_RUN','LAUNCH_ACCEPTANCE',?,JSON_OBJECT('kind',?,'result','PASS'))
+    `,[req.admin?.user_id||null,kind,kind]);
+    res.json({...result,kind,readiness:await getLaunchReadiness()});
+  }catch(e){
+    await pool.query(`
+      INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json)
+      VALUES (?,'LAUNCH_CHECK_RUN','LAUNCH_ACCEPTANCE',?,JSON_OBJECT('kind',?,'result','FAIL'))
+    `,[req.admin?.user_id||null,kind,kind]).catch(()=>{});
+    if(e.status)return res.status(e.status).json(e.payload||{error:e.message});
+    next(e);
+  }
 });
 
 router.post('/repair-fixture-lifecycle',async(req,res,next)=>{
