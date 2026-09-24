@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {
   Activity,AlertTriangle,BarChart3,CheckCircle2,ChevronRight,ClipboardList,DoorOpen,
-  Flag,KeyRound,LayoutDashboard,LockKeyhole,Medal,Menu,Radio,RefreshCw,Rocket,
+  Ban,CalendarClock,Flag,KeyRound,LayoutDashboard,LockKeyhole,Medal,Menu,Pencil,Plus,Radio,RefreshCw,Rocket,Save,
   Search,ShieldCheck,Trophy,UserPlus,Users,X
 } from 'lucide-react';
 
@@ -331,28 +331,177 @@ function Overview({d}){
 }
 
 function CitiesAdmin({d,act}){
-  if(!d?.season)return <Empty title="Qualification is not open" body="No qualification season is available."/>;
-  return <section className="adminPanel"><PanelHead eyebrow={d.season.status} title={d.season.name+' cities'}/>
-    <div className="adminTable adminCitiesTable"><div className="adminTR head"><span>City</span><span>Verified</span><span>Target</span><span>Status</span><span>Open</span><span>Action</span></div>
-      {(d.cities||[]).map(c=><div className="adminTR" key={c.id}>
-        <div><b>{c.name}</b><small>{c.code} · {c.tier}</small></div>
-        <strong>{fmt(c.verified_supporters)}</strong><span>{fmt(c.qualification_target)}</span><span>{c.status}</span>
-        <span className={c.is_open?'adminYes':'adminNo'}>{c.is_open?'OPEN':'CLOSED'}</span>
-        <button className="adminSmallBtn" onClick={()=>act(()=>adminApi('/api/admin/qualification/cities/'+c.id,{method:'PATCH',body:JSON.stringify({isOpen:!c.is_open})}),c.name+(c.is_open?' closed':' opened'))}>{c.is_open?'Close':'Open'}</button>
-      </div>)}
-    </div>
-  </section>
+  const [editing,setEditing]=useState(null);
+  const [target,setTarget]=useState('');
+  const [status,setStatus]=useState('');
+  if(!d?.season)return <Empty title="No active competition" body="Create or activate a Somali Cup season before city operations begin."/>;
+
+  const seasonNext={DRAFT:'QUALIFICATION',QUALIFICATION:'GROUP',GROUP:'KNOCKOUT',KNOCKOUT:'FINAL',FINAL:'COMPLETE',COMPLETE:'ARCHIVED'}[d.season.status];
+  const startEdit=c=>{setEditing(c.id);setTarget(String(c.qualification_target||''));setStatus(c.status||'QUALIFYING')};
+  const saveCity=c=>act(
+    ()=>adminApi('/api/admin/qualification/cities/'+c.id,{method:'PATCH',body:JSON.stringify({
+      qualificationTarget:Number(target),
+      status
+    })}),
+    c.name+' updated'
+  );
+
+  return <>
+    <section className="seasonOpsHero">
+      <div>
+        <small>SEASON CONTROL</small>
+        <h2>{d.season.name}</h2>
+        <p>Current stage: <b>{nice(d.season.status)}</b>. Moving the season forward is audited and cannot be casually reversed.</p>
+      </div>
+      <div className="seasonOpsActions">
+        <span className={'status '+String(d.season.status).toLowerCase()}>{d.season.status}</span>
+        {seasonNext&&<button className="adminPrimary" onClick={()=>{
+          if(window.confirm('Move '+d.season.name+' from '+d.season.status+' to '+seasonNext+'? This is a competition-stage change.')){
+            act(()=>adminApi('/api/admin/season',{method:'PATCH',body:JSON.stringify({status:seasonNext,confirmation:'CONFIRM SEASON CHANGE'})}),'Season moved to '+seasonNext)
+          }
+        }}>MOVE TO {nice(seasonNext)} <ChevronRight size={15}/></button>}
+      </div>
+    </section>
+
+    <section className="adminPanel">
+      <div className="adminPanelAction"><PanelHead eyebrow="CITY OPERATIONS" title="Qualification & city control"/><span className="opsHint">{fmt(d.cities?.length||0)} cities</span></div>
+      <div className="cityOpsGrid">
+        {(d.cities||[]).map(c=><article className={'cityOpsCard '+(editing===c.id?'editing':'')} key={c.id}>
+          <div className="cityOpsHead">
+            <div><span className="cityCodeBadge">{c.code}</span><div><h3>{c.name}</h3><small>{c.tier}</small></div></div>
+            <span className={c.is_open?'adminYes':'adminNo'}>{c.is_open?'OPEN':'CLOSED'}</span>
+          </div>
+          <div className="cityOpsNumbers">
+            <div><span>Verified Goals</span><strong>{fmt(c.verified_supporters)}</strong></div>
+            <div><span>Target</span><strong>{fmt(c.qualification_target)}</strong></div>
+            <div><span>Status</span><strong>{nice(c.status)}</strong></div>
+          </div>
+          <div className="cityOpsButtons">
+            <button onClick={()=>act(()=>adminApi('/api/admin/qualification/cities/'+c.id,{method:'PATCH',body:JSON.stringify({isOpen:!c.is_open})}),c.name+(c.is_open?' closed':' opened'))}>{c.is_open?<><Ban size={13}/> CLOSE CITY</>:<><ShieldCheck size={13}/> OPEN CITY</>}</button>
+            <button onClick={()=>editing===c.id?setEditing(null):startEdit(c)}><Pencil size={13}/> {editing===c.id?'CLOSE EDITOR':'MANAGE'}</button>
+          </div>
+          {editing===c.id&&<div className="cityOpsEditor">
+            <label><span>Qualification target</span><input type="number" min="1" value={target} onChange={e=>setTarget(e.target.value)}/></label>
+            <label><span>Competition status</span><select value={status} onChange={e=>setStatus(e.target.value)}>
+              <option value="QUALIFYING">Qualifying</option>
+              <option value="QUALIFIED">Qualified</option>
+              <option value="ELIMINATED">Eliminated</option>
+              <option value="CHAMPION">Champion</option>
+            </select></label>
+            <button className="adminPrimary compact" onClick={()=>saveCity(c)}><Save size={13}/> SAVE CITY</button>
+          </div>}
+        </article>)}
+      </div>
+    </section>
+  </>
 }
 
 function MatchesAdmin({d,act}){
+  const [showCreate,setShowCreate]=useState(false);
+  const [editing,setEditing]=useState(null);
+  const [scoreEdit,setScoreEdit]=useState(null);
+  const blank={homeCityCode:'',awayCityCode:'',roundCode:'GROUP',startsAt:'',lobbyOpensAt:'',durationMinutes:60};
+  const [form,setForm]=useState(blank);
+  const [editForm,setEditForm]=useState(blank);
+  const [scoreForm,setScoreForm]=useState({homeScore:0,awayScore:0,reason:''});
   const next={SCHEDULED:'LOBBY',LOBBY:'LIVE',LIVE:'FINAL'};
-  return <section className="adminPanel"><PanelHead eyebrow="MATCH CONTROL" title="Fixtures & lifecycle"/>
-    <div className="adminMatchList">{(d?.matches||[]).map(m=><article key={m.public_id} className="adminMatchCard">
-      <div className="adminMatchTop"><span className={'status '+String(m.status).toLowerCase()}>{m.status}</span><small>{m.round_code}</small></div>
-      <div className="adminMatchScore"><div><b>{m.home_code}</b><span>{m.home_name}</span></div><strong>{m.home_score} — {m.away_score}</strong><div><b>{m.away_code}</b><span>{m.away_name}</span></div></div>
-      <div className="adminMatchFoot"><span>{m.starts_at?new Date(m.starts_at).toLocaleString():'No kickoff'}</span>{next[m.status]&&<button className="adminSmallBtn" onClick={()=>act(()=>adminApi('/api/admin/matches/'+m.public_id+'/state',{method:'PATCH',body:JSON.stringify({status:next[m.status]})}),'Match moved to '+next[m.status])}>{next[m.status]==='FINAL'?'Full Time':'Move to '+nice(next[m.status])}</button>}</div>
-    </article>)}</div>
-  </section>
+  const cities=d?.cities||[];
+
+  const iso=v=>v?new Date(v).toISOString():null;
+  const localInput=v=>{
+    if(!v)return '';
+    const x=new Date(v); if(Number.isNaN(x.getTime()))return '';
+    const z=n=>String(n).padStart(2,'0');
+    return x.getFullYear()+'-'+z(x.getMonth()+1)+'-'+z(x.getDate())+'T'+z(x.getHours())+':'+z(x.getMinutes());
+  };
+  const durationFrom=m=>{
+    const a=new Date(m.starts_at).getTime(),b=new Date(m.regulation_ends_at).getTime();
+    return Number.isFinite(a)&&Number.isFinite(b)&&b>a?Math.round((b-a)/60000):60;
+  };
+  const openEdit=m=>{
+    setEditing(m.public_id);
+    setEditForm({
+      homeCityCode:m.home_code,awayCityCode:m.away_code,roundCode:m.round_code||'GROUP',
+      startsAt:localInput(m.starts_at),lobbyOpensAt:localInput(m.lobby_opens_at),durationMinutes:durationFrom(m)
+    });
+  };
+  const createFixture=()=>act(()=>adminApi('/api/admin/matches',{method:'POST',body:JSON.stringify({
+    ...form,startsAt:iso(form.startsAt),lobbyOpensAt:form.lobbyOpensAt?iso(form.lobbyOpensAt):null
+  })}),'Fixture created');
+  const saveFixture=m=>act(()=>adminApi('/api/admin/matches/'+m.public_id,{method:'PATCH',body:JSON.stringify({
+    ...editForm,startsAt:iso(editForm.startsAt),lobbyOpensAt:editForm.lobbyOpensAt?iso(editForm.lobbyOpensAt):null
+  })}),'Fixture updated');
+
+  return <>
+    <section className="matchOpsHeader">
+      <div><small>FIXTURE OPERATIONS</small><h2>Run the match calendar</h2><p>Create, reschedule, open, start, finish or cancel fixtures from one control desk.</p></div>
+      <button className="adminPrimary" onClick={()=>setShowCreate(v=>!v)}><Plus size={15}/> {showCreate?'CLOSE FORM':'CREATE FIXTURE'}</button>
+    </section>
+
+    {showCreate&&<section className="adminPanel fixtureForm">
+      <PanelHead eyebrow="NEW FIXTURE" title="Create a scheduled match"/>
+      <div className="opsFormGrid">
+        <label><span>Home city</span><select value={form.homeCityCode} onChange={e=>setForm({...form,homeCityCode:e.target.value})}><option value="">Select city</option>{cities.map(c=><option key={c.code} value={c.code}>{c.name} · {c.code}</option>)}</select></label>
+        <label><span>Away city</span><select value={form.awayCityCode} onChange={e=>setForm({...form,awayCityCode:e.target.value})}><option value="">Select city</option>{cities.map(c=><option key={c.code} value={c.code}>{c.name} · {c.code}</option>)}</select></label>
+        <label><span>Round</span><input value={form.roundCode} onChange={e=>setForm({...form,roundCode:e.target.value})}/></label>
+        <label><span>Duration (minutes)</span><input type="number" min="1" value={form.durationMinutes} onChange={e=>setForm({...form,durationMinutes:Number(e.target.value)})}/></label>
+        <label><span>Kickoff</span><input type="datetime-local" value={form.startsAt} onChange={e=>setForm({...form,startsAt:e.target.value})}/></label>
+        <label><span>Lobby opens</span><input type="datetime-local" value={form.lobbyOpensAt} onChange={e=>setForm({...form,lobbyOpensAt:e.target.value})}/></label>
+      </div>
+      <button className="adminPrimary compact" onClick={createFixture}><Plus size={14}/> CREATE SCHEDULED FIXTURE</button>
+    </section>}
+
+    <section className="adminPanel"><PanelHead eyebrow="MATCH CONTROL" title="Fixtures & lifecycle"/>
+      <div className="adminMatchList ops">{(d?.matches||[]).map(m=><article key={m.public_id} className={'adminMatchCard ops '+String(m.status).toLowerCase()}>
+        <div className="adminMatchTop"><span className={'status '+String(m.status).toLowerCase()}>{m.status}</span><small>{m.round_code} · {m.participation_total} participants · {m.verified_goals} verified Goals</small></div>
+        <div className="adminMatchScore"><div><b>{m.home_code}</b><span>{m.home_name}</span></div><strong>{m.home_score} — {m.away_score}</strong><div><b>{m.away_code}</b><span>{m.away_name}</span></div></div>
+        <div className="matchOpsTimes">
+          <span><CalendarClock size={12}/> Kickoff {m.starts_at?new Date(m.starts_at).toLocaleString():'Not set'}</span>
+          <span>Lobby {m.lobby_opens_at?new Date(m.lobby_opens_at).toLocaleString():'Not set'}</span>
+          {m.winner_code&&<b>Winner: {m.winner_name} ({m.winner_code})</b>}
+        </div>
+        <div className="matchOpsButtons">
+          {next[m.status]&&<button className="adminPrimary compact" onClick={()=>{
+            const target=next[m.status];
+            if(target==='FINAL'&&!window.confirm('Finish this match now? The winner will be calculated from the verified score.'))return;
+            act(()=>adminApi('/api/admin/matches/'+m.public_id+'/state',{method:'PATCH',body:JSON.stringify({status:target})}),'Match moved to '+target)
+          }}>{next[m.status]==='FINAL'?'FULL TIME':'MOVE TO '+nice(next[m.status])} <ChevronRight size={12}/></button>}
+          {['SCHEDULED','LOBBY'].includes(m.status)&&<button onClick={()=>editing===m.public_id?setEditing(null):openEdit(m)}><Pencil size={12}/> EDIT</button>}
+          {m.status==='LIVE'&&<button onClick={()=>{setScoreEdit(scoreEdit===m.public_id?null:m.public_id);setScoreForm({homeScore:Number(m.home_score),awayScore:Number(m.away_score),reason:''})}}><Pencil size={12}/> SCORE CORRECTION</button>}
+          {['SCHEDULED','LOBBY','LIVE'].includes(m.status)&&<button className="danger" onClick={()=>{
+            if(window.confirm('Cancel '+m.home_code+' vs '+m.away_code+'? This will stop the fixture.')){
+              act(()=>adminApi('/api/admin/matches/'+m.public_id+'/state',{method:'PATCH',body:JSON.stringify({status:'CANCELLED',confirmation:'CANCEL MATCH'})}),'Match cancelled')
+            }
+          }}><Ban size={12}/> CANCEL</button>}
+          {m.status==='CANCELLED'&&<button onClick={()=>{
+            if(window.confirm('Reopen this cancelled match as SCHEDULED?')){
+              act(()=>adminApi('/api/admin/matches/'+m.public_id+'/state',{method:'PATCH',body:JSON.stringify({status:'SCHEDULED',confirmation:'REOPEN MATCH'})}),'Match reopened')
+            }
+          }}><RefreshCw size={12}/> REOPEN</button>}
+        </div>
+        {editing===m.public_id&&<div className="matchInlineEditor">
+          <div className="opsFormGrid">
+            <label><span>Home</span><select value={editForm.homeCityCode} onChange={e=>setEditForm({...editForm,homeCityCode:e.target.value})}>{cities.map(c=><option key={c.code} value={c.code}>{c.name}</option>)}</select></label>
+            <label><span>Away</span><select value={editForm.awayCityCode} onChange={e=>setEditForm({...editForm,awayCityCode:e.target.value})}>{cities.map(c=><option key={c.code} value={c.code}>{c.name}</option>)}</select></label>
+            <label><span>Round</span><input value={editForm.roundCode} onChange={e=>setEditForm({...editForm,roundCode:e.target.value})}/></label>
+            <label><span>Duration</span><input type="number" value={editForm.durationMinutes} onChange={e=>setEditForm({...editForm,durationMinutes:Number(e.target.value)})}/></label>
+            <label><span>Kickoff</span><input type="datetime-local" value={editForm.startsAt} onChange={e=>setEditForm({...editForm,startsAt:e.target.value})}/></label>
+            <label><span>Lobby opens</span><input type="datetime-local" value={editForm.lobbyOpensAt} onChange={e=>setEditForm({...editForm,lobbyOpensAt:e.target.value})}/></label>
+          </div>
+          <button className="adminPrimary compact" onClick={()=>saveFixture(m)}><Save size={13}/> SAVE FIXTURE</button>
+        </div>}
+        {scoreEdit===m.public_id&&<div className="scoreCorrection">
+          <div><label><span>{m.home_code}</span><input type="number" min="0" value={scoreForm.homeScore} onChange={e=>setScoreForm({...scoreForm,homeScore:Number(e.target.value)})}/></label><label><span>{m.away_code}</span><input type="number" min="0" value={scoreForm.awayScore} onChange={e=>setScoreForm({...scoreForm,awayScore:Number(e.target.value)})}/></label></div>
+          <label><span>Reason for correction</span><input value={scoreForm.reason} onChange={e=>setScoreForm({...scoreForm,reason:e.target.value})} placeholder="Explain the verified correction"/></label>
+          <button className="adminPrimary compact" onClick={()=>{
+            if(window.confirm('Apply this audited score correction? An ADJUSTMENT event will be written to history.')){
+              act(()=>adminApi('/api/admin/matches/'+m.public_id+'/score-adjustment',{method:'POST',body:JSON.stringify({...scoreForm,confirmation:'CONFIRM SCORE CORRECTION'})}),'Score corrected')
+            }
+          }}><Save size={13}/> APPLY AUDITED CORRECTION</button>
+        </div>}
+      </article>)}</div>
+    </section>
+  </>
 }
 
 function TournamentAdmin({d,act}){
