@@ -1,5 +1,5 @@
 import React,{useEffect,useMemo,useRef,useState} from 'react';
-import {AlertTriangle,ArrowLeft,ArrowRight,BarChart3,Check,ChevronRight,Clock3,Globe2,Heart,Link2,LockKeyhole,MapPin,Menu,Play,Radio,Search,Share2,ShieldCheck,Sparkles,Trophy,UserPlus,Users,X,Zap} from 'lucide-react';
+import {AlertTriangle,ArrowLeft,ArrowRight,BarChart3,Check,ChevronRight,Globe2,Link2,LockKeyhole,MapPin,Menu,Play,Radio,Search,Share2,ShieldCheck,Sparkles,Trophy,UserPlus,Users,X,Zap} from 'lucide-react';
 
 const heroImage='https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=2200&q=90';
 const cityImages={
@@ -946,8 +946,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
       callup:{eyebrow:'MATCH CALL-UP',title:`${city.name.toUpperCase()} NEEDS YOU`,subtitle:`${home.name} ${homeScore} — ${awayScore} ${away.name}`,footer:'Join my city in the Somali Cup match'},
       goal:{eyebrow:'GOAL · VERIFIED',title:'I SCORED FOR MY CITY',subtitle:`${city.name} · Somali Cup 2027`,footer:'One verified supporter. One goal.'},
       assist:{eyebrow:'ASSIST · VERIFIED',title:'I BROUGHT MY PEOPLE',subtitle:`${directAssists} direct ${directAssists===1?'Assist':'Assists'} · Branch ${branchTotal}`,footer:extendedBranch?`${extendedBranch} more came through my chain`:`${city.name} is stronger together`},
-      fulltime:{eyebrow:'FULL TIME',title:`${(match.winner?.name||leader?.name||city.name).toUpperCase()}`,subtitle:`${home.code} ${homeScore} — ${awayScore} ${away.code}`,footer:'Somali Cup · The city story continues'},
-      motm:{eyebrow:'MAN OF THE MATCH',title:'THE IMPACT RACE',subtitle:`${mine?.assists??mine?.direct_joins??0} assists · ${mine?.downstream_joins??0} branch`,footer:'Verified impact. Real supporters.'}
+      fulltime:{eyebrow:'FULL TIME',title:`${(match.winner?.name||leader?.name||city.name).toUpperCase()}`,subtitle:`${home.code} ${homeScore} — ${awayScore} ${away.code}`,footer:'Somali Cup · The city story continues'}
     };
     try{
       const result=await sharePoster({city,...presets[type],fromName:me?.user?.nickname||me?.user?.displayName||'',refPublicId:me?.user?.publicId||''});
@@ -994,7 +993,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
     <section className={"matchNarrative "+(leader?'hasLeader':'level')}>
       <div className="narrativeState">
         <span className="statePulse"/>
-        <small>{leader?'MATCH STATE':'MATCH STATE'}</small>
+        <small>MATCH STATE</small>
         <h3>{match.tiebreakMode==='SUDDEN_DEATH'?'Sudden death — next Goal wins':leader?`${leader.name} lead by ${leadMargin}`:'Level match — next goal changes everything'}</h3>
         <p>{match.tiebreakMode==='SUDDEN_DEATH'?'Regulation ended level. The next unused verified supporter Goal ends the match.':leader?`${trailing.name} need a response. The next verified Goal changes the match.`:'The score is level. The next verified Goal breaks the deadlock.'}</p>
       </div>
