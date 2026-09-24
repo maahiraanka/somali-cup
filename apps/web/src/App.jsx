@@ -636,7 +636,7 @@ function BestCityExperience({data,me,onBack,onRefresh}){
         <small>BEST CITY IN SOMALIA</small>
         <h1>Which city<br/><em>has the most support?</em></h1>
         <p>Choose your city. Bring your friends. Cities that reach the target move to the next round.</p>
-        {!mySupport&&<button className="bestCityPrimary" onClick={()=>{setSelected(top||null);setShowJoin(true)}}>SUPPORT MY CITY <ArrowRight size={17}/></button>}
+        {!mySupport&&<button className="bestCityPrimary" onClick={()=>{setSelected(selected||top||null);setShowJoin(true)}}>SUPPORT MY CITY <ArrowRight size={17}/></button>}
         {mySupport&&<div className="mySupportHero"><Check size={18}/><div><span>YOU SUPPORT</span><strong>{mySupport.choice_name}</strong><small>You are supporter #{fmt(mySupport.supporter_no)} · {fmt(mySupport.friends_brought)} friends brought</small></div></div>}
         {mySupport&&<button className="bestCityShare" onClick={async()=>{
           const url=`${window.location.origin}${window.location.pathname}?competition=best-city-somalia&choice=${encodeURIComponent(mySupport.code)}&ref=${encodeURIComponent(mySupport.publicId||'')}`;
