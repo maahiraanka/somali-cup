@@ -41,6 +41,43 @@ router.patch('/qualification/cities/:cityId',async(req,res,next)=>{
   }catch(e){await conn.rollback();if(e.status)return res.status(e.status).json({error:e.message});next(e)}finally{conn.release()}
 });
 
+router.get('/integrity',async(req,res,next)=>{
+  try{
+    const days=Math.max(1,Math.min(30,Number(req.query.days)||7));
+    const [[summary]]=await pool.query(`
+      SELECT
+        SUM(event_type='DUPLICATE_DEVICE_BLOCKED') duplicateDeviceBlocks,
+        SUM(event_type='DEVICE_RECOVERED') deviceRecoveries,
+        SUM(event_type='NETWORK_BURST_SIGNAL') networkBurstSignals,
+        SUM(event_type='DEVICE_CLAIMED') deviceClaims
+      FROM identity_integrity_events
+      WHERE created_at>=UTC_TIMESTAMP()-INTERVAL ? DAY
+    `,[days]);
+    const [recent]=await pool.query(`
+      SELECT iie.id,iie.event_type,iie.created_at,iie.user_id,
+        LEFT(iie.device_hash,12) device_hint,
+        LEFT(iie.network_hash,12) network_hint,
+        iie.metadata_json,u.public_id,u.display_name
+      FROM identity_integrity_events iie
+      LEFT JOIN users u ON u.id=iie.user_id
+      WHERE iie.event_type IN ('DUPLICATE_DEVICE_BLOCKED','NETWORK_BURST_SIGNAL','DEVICE_RECOVERED')
+        AND iie.created_at>=UTC_TIMESTAMP()-INTERVAL ? DAY
+      ORDER BY iie.id DESC
+      LIMIT 100
+    `,[days]);
+    res.json({
+      days,
+      summary:{
+        duplicateDeviceBlocks:Number(summary?.duplicateDeviceBlocks||0),
+        deviceRecoveries:Number(summary?.deviceRecoveries||0),
+        networkBurstSignals:Number(summary?.networkBurstSignals||0),
+        deviceClaims:Number(summary?.deviceClaims||0)
+      },
+      recent
+    });
+  }catch(e){next(e)}
+});
+
 router.get('/matches',async(_req,res,next)=>{
   try{
     const [rows]=await pool.query(`
