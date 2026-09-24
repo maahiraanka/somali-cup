@@ -119,7 +119,7 @@ router.post('/:slug/join',async(req,res,next)=>{
       "SELECT id,slug,name,status,choice_type,language_preset,language_overrides_json FROM competitions WHERE slug=? LIMIT 1 FOR UPDATE",
       [slug]
     );
-    if(!competition)return res.status(404).json({error:'competition_not_found'});
+    if(!competition)throw Object.assign(new Error('competition_not_found'),{status:404});
     if(!['OPEN','LIVE'].includes(competition.status))throw Object.assign(new Error('competition_not_open'),{status:409});
     const [[choice]]=await conn.query(`
       SELECT id,name,code,target,next_supporter_no
