@@ -56,23 +56,43 @@ await check('public_root_200',async()=>{
   return '200 HTML';
 });
 
+let deployedBundle='';
 await check('public_bundle_matches_launch_mode',async()=>{
   const scripts=[...rootHtml.matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map(m=>m[1]);
   if(!scripts.length)throw new Error('no production JavaScript bundle found');
-  if(launchMode==='LIVE')return 'LIVE mode configured';
-  let found=false;
   for(const src of scripts){
     const path=src.startsWith('http')?src:new URL(src,origin).href;
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),10000);
     try{
       const r=await fetch(path,{signal:controller.signal});
-      const text=await r.text();
-      if(text.includes('THE CITIES')&&text.includes('COMING SOON')){found=true;break}
+      deployedBundle+=await r.text();
     }finally{clearTimeout(timer)}
   }
-  if(!found)throw new Error('Coming Soon copy not found in deployed bundle');
-  return 'COMING_SOON mode verified';
+  if(launchMode==='COMING_SOON'&&!(deployedBundle.includes('THE CITIES')&&deployedBundle.includes('COMING SOON'))){
+    throw new Error('Coming Soon copy not found in deployed bundle');
+  }
+  return launchMode+' bundle verified';
+});
+
+await check('launch_copy_present',()=>{
+  const required=[
+    'REPRESENT YOUR CITY',
+    'One verified person = one Goal',
+    'Somali Cup Terms',
+    'Privacy at Somali Cup',
+    'How Somali Cup Works'
+  ];
+  const missing=required.filter(v=>!deployedBundle.includes(v));
+  if(missing.length)throw new Error('missing launch copy: '+missing.join(' | '));
+  return required.length+' critical content markers present';
+});
+
+await check('no_placeholder_copy',()=>{
+  const bad=['Lorem ipsum','TODO COPY','PLACEHOLDER TEXT','REPLACE ME'];
+  const found=bad.filter(v=>deployedBundle.includes(v));
+  if(found.length)throw new Error('placeholder copy found: '+found.join(', '));
+  return 'no known placeholder copy';
 });
 
 await check('preview_route_hidden_from_search',async()=>{
@@ -90,6 +110,16 @@ await check('admin_route_hidden_from_search',async()=>{
   if(!robots.includes('noindex'))throw new Error('X-Robots-Tag noindex missing');
   return robots;
 });
+
+for(const route of ['/terms','/privacy','/rules']){
+  await check('public_legal_'+route.slice(1),async()=>{
+    const {response,body}=await request(route);
+    if(response.status!==200)throw new Error('status '+response.status);
+    if(!String(response.headers.get('content-type')||'').includes('text/html'))throw new Error(route+' did not return HTML');
+    if(!String(body||'').includes('<div id="root">')&&!String(body||'').includes('id="root"'))throw new Error(route+' did not return app shell');
+    return '200 HTML';
+  });
+}
 
 await check('api_health',async()=>{
   const {response,body}=await request('/api/health',{expectJson:true});
