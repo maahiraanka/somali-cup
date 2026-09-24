@@ -1,34 +1,32 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {ArrowLeft,ArrowRight,BarChart3,Check,ChevronRight,Clock3,Globe2,Heart,Link2,LockKeyhole,MapPin,Menu,Play,Radio,Search,Share2,ShieldCheck,Sparkles,Trophy,UserPlus,Users,X,Zap} from 'lucide-react';
 
-const heroImage='https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=2200&q=88';
+const heroImage='https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=2200&q=90';
 const cityImages={
-  MEL:'https://images.unsplash.com/photo-1514395462725-fb4566210144?auto=format&fit=crop&w=900&q=84',
-  LON:'https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?auto=format&fit=crop&w=900&q=84',
-  TOR:'https://images.unsplash.com/photo-1517090504586-fde19ea6066f?auto=format&fit=crop&w=900&q=84',
-  NAI:'https://images.unsplash.com/photo-1611348524140-53c9a25263d6?auto=format&fit=crop&w=900&q=84',
-  MOG:'https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=900&q=84',
-  HAR:'https://images.unsplash.com/photo-1486325212027-8081e485255e?auto=format&fit=crop&w=900&q=84',
-  MIN:'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=900&q=84',
-  STO:'https://images.unsplash.com/photo-1509356843151-3e7d96241e11?auto=format&fit=crop&w=900&q=84',
-  PER:'https://images.unsplash.com/photo-1523482580672-f109ba8cb9be?auto=format&fit=crop&w=900&q=84',
-  BHM:'https://images.unsplash.com/photo-1461696114087-397271a7aedc?auto=format&fit=crop&w=900&q=84',
-  DXB:'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=900&q=84',
-  OSL:'https://images.unsplash.com/photo-1513622470522-26c3c8a854bc?auto=format&fit=crop&w=900&q=84'
+  MOG:'https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=1000&q=88',
+  HAR:'https://images.unsplash.com/photo-1486325212027-8081e485255e?auto=format&fit=crop&w=1000&q=88',
+  KIS:'https://images.unsplash.com/photo-1500375592092-40eb2168fd21?auto=format&fit=crop&w=1000&q=88',
+  GAR:'https://images.unsplash.com/photo-1518005020951-eccb494ad742?auto=format&fit=crop&w=1000&q=88',
+  BOS:'https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1000&q=88',
+  BAI:'https://images.unsplash.com/photo-1528127269322-539801943592?auto=format&fit=crop&w=1000&q=88',
+  BLW:'https://images.unsplash.com/photo-1500534314209-a25ddb2bd429?auto=format&fit=crop&w=1000&q=88',
+  GAL:'https://images.unsplash.com/photo-1511818966892-d7d671e672a2?auto=format&fit=crop&w=1000&q=88',
+  JOW:'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1000&q=88',
+  BUR:'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?auto=format&fit=crop&w=1000&q=88'
 };
 const demoStandings=[
-  {rank:1,code:'MEL',name:'Melbourne',country:'Australia',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:418,progress_pct:83.6,is_open:1},
-  {rank:2,code:'LON',name:'London',country:'United Kingdom',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:397,progress_pct:79.4,is_open:1},
-  {rank:3,code:'TOR',name:'Toronto',country:'Canada',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:346,progress_pct:69.2,is_open:1},
-  {rank:4,code:'NAI',name:'Nairobi',country:'Kenya',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:319,progress_pct:63.8,is_open:1},
-  {rank:5,code:'MIN',name:'Minneapolis',country:'United States',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:288,progress_pct:57.6,is_open:1},
-  {rank:6,code:'MOG',name:'Mogadishu',country:'Somalia',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:271,progress_pct:54.2,is_open:1},
-  {rank:7,code:'STO',name:'Stockholm',country:'Sweden',tier:'CHAMPIONSHIP',status:'QUALIFYING',qualification_target:300,verified_supporters:182,progress_pct:60.7,is_open:1},
-  {rank:8,code:'HAR',name:'Hargeisa',country:'Somalia',tier:'CHAMPIONSHIP',status:'QUALIFYING',qualification_target:300,verified_supporters:161,progress_pct:53.7,is_open:1},
-  {rank:9,code:'PER',name:'Perth',country:'Australia',tier:'CHAMPIONSHIP',status:'QUALIFYING',qualification_target:300,verified_supporters:149,progress_pct:49.7,is_open:1},
-  {rank:10,code:'BHM',name:'Birmingham',country:'United Kingdom',tier:'CHAMPIONSHIP',status:'QUALIFYING',qualification_target:300,verified_supporters:141,progress_pct:47,is_open:1}
+  {rank:1,code:'MOG',name:'Mogadishu',country:'Somalia',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:418,progress_pct:83.6,is_open:1},
+  {rank:2,code:'HAR',name:'Hargeisa',country:'Somalia',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:397,progress_pct:79.4,is_open:1},
+  {rank:3,code:'KIS',name:'Kismayo',country:'Somalia',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:346,progress_pct:69.2,is_open:1},
+  {rank:4,code:'GAR',name:'Garowe',country:'Somalia',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:319,progress_pct:63.8,is_open:1},
+  {rank:5,code:'BOS',name:'Bosaso',country:'Somalia',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:288,progress_pct:57.6,is_open:1},
+  {rank:6,code:'BAI',name:'Baidoa',country:'Somalia',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:271,progress_pct:54.2,is_open:1},
+  {rank:7,code:'BLW',name:'Beledweyne',country:'Somalia',tier:'CHAMPIONSHIP',status:'QUALIFYING',qualification_target:300,verified_supporters:182,progress_pct:60.7,is_open:1},
+  {rank:8,code:'GAL',name:'Galkayo',country:'Somalia',tier:'CHAMPIONSHIP',status:'QUALIFYING',qualification_target:300,verified_supporters:161,progress_pct:53.7,is_open:1},
+  {rank:9,code:'JOW',name:'Jowhar',country:'Somalia',tier:'CHAMPIONSHIP',status:'QUALIFYING',qualification_target:300,verified_supporters:149,progress_pct:49.7,is_open:1},
+  {rank:10,code:'BUR',name:'Burco',country:'Somalia',tier:'CHAMPIONSHIP',status:'QUALIFYING',qualification_target:300,verified_supporters:141,progress_pct:47,is_open:1}
 ];
-const demoMatches=[{publicId:'sc2027mellondonqf000000001',seasonName:'Somali Cup 2027',roundCode:'QUARTERFINAL',status:'LOBBY',startsAt:'2027-06-12T09:30:00.000Z',lobbyOpensAt:'2027-06-12T09:00:00.000Z',scoreVersion:0,home:{code:'MEL',name:'Melbourne',country:'Australia',score:0},away:{code:'LON',name:'London',country:'United Kingdom',score:0}}];
+const demoMatches=[{publicId:'sc2027mellondonqf000000001',seasonName:'Somali Cup 2027',roundCode:'QUARTERFINAL',status:'LOBBY',startsAt:'2027-06-12T09:30:00.000Z',lobbyOpensAt:'2027-06-12T09:00:00.000Z',scoreVersion:0,home:{code:'MOG',name:'Mogadishu',country:'Somalia',score:0},away:{code:'HAR',name:'Hargeisa',country:'Somalia',score:0}}];
 
 const flag=(country)=>({Australia:'🇦🇺','United Kingdom':'🇬🇧',Canada:'🇨🇦',Kenya:'🇰🇪','United States':'🇺🇸',Somalia:'🇸🇴',Sweden:'🇸🇪',Norway:'🇳🇴','United Arab Emirates':'🇦🇪'})[country]||'🌍';
 const fmt=n=>Number(n||0).toLocaleString();
@@ -99,7 +97,7 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
         <div className="liveBadge"><span/> QUALIFICATION OPEN</div>
         <h1><span>SOMALI</span><em>CUP</em></h1>
         <h2>Different cities. One people.</h2>
-        <p>A global city-vs-city competition uniting Somali communities through pride, participation and real community impact.</p>
+        <p>A nationwide city-vs-city competition where Somalia’s cities compete through their people, pride and community impact.</p>
         <div className="heroButtons">
           <button className="goldBtn" onClick={onJoin}>Represent Your City <ArrowRight size={17}/></button>
           <button className="glassBtn" onClick={goMatches}><Play size={16}/> Explore Matches</button>
@@ -114,6 +112,27 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
       </div>
     </section>
 
+    <section className="broadcastTicker">
+      <div><span className="tickerLive">LIVE</span><b>QUALIFICATION RACE</b><em>Mogadishu leads the table</em></div>
+      <div><b>NEXT FEATURED RIVALRY</b><em>Mogadishu vs Hargeisa</em><span>Somali Cup 2027</span></div>
+      <div><b>THE ROAD TO THE CUP</b><em>Qualification → Groups → Knockout → Final</em></div>
+    </section>
+
+    <section className="rivalrySpotlight">
+      <div className="rivalryCopy">
+        <small>FEATURED RIVALRY</small>
+        <h3>Mogadishu <span>vs</span> Hargeisa</h3>
+        <p>Two heavyweight cities. One national stage. Every verified supporter strengthens their city before kickoff.</p>
+        <button className="glassBtn" onClick={goMatches}>Open Match Centre <ArrowRight size={15}/></button>
+      </div>
+      <div className="rivalryCities">
+        <div><CityThumb city={standings.find(c=>c.code==='MOG')||standings[0]} size="lg"/><strong>MOG</strong><span>Mogadishu</span></div>
+        <b className="versus">VS</b>
+        <div><CityThumb city={standings.find(c=>c.code==='HAR')||standings[1]} size="lg"/><strong>HAR</strong><span>Hargeisa</span></div>
+      </div>
+      <div className="rivalryMeta"><span>QUALIFICATION</span><b>National pride starts here.</b><small>Verified supporters only</small></div>
+    </section>
+
     <section className="dashboardRow">
       <div className="panel leaderboardPanel">
         <div className="panelHead"><div><small>LIVE TABLE</small><h3>Qualification leaderboard</h3></div><button onClick={goQualification}>Full standings <ArrowRight size={14}/></button></div>
@@ -121,8 +140,8 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
         {standings.slice(0,7).map(c=><button className="leaderRow" key={c.code} onClick={()=>openCity(c)}><b>{c.rank}</b><div className="cityInline"><span>{flag(c.country)}</span><strong>{c.name}</strong></div><strong>{fmt(c.verified_supporters)}</strong><div className="leaderProgress"><Progress value={c.progress_pct}/><small>{Math.round(c.progress_pct||0)}%</small></div></button>)}
       </div>
       <div className="panel movementPanel">
-        <div className="panelHead"><div><small>GLOBAL MOVEMENT</small><h3>One community, worldwide.</h3></div><Globe2 size={20}/></div>
-        <div className="globeOrb"><div className="globeLines"/><span>Somalis in</span><strong>50+ countries</strong><small>One competition. Shared pride.</small></div>
+        <div className="panelHead"><div><small>GLOBAL MOVEMENT</small><h3>One country. Every city.</h3></div><Globe2 size={20}/></div>
+        <div className="globeOrb"><div className="globeLines"/><span>Cities across</span><strong>Somalia</strong><small>One cup. One national stage.</small></div>
         <div className="avatarStack"><i>A</i><i>Y</i><i>M</i><i>N</i><i>F</i><span>+5K</span></div>
       </div>
     </section>
@@ -149,7 +168,7 @@ function Qualification({standings,season,onJoin,openCity}){
 
 function Cities({standings,openCity,onJoin}){
   return <div className="pageWrap">
-    <section className="pageHero compact"><div><small className="kicker">GLOBAL CITY NETWORK</small><h1>Choose the city that <em>feels like home.</em></h1><p>From Melbourne to Mogadishu, every community enters with its own identity, momentum and road to the Cup.</p></div><button className="goldBtn" onClick={onJoin}>Join Your City</button></section>
+    <section className="pageHero compact"><div><small className="kicker">SOMALIA CITY NETWORK</small><h1>Choose the city that <em>feels like home.</em></h1><p>From Mogadishu to Kismayo, Garowe to Baidoa, every city enters with its own identity, supporters and road to the Cup.</p></div><button className="goldBtn" onClick={onJoin}>Join Your City</button></section>
     <div className="citiesGrid">{standings.map(c=><button className="cityPoster" key={c.code} onClick={()=>openCity(c)} style={{backgroundImage:`linear-gradient(180deg,rgba(2,8,18,.03),rgba(2,8,18,.96)),url("${imgFor(c)}")`}}><span className="rankChip">#{c.rank}</span><div><small>{flag(c.country)} {c.country}</small><h3>{c.name}</h3><p>{fmt(c.verified_supporters)} verified supporters</p><Progress value={c.progress_pct}/><b>{Number(c.progress_pct||0).toFixed(0)}% to target</b></div></button>)}</div>
   </div>
 }
@@ -183,9 +202,9 @@ function MatchCenter({matches,me,onNeedIdentity}){
 
   return <div className="matchExperience">
     <section className="broadcastHero">
-      <div className="matchSide homeSide" style={{backgroundImage:`linear-gradient(90deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(home)}")`}}><CityThumb city={home} size="lg"/><h2>{home.name}</h2><small>THE OCEAN CITY</small></div>
+      <div className="matchSide homeSide" style={{backgroundImage:`linear-gradient(90deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(home)}")`}}><CityThumb city={home} size="lg"/><h2>{home.name}</h2><small>MOGADISHU</small></div>
       <div className="scoreBoard"><div className="liveBadge red"><span/> {match.status}</div><small>{match.roundCode||match.round_code}</small><strong>{fmt(home.score)} <em>–</em> {fmt(away.score)}</strong><span className="matchClock">62:18</span></div>
-      <div className="matchSide awaySide" style={{backgroundImage:`linear-gradient(270deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(away)}")`}}><CityThumb city={away} size="lg"/><h2>{away.name}</h2><small>THE CAPITAL CITY</small></div>
+      <div className="matchSide awaySide" style={{backgroundImage:`linear-gradient(270deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(away)}")`}}><CityThumb city={away} size="lg"/><h2>{away.name}</h2><small>HARGEISA</small></div>
     </section>
     <section className="supportMeter"><div><b>58%</b><span>{fmt(live?.counts?.homeActive||0)} supporters</span></div><div className="meterTrack"><i/><em/></div><div><b>42%</b><span>{fmt(live?.counts?.awayActive||0)} supporters</span></div></section>
 
