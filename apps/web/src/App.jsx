@@ -33,7 +33,7 @@ const fmt=n=>Number(n||0).toLocaleString();
 function api(path,opts={}){const token=localStorage.getItem('somalicup_session');const headers={'Content-Type':'application/json',...(opts.headers||{})};if(token)headers.Authorization=`Bearer ${token}`;return fetch(path,{...opts,headers}).then(async r=>{const body=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(body.error||'request_failed'),{status:r.status,body});return body})}
 const imgFor=c=>cityImages[c?.code]||heroImage;
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[m]));
-async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer='Different cities. One people.',accent='#ffcf4a'}){
+async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer='Different cities. One people.',accent='#ffcf4a',fromName=''}){
   const titleSize=String(title||'').length>24?58:String(title||'').length>18?68:82;
   const subtitleSize=String(subtitle||'').length>44?28:String(subtitle||'').length>30?32:38;
   const footerSize=String(footer||'').length>46?30:String(footer||'').length>34?36:46;
@@ -83,7 +83,12 @@ async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer
   });
   const file=new File([pngBlob],'somali-cup-status.png',{type:'image/png'});
   if(navigator.share&&navigator.canShare?.({files:[file]})){
-    try{await navigator.share({title:'Somali Cup',text:`${subtitle}\nJoin ${city?.name||'your city'}: ${window.location.origin}/?city=${city?.code||''}&src=status`,files:[file]});return 'shared'}catch(e){if(e?.name==='AbortError')return 'cancelled'}
+    try{
+      const fromParam=fromName?`&from=${encodeURIComponent(fromName)}`:'';
+      const lead=fromName?`${fromName} is backing ${city?.name}.\n`:'';
+      await navigator.share({title:'Somali Cup',text:`${lead}${subtitle}\nJoin ${city?.name||'your city'}: ${window.location.origin}/?city=${city?.code||''}&src=status${fromParam}`,files:[file]});
+      return 'shared'
+    }catch(e){if(e?.name==='AbortError')return 'cancelled'}
   }
   const url=URL.createObjectURL(pngBlob);
   const a=document.createElement('a');a.href=url;a.download='somali-cup-status.png';document.body.appendChild(a);a.click();a.remove();
@@ -126,6 +131,7 @@ export default function App(){
   const top=standings[0];
   const myCity=useMemo(()=>me?.membership?standings.find(c=>c.code===me.membership.code):null,[me,standings]);
   const total=standings.reduce((a,c)=>a+Number(c.verified_supporters||0),0);
+  const viralFrom=(new URLSearchParams(window.location.search).get('from')||'').trim().slice(0,40);
   const requestJoin=(city=null)=>{
     if(me?.membership){setNotice(`You already represent ${me.membership.name} this season.`);setTimeout(()=>setNotice(''),2600);return}
     setJoinCity(city||null);
@@ -162,7 +168,7 @@ export default function App(){
     </header></>}
 
     <main className={viralCity&&!me?.membership?'mainStage viralStage':'mainStage'}>
-      {viralCity&&!me?.membership?<ViralCityLanding city={viralCity} standings={standings} onJoin={()=>requestJoin(viralCity)} onOther={leaveViralLanding}/>:<>
+      {viralCity&&!me?.membership?<ViralCityLanding city={viralCity} standings={standings} fromName={viralFrom} onJoin={()=>requestJoin(viralCity)} onOther={leaveViralLanding}/>:<>
         {view==='home'&&<Home standings={standings} top={top} total={total} season={season} myCity={myCity} onJoin={requestJoin} openCity={openCity} goQualification={()=>setView('qualification')} goMatches={()=>setView('matches')}/>}
         {view==='qualification'&&<Qualification standings={standings} season={season} onJoin={requestJoin} openCity={openCity}/>}
         {view==='cities'&&<Cities standings={standings} openCity={openCity} onJoin={requestJoin}/>}
@@ -181,12 +187,12 @@ export default function App(){
     </nav>}
 
     {showJoin&&!me?.membership&&<JoinExperience standings={standings.filter(c=>c.is_open)} initialCity={joinCity} onClose={()=>{setShowJoin(false);setJoinCity(null)}} onJoined={joined}/>}
-    {joinedMoment&&<JoinedMoment payload={joinedMoment} city={standings.find(c=>c.code===joinedMoment.city.code)||joinedMoment.city} onDone={()=>{setJoinedMoment(null);setView('profile')}}/>}
+    {joinedMoment&&<JoinedMoment payload={joinedMoment} city={{...(standings.find(c=>c.code===joinedMoment.city.code)||{}),...joinedMoment.city}} onDone={()=>{setJoinedMoment(null);setView('profile')}}/>}
     {notice&&<div className="toast"><Check size={16}/>{notice}</div>}
   </div>
 }
 
-function ViralCityLanding({city,standings,onJoin,onOther}){
+function ViralCityLanding({city,standings,fromName,onJoin,onOther}){
   const need=Math.max(0,Number(city.qualification_target||0)-Number(city.verified_supporters||0));
   const leader=standings[0];
   const gap=leader&&leader.code!==city.code?Math.max(0,Number(leader.verified_supporters||0)-Number(city.verified_supporters||0)):0;
@@ -194,9 +200,9 @@ function ViralCityLanding({city,standings,onJoin,onOther}){
     <section className="viralLandingHero" style={{backgroundImage:`linear-gradient(180deg,rgba(1,7,16,.2),rgba(1,7,16,.96)),url("${imgFor(city)}")`}}>
       <div className="viralLandingTop"><Logo/><span><i/> LIVE QUALIFICATION</span></div>
       <div className="viralLandingContent">
-        <small>SOMEONE FROM {city.name.toUpperCase()} SENT YOU THIS</small>
+        <small>{fromName?`${fromName.toUpperCase()} FROM ${city.name.toUpperCase()} CHALLENGED YOU`:`SOMEONE FROM ${city.name.toUpperCase()} SENT YOU THIS`}</small>
         <h1>{city.name}<br/><em>needs you.</em></h1>
-        <p>Somalia’s cities are competing for Somali Cup 2027. Every verified supporter moves their city closer to qualification.</p>
+        <p>{fromName?<><b>{fromName}</b> is backing {city.name}. Join the same city and move it one supporter closer to qualification.</>:<>Somalia’s cities are competing for Somali Cup 2027. Every verified supporter moves their city closer to qualification.</>}</p>
         <div className="viralLandingNumbers">
           <div><span>CITY RANK</span><strong>#{city.rank}</strong></div>
           <div><span>SUPPORTERS</span><strong>{fmt(city.verified_supporters)}</strong></div>
@@ -339,7 +345,7 @@ function SupporterProfile({me,city,season,onJoin,onCity,onMatches}){
       qualification:{title:`${city.name.toUpperCase()} NEEDS ${fmt(remaining)} MORE`,subtitle:`${fmt(city.verified_supporters)} verified supporters · ${Number(city.progress_pct||0).toFixed(0)}% complete`,footer:`Help ${city.name} reach Somali Cup 2027`},
       callup:{title:'CALLING MY CITY',subtitle:`${city.name} supporters — join me in Somali Cup`,footer:'Represent your city at somalicup.com'}
     };
-    return sharePoster({city,...presets[kind]});
+    return sharePoster({city,...presets[kind],fromName:name});
   };
   return <div className="supporterPage">
     <section className="supporterHero" style={{backgroundImage:`linear-gradient(90deg,rgba(2,8,18,.98),rgba(2,8,18,.58),rgba(2,8,18,.85)),url("${imgFor(city)}")`}}>
@@ -409,7 +415,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
       fulltime:{eyebrow:'FULL TIME',title:`${(match.winner?.name||leader?.name||city.name).toUpperCase()}`,subtitle:`${home.code} ${homeScore} — ${awayScore} ${away.code}`,footer:'Somali Cup · The city story continues'},
       motm:{eyebrow:'MAN OF THE MATCH',title:'THE IMPACT RACE',subtitle:`${mine?.assists??mine?.direct_joins??0} assists · ${mine?.downstream_joins??0} branch`,footer:'Verified impact. Real supporters.'}
     };
-    try{await sharePoster({city,...presets[type]});setMsg('Your Somali Cup poster is ready.')}catch{setMsg('Could not create poster on this device.')}
+    try{await sharePoster({city,...presets[type],fromName:me?.user?.nickname||me?.user?.displayName||''});setMsg('Your Somali Cup poster is ready.')}catch{setMsg('Could not create poster on this device.')}
   };
 
   return <div className="matchExperience">
@@ -532,9 +538,11 @@ function MatchCenter({matches,me,onNeedIdentity}){
 
 function JoinedMoment({payload,city,onDone}){
   const [sharing,setSharing]=useState(false);
-  const supporters=Number(city.verified_supporters||0);
+  const supporters=Number(city.supporterNumber||city.verified_supporters||0);
   const target=Number(city.qualification_target||500);
   const remaining=Math.max(0,target-supporters);
+  const nextNumber=supporters+1;
+  const supporterName=payload.user?.nickname||payload.user?.displayName||'';
   const share=async()=>{
     setSharing(true);
     try{
@@ -543,7 +551,8 @@ function JoinedMoment({payload,city,onDone}){
         eyebrow:'I’M IN · SOMALI CUP 2027',
         title:`I REPRESENT ${city.name.toUpperCase()}`,
         subtitle:`${supporters?fmt(supporters)+' verified supporters':'My support now counts'}`,
-        footer:remaining?`${fmt(remaining)} more supporters needed — join ${city.name}`:`${city.name} reached its target`
+        footer:remaining?`I’m #${fmt(supporters)} — help make #${fmt(nextNumber)} happen`:`${city.name} reached its target`,
+        fromName:supporterName
       });
     }finally{setSharing(false)}
   };
@@ -552,9 +561,9 @@ function JoinedMoment({payload,city,onDone}){
       <div className="joinedBurst">★</div>
       <small>YOU’RE IN</small>
       <h2>You represent<br/><em>{city.name}.</em></h2>
-      <p>Your support now counts in the Somali Cup qualification race.</p>
+      <p>You are now <b>supporter #{fmt(supporters)}</b> for {city.name}. Your place in the race is real.</p>
       <div className="joinedCityStrip"><CityThumb city={city} size="lg"/><div><span>YOUR CITY</span><strong>{city.name}</strong><small>{remaining?fmt(remaining)+' more needed to reach the target':'Qualification target reached'}</small></div></div>
-      <div className="joinedShareReason"><Share2 size={18}/><div><b>Now bring one more person.</b><span>Your ready-made Status poster carries {city.name} into the next conversation.</span></div></div>
+      <div className="joinedShareReason"><Share2 size={18}/><div><b>Make supporter #{fmt(nextNumber)} happen.</b><span>Share your ready-made Status poster and challenge one person from {city.name} to join you.</span></div></div>
       <button className="joinedPrimary" disabled={sharing} onClick={share}>{sharing?'CREATING POSTER…':`SHARE ${city.name.toUpperCase()}`} <Share2 size={17}/></button>
       <button className="joinedSecondary" onClick={onDone}>Go to my supporter pass</button>
     </section>
@@ -570,7 +579,12 @@ function JoinExperience({standings,initialCity,onClose,onJoined}){
   const submit=async()=>{
     setBusy(true);setError('');
     try{
-      const payload=await api('/api/identity/join',{method:'POST',body:JSON.stringify({displayName,nickname:'',email:'',cityCode:city.code})});
+      const params=new URLSearchParams(window.location.search);
+      const payload=await api('/api/identity/join',{method:'POST',body:JSON.stringify({
+        displayName,nickname:'',email:'',cityCode:city.code,
+        source:(params.get('src')||'direct').slice(0,24),
+        referredBy:(params.get('from')||'').slice(0,80)
+      })});
       onJoined(payload);
     }catch(e){setError(e.message.replaceAll('_',' '))}
     finally{setBusy(false)}
