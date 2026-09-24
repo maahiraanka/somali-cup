@@ -46,5 +46,7 @@ await check('tournament_stages_table',()=>pool.query("SELECT code,stage_type,sta
 await check('tournament_groups_table',()=>pool.query("SELECT code,name FROM tournament_groups LIMIT 1"));
 await check('tournament_advancement_slots_table',()=>pool.query("SELECT target_stage_id,target_match_no,target_slot,source_type FROM tournament_advancement_slots LIMIT 1"));
 await check('tournament_events_table',()=>pool.query("SELECT event_type,created_at FROM tournament_events LIMIT 1"));
+await check('match_lifecycle_columns',()=>pool.query("SELECT regulation_ends_at,tiebreak_mode,tiebreak_started_at FROM matches LIMIT 1"));
+await check('tournament_stage_rules',()=>pool.query("SELECT tie_policy,match_duration_minutes FROM tournament_stages LIMIT 1"));
 await pool.end();
 if(!ok) process.exit(1);
