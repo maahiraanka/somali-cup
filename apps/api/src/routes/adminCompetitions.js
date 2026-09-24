@@ -4,6 +4,7 @@ import { pool } from '../db/pool.js';
 import { requireAdminKey } from '../auth.js';
 import { languageFor, supportedLanguagePresets } from '../competitionLanguage.js';
 import { closeCompetitionStage, openCompetitionStage } from '../competitionProgress.js';
+import { resetPublicCompetitionContent } from '../competitionDefaults.js';
 
 const router=Router();
 router.use(requireAdminKey);
@@ -60,6 +61,164 @@ router.post('/',async(req,res,next)=>{
   }
 });
 
+
+
+router.post('/reset-defaults',async(req,res,next)=>{
+  const confirmation=clean(req.body?.confirmation,80);
+  if(confirmation!=='RESET PUBLIC CONTENT')return res.status(400).json({error:'confirmation_required'});
+  const conn=await pool.getConnection();
+  try{
+    await conn.beginTransaction();
+    const result=await resetPublicCompetitionContent(conn);
+    await conn.query(
+      'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'PUBLIC_COMPETITION_CONTENT_RESET','SYSTEM','competition-content',JSON.stringify(result)]
+    );
+    await conn.commit();
+    res.json({ok:true,...result});
+  }catch(e){
+    await conn.rollback();
+    next(e);
+  }finally{conn.release()}
+});
+
+router.patch('/:id/details',async(req,res,next)=>{
+  const id=Number(req.params.id);
+  if(!Number.isInteger(id)||id<1)return res.status(400).json({error:'invalid_competition'});
+  const name=clean(req.body?.name,140);
+  const shortName=clean(req.body?.shortName,80);
+  const status=clean(req.body?.status,20).toUpperCase();
+  const languagePreset=clean(req.body?.languagePreset,20).toUpperCase();
+  const allowNominations=req.body?.allowNominations;
+  try{
+    const [[current]]=await pool.query('SELECT * FROM competitions WHERE id=? LIMIT 1',[id]);
+    if(!current)return res.status(404).json({error:'competition_not_found'});
+    const next={
+      name:name||current.name,
+      shortName:shortName||current.short_name,
+      status:status||current.status,
+      languagePreset:languagePreset||current.language_preset,
+      allowNominations:allowNominations===undefined?Number(current.allow_nominations):(allowNominations?1:0)
+    };
+    if(!['DRAFT','OPEN','LIVE','COMPLETE','ARCHIVED'].includes(next.status))return res.status(400).json({error:'invalid_competition_status'});
+    if(!supportedLanguagePresets().includes(next.languagePreset))return res.status(400).json({error:'invalid_language_preset'});
+    await pool.query(
+      'UPDATE competitions SET name=?,short_name=?,status=?,language_preset=?,allow_nominations=? WHERE id=?',
+      [next.name,next.shortName,next.status,next.languagePreset,next.allowNominations,id]
+    );
+    await pool.query(
+      'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'COMPETITION_DETAILS_UPDATED','COMPETITION',String(id),JSON.stringify({
+        before:{name:current.name,shortName:current.short_name,status:current.status,languagePreset:current.language_preset,allowNominations:Boolean(current.allow_nominations)},
+        after:{...next,allowNominations:Boolean(next.allowNominations)}
+      })]
+    );
+    res.json({ok:true});
+  }catch(e){next(e)}
+});
+
+router.delete('/:id',async(req,res,next)=>{
+  const id=Number(req.params.id);
+  const confirmation=clean(req.body?.confirmation,120);
+  if(!Number.isInteger(id)||id<1)return res.status(400).json({error:'invalid_competition'});
+  const conn=await pool.getConnection();
+  try{
+    await conn.beginTransaction();
+    const [[competition]]=await conn.query('SELECT id,slug,name FROM competitions WHERE id=? LIMIT 1 FOR UPDATE',[id]);
+    if(!competition)throw Object.assign(new Error('competition_not_found'),{status:404});
+    if(confirmation!==('DELETE '+competition.name))throw Object.assign(new Error('confirmation_required'),{status:400});
+    if(competition.slug==='somali-cup')throw Object.assign(new Error('core_competition_protected'),{status:409});
+
+    const [choiceRows]=await conn.query('SELECT id FROM competition_choices WHERE competition_id=?',[id]);
+    const choiceIds=choiceRows.map(x=>Number(x.id));
+    await conn.query('DELETE FROM competition_stage_events WHERE competition_id=?',[id]);
+    await conn.query('DELETE csc FROM competition_stage_choices csc JOIN competition_stages cs ON cs.id=csc.stage_id WHERE cs.competition_id=?',[id]);
+    await conn.query('DELETE FROM competition_stages WHERE competition_id=?',[id]);
+    await conn.query('DELETE FROM competition_referrals WHERE competition_id=?',[id]);
+    await conn.query('DELETE FROM competition_device_claims WHERE competition_id=?',[id]);
+    await conn.query('DELETE FROM competition_supporters WHERE competition_id=?',[id]);
+    await conn.query('DELETE FROM competition_nominations WHERE competition_id=?',[id]);
+    await conn.query('DELETE FROM competition_choices WHERE competition_id=?',[id]);
+    await conn.query('DELETE FROM competitions WHERE id=?',[id]);
+    await conn.query(
+      'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'COMPETITION_DELETED','COMPETITION',String(id),JSON.stringify({name:competition.name,slug:competition.slug,choiceIds})]
+    );
+    await conn.commit();
+    res.json({ok:true});
+  }catch(e){
+    await conn.rollback();
+    if(e.status)return res.status(e.status).json({error:e.message});
+    next(e);
+  }finally{conn.release()}
+});
+
+router.patch('/:id/choices/:choiceId',async(req,res,next)=>{
+  const competitionId=Number(req.params.id),choiceId=Number(req.params.choiceId);
+  if(!Number.isInteger(competitionId)||competitionId<1||!Number.isInteger(choiceId)||choiceId<1)return res.status(400).json({error:'invalid_choice'});
+  const name=clean(req.body?.name,140);
+  const shortName=clean(req.body?.shortName,80);
+  const status=clean(req.body?.status,20).toUpperCase();
+  const target=req.body?.target===undefined?undefined:(req.body?.target===null||req.body?.target===''?null:Number(req.body.target));
+  try{
+    const [[current]]=await pool.query('SELECT * FROM competition_choices WHERE id=? AND competition_id=? LIMIT 1',[choiceId,competitionId]);
+    if(!current)return res.status(404).json({error:'choice_not_found'});
+    const next={
+      name:name||current.name,
+      shortName:shortName||current.short_name,
+      status:status||current.status,
+      target:target===undefined?current.target:target
+    };
+    if(!['ACTIVE','PAUSED','ELIMINATED','WINNER'].includes(next.status))return res.status(400).json({error:'invalid_choice_status'});
+    if(next.target!==null&&(!Number.isInteger(next.target)||next.target<1))return res.status(400).json({error:'invalid_target'});
+    await pool.query(
+      'UPDATE competition_choices SET name=?,short_name=?,status=?,target=? WHERE id=? AND competition_id=?',
+      [next.name,next.shortName,next.status,next.target,choiceId,competitionId]
+    );
+    await pool.query(
+      'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'COMPETITION_CHOICE_UPDATED','COMPETITION_CHOICE',String(choiceId),JSON.stringify({competitionId,before:{name:current.name,shortName:current.short_name,status:current.status,target:current.target},after:next})]
+    );
+    res.json({ok:true});
+  }catch(e){next(e)}
+});
+
+router.delete('/:id/choices/:choiceId',async(req,res,next)=>{
+  const competitionId=Number(req.params.id),choiceId=Number(req.params.choiceId);
+  const confirmation=clean(req.body?.confirmation,160);
+  if(!Number.isInteger(competitionId)||competitionId<1||!Number.isInteger(choiceId)||choiceId<1)return res.status(400).json({error:'invalid_choice'});
+  const conn=await pool.getConnection();
+  try{
+    await conn.beginTransaction();
+    const [[choice]]=await conn.query(
+      'SELECT cc.id,cc.name,cp.slug FROM competition_choices cc JOIN competitions cp ON cp.id=cc.competition_id WHERE cc.id=? AND cc.competition_id=? LIMIT 1 FOR UPDATE',
+      [choiceId,competitionId]
+    );
+    if(!choice)throw Object.assign(new Error('choice_not_found'),{status:404});
+    if(confirmation!==('DELETE '+choice.name))throw Object.assign(new Error('confirmation_required'),{status:400});
+    if(choice.slug==='somali-cup')throw Object.assign(new Error('core_competition_choice_protected'),{status:409});
+    await conn.query('DELETE FROM competition_referrals WHERE competition_id=? AND choice_id=?',[competitionId,choiceId]);
+    await conn.query(`
+      DELETE cdc FROM competition_device_claims cdc
+      JOIN competition_supporters cs
+        ON cs.competition_id=cdc.competition_id AND cs.user_id=cdc.user_id
+      WHERE cs.competition_id=? AND cs.choice_id=?
+    `,[competitionId,choiceId]);
+    await conn.query('DELETE FROM competition_supporters WHERE competition_id=? AND choice_id=?',[competitionId,choiceId]);
+    await conn.query('DELETE FROM competition_stage_choices WHERE choice_id=?',[choiceId]);
+    await conn.query('DELETE FROM competition_choices WHERE id=? AND competition_id=?',[choiceId,competitionId]);
+    await conn.query(
+      'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'COMPETITION_CHOICE_DELETED','COMPETITION_CHOICE',String(choiceId),JSON.stringify({competitionId,name:choice.name})]
+    );
+    await conn.commit();
+    res.json({ok:true});
+  }catch(e){
+    await conn.rollback();
+    if(e.status)return res.status(e.status).json({error:e.message});
+    next(e);
+  }finally{conn.release()}
+});
 
 router.post('/create-complete',async(req,res,next)=>{
   const name=clean(req.body?.name,140);
@@ -214,6 +373,22 @@ router.patch('/:id',async(req,res,next)=>{
       })]
     );
     res.json({ok:true});
+  }catch(e){next(e)}
+});
+
+
+router.get('/:id/choices',async(req,res,next)=>{
+  try{
+    const competitionId=Number(req.params.id);
+    if(!Number.isInteger(competitionId)||competitionId<1)return res.status(400).json({error:'invalid_competition'});
+    const [rows]=await pool.query(`
+      SELECT cc.id,cc.name,cc.short_name,cc.code,cc.choice_type,cc.status,cc.target,cc.sort_order,
+        (SELECT COUNT(*) FROM competition_supporters cs WHERE cs.competition_id=cc.competition_id AND cs.choice_id=cc.id AND cs.status='ACTIVE') supporter_count
+      FROM competition_choices cc
+      WHERE cc.competition_id=?
+      ORDER BY cc.sort_order,cc.name
+    `,[competitionId]);
+    res.json({choices:rows.map(x=>({...x,id:Number(x.id),target:x.target===null?null:Number(x.target),supporter_count:Number(x.supporter_count||0)}))});
   }catch(e){next(e)}
 });
 

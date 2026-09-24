@@ -29,7 +29,7 @@ if(config.env!=='production'){
 app.get('/api/health',(_req,res)=>res.json({
   ok:true,
   service:'somali-cup-api',
-  version:'0.4.3-blank-page-hotfix'
+  version:'0.5.0-admin-content-control'
 }));
 
 app.use('/api/public',publicRoutes);
