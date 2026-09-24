@@ -84,6 +84,14 @@ export default function App(){
       {view==='matches'&&<MatchCenter matches={matches} me={me} onNeedIdentity={requestJoin}/>}
     </main>
 
+    <nav className="mobileDock">
+      <button className={view==='home'?'active':''} onClick={()=>setView('home')}><Trophy size={18}/><span>Home</span></button>
+      <button className={view==='qualification'?'active':''} onClick={()=>setView('qualification')}><BarChart3 size={18}/><span>Table</span></button>
+      <button className={view==='matches'?'active':''} onClick={()=>setView('matches')}><Radio size={18}/><span>Matches</span></button>
+      <button className={view==='cities'?'active':''} onClick={()=>setView('cities')}><MapPin size={18}/><span>Cities</span></button>
+      <button onClick={requestJoin}><Users size={18}/><span>${me?.membership?'My City':'Join'}</span></button>
+    </nav>
+
     {showJoin&&!me?.membership&&<JoinExperience standings={standings.filter(c=>c.is_open)} onClose={()=>setShowJoin(false)} onJoined={joined}/>}
     {notice&&<div className="toast"><Check size={16}/>{notice}</div>}
   </div>
@@ -144,6 +152,52 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
         <div className="globeOrb"><div className="globeLines"/><span>Cities across</span><strong>Somalia</strong><small>One cup. One national stage.</small></div>
         <div className="avatarStack"><i>A</i><i>Y</i><i>M</i><i>N</i><i>F</i><span>+5K</span></div>
       </div>
+    </section>
+
+    <section className="roadToCup">
+      <div className="roadHead">
+        <div><small>THE ROAD TO THE CUP</small><h3>One season. Five battles.</h3></div>
+        <span>Somali Cup 2027</span>
+      </div>
+      <div className="roadTrack">
+        <div className="roadStage active"><i>01</i><div><b>Qualification</b><span>Build your city</span></div><em>LIVE</em></div>
+        <div className="roadLine active"/>
+        <div className="roadStage"><i>02</i><div><b>Group Stage</b><span>Earn your place</span></div></div>
+        <div className="roadLine"/>
+        <div className="roadStage"><i>03</i><div><b>Knockout</b><span>No second chances</span></div></div>
+        <div className="roadLine"/>
+        <div className="roadStage"><i>04</i><div><b>Semi Final</b><span>Four cities remain</span></div></div>
+        <div className="roadLine"/>
+        <div className="roadStage final"><i>05</i><div><b>Final</b><span>One city lifts the Cup</span></div><Trophy size={18}/></div>
+      </div>
+    </section>
+
+    <section className="cityPulseSection">
+      <div className="sectionTitle"><div><small>CITY PULSE</small><h3>Where the qualification race is moving.</h3></div><button onClick={goQualification}>Live table <ArrowRight size={14}/></button></div>
+      <div className="cityPulseGrid">
+        {standings.slice(0,3).map((c,i)=>{
+          const remaining=Math.max(0,Number(c.qualification_target||0)-Number(c.verified_supporters||0));
+          return <button className={"pulseCard p"+(i+1)} key={c.code} onClick={()=>openCity(c)}>
+            <div className="pulseImage" style={{backgroundImage:`linear-gradient(180deg,rgba(2,8,18,.08),rgba(2,8,18,.96)),url("${imgFor(c)}")`}}>
+              <span className="pulseRank">#{c.rank}</span>
+              <div className="pulseCity"><span>{flag(c.country)}</span><div><h4>{c.name}</h4><small>{c.tier}</small></div></div>
+            </div>
+            <div className="pulseBody">
+              <div><span>Verified</span><b>{fmt(c.verified_supporters)}</b></div>
+              <div><span>Needed</span><b>{fmt(remaining)}</b></div>
+              <div><span>Progress</span><b>{Number(c.progress_pct||0).toFixed(0)}%</b></div>
+            </div>
+            <Progress value={c.progress_pct}/>
+            <strong className="pulseCall">{remaining>0?`${fmt(remaining)} more supporters to qualify`:'Qualification target reached'} <ChevronRight size={14}/></strong>
+          </button>
+        })}
+      </div>
+    </section>
+
+    <section className="impactBand">
+      <div className="impactBrand"><div className="impactStar">★</div><div><small>MORE THAN A SCORE</small><h3>Cities compete. Communities rise.</h3></div></div>
+      <p>Somali Cup turns city pride into visible participation, community recognition and sponsor-backed impact.</p>
+      <div className="impactMetrics"><div><strong>10</strong><span>Launch cities</span></div><div><strong>1</strong><span>National cup</span></div><div><strong>100%</strong><span>Community driven</span></div></div>
     </section>
 
     <section className="cityRailWrap">
