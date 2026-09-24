@@ -46,6 +46,13 @@ await check('tournament_stages_table',()=>pool.query("SELECT code,stage_type,sta
 await check('tournament_groups_table',()=>pool.query("SELECT code,name FROM tournament_groups LIMIT 1"));
 await check('tournament_advancement_slots_table',()=>pool.query("SELECT target_stage_id,target_match_no,target_slot,source_type FROM tournament_advancement_slots LIMIT 1"));
 await check('tournament_events_table',()=>pool.query("SELECT event_type,created_at FROM tournament_events LIMIT 1"));
+await check('competitions_table',()=>pool.query("SELECT slug,competition_type,choice_type,language_preset,status FROM competitions LIMIT 1"));
+await check('competition_choices_table',()=>pool.query("SELECT competition_id,name,code,choice_type,status FROM competition_choices LIMIT 1"));
+await check('competition_nominations_table',()=>pool.query("SELECT competition_id,name,status FROM competition_nominations LIMIT 1"));
+await check('somali_cup_competition_backfill',async()=>{
+  const [[r]]=await pool.query("SELECT id FROM competitions WHERE slug='somali-cup' LIMIT 1");
+  if(!r)throw new Error('Somali Cup competition backfill missing');
+});
 await check('match_lifecycle_columns',()=>pool.query("SELECT regulation_ends_at,tiebreak_mode,tiebreak_started_at FROM matches LIMIT 1"));
 await check('tournament_stage_rules',()=>pool.query("SELECT tie_policy,match_duration_minutes FROM tournament_stages LIMIT 1"));
 await check('admin_credentials_table',()=>pool.query("SELECT user_id,password_updated_at FROM admin_credentials LIMIT 1"));
