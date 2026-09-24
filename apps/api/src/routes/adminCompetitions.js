@@ -3,6 +3,7 @@ import { Router } from 'express';
 import { pool } from '../db/pool.js';
 import { requireAdminKey } from '../auth.js';
 import { languageFor, supportedLanguagePresets } from '../competitionLanguage.js';
+import { closeCompetitionStage, openCompetitionStage } from '../competitionProgress.js';
 
 const router=Router();
 router.use(requireAdminKey);
@@ -114,6 +115,83 @@ router.post('/:id/choices',async(req,res,next)=>{
     if(e.code==='ER_DUP_ENTRY')return res.status(409).json({error:'choice_already_exists'});
     next(e);
   }
+});
+
+
+router.get('/:id/stages',async(req,res,next)=>{
+  try{
+    const competitionId=Number(req.params.id);
+    if(!Number.isInteger(competitionId)||competitionId<1)return res.status(400).json({error:'invalid_competition'});
+    const [stages]=await pool.query(`
+      SELECT id,code,name,stage_type,sequence_no,status,rule_type,target,advance_count,group_size,starts_at,ends_at
+      FROM competition_stages
+      WHERE competition_id=?
+      ORDER BY sequence_no
+    `,[competitionId]);
+    const out=[];
+    for(const stage of stages){
+      const [choices]=await pool.query(`
+        SELECT csc.choice_id,csc.group_code,csc.seed_no,csc.entry_supporter_count,csc.final_supporter_count,csc.result_status,
+          cc.code,cc.name,
+          (SELECT COUNT(*) FROM competition_supporters cs WHERE cs.competition_id=? AND cs.choice_id=cc.id AND cs.status='ACTIVE') supporter_count
+        FROM competition_stage_choices csc
+        JOIN competition_choices cc ON cc.id=csc.choice_id
+        WHERE csc.stage_id=?
+        ORDER BY COALESCE(csc.group_code,''),csc.seed_no,cc.name
+      `,[competitionId,stage.id]);
+      out.push({...stage,id:Number(stage.id),target:stage.target===null?null:Number(stage.target),advance_count:stage.advance_count===null?null:Number(stage.advance_count),group_size:stage.group_size===null?null:Number(stage.group_size),choices:choices.map(x=>({...x,choice_id:Number(x.choice_id),supporter_count:Number(x.supporter_count||0),entry_supporter_count:Number(x.entry_supporter_count||0),final_supporter_count:x.final_supporter_count===null?null:Number(x.final_supporter_count)}))});
+    }
+    res.json({stages:out});
+  }catch(e){next(e)}
+});
+
+router.patch('/:id/stages/:stageId',async(req,res,next)=>{
+  const competitionId=Number(req.params.id);
+  const stageId=Number(req.params.stageId);
+  if(!Number.isInteger(competitionId)||competitionId<1||!Number.isInteger(stageId)||stageId<1)return res.status(400).json({error:'invalid_stage'});
+  const name=clean(req.body?.name,100);
+  const ruleType=clean(req.body?.ruleType,30).toUpperCase();
+  const target=req.body?.target===null||req.body?.target===''?null:Number(req.body?.target);
+  const advanceCount=req.body?.advanceCount===null||req.body?.advanceCount===''?null:Number(req.body?.advanceCount);
+  const groupSize=req.body?.groupSize===null||req.body?.groupSize===''?null:Number(req.body?.groupSize);
+  try{
+    const [[stage]]=await pool.query('SELECT * FROM competition_stages WHERE id=? AND competition_id=? LIMIT 1',[stageId,competitionId]);
+    if(!stage)return res.status(404).json({error:'competition_stage_not_found'});
+    const nextName=name||stage.name;
+    const nextRule=ruleType||stage.rule_type;
+    const nextTarget=req.body?.target===undefined?stage.target:target;
+    const nextAdvance=req.body?.advanceCount===undefined?stage.advance_count:advanceCount;
+    const nextGroupSize=req.body?.groupSize===undefined?stage.group_size:groupSize;
+    if(!['TARGET','TOP_N','TARGET_OR_TOP_N','HIGHEST_AT_CLOSE'].includes(nextRule))return res.status(400).json({error:'invalid_stage_rule'});
+    if(nextTarget!==null&&(!Number.isInteger(nextTarget)||nextTarget<1))return res.status(400).json({error:'invalid_target'});
+    if(nextAdvance!==null&&(!Number.isInteger(nextAdvance)||nextAdvance<1))return res.status(400).json({error:'invalid_advance_count'});
+    if(nextGroupSize!==null&&(!Number.isInteger(nextGroupSize)||nextGroupSize<2))return res.status(400).json({error:'invalid_group_size'});
+    await pool.query(
+      'UPDATE competition_stages SET name=?,rule_type=?,target=?,advance_count=?,group_size=? WHERE id=? AND competition_id=?',
+      [nextName,nextRule,nextTarget,nextAdvance,nextGroupSize,stageId,competitionId]
+    );
+    await pool.query(
+      'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'COMPETITION_STAGE_UPDATED','COMPETITION_STAGE',String(stageId),JSON.stringify({competitionId,before:{name:stage.name,ruleType:stage.rule_type,target:stage.target,advanceCount:stage.advance_count,groupSize:stage.group_size},after:{name:nextName,ruleType:nextRule,target:nextTarget,advanceCount:nextAdvance,groupSize:nextGroupSize}})]
+    );
+    res.json({ok:true});
+  }catch(e){next(e)}
+});
+
+router.post('/:id/stages/:stageId/open',async(req,res,next)=>{
+  try{
+    const competitionId=Number(req.params.id),stageId=Number(req.params.stageId);
+    const result=await openCompetitionStage({competitionId,stageId,actorUserId:req.admin?.user_id||null});
+    res.json(result);
+  }catch(e){if(e.status)return res.status(e.status).json({error:e.message});next(e)}
+});
+
+router.post('/:id/stages/:stageId/close',async(req,res,next)=>{
+  try{
+    const competitionId=Number(req.params.id),stageId=Number(req.params.stageId);
+    const result=await closeCompetitionStage({competitionId,stageId,actorUserId:req.admin?.user_id||null});
+    res.json(result);
+  }catch(e){if(e.status)return res.status(e.status).json({error:e.message});next(e)}
 });
 
 router.get('/:id/nominations',async(req,res,next)=>{
