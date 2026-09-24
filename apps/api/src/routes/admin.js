@@ -12,7 +12,7 @@ const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const apiRoot=path.resolve(__dirname,'..');
 const launchRuns=new Set();
 
-async function runLaunchScript(kind){
+async function runLaunchScript(kind,adminUserId=null){
   const scripts={
     preflight:'preflight.js',
     safe:'acceptanceSafe.js',
@@ -24,14 +24,34 @@ async function runLaunchScript(kind){
   launchRuns.add(kind);
   try{
     const env={...process.env};
+    let tempAdminSessionId=null;
     if(kind==='controlled'){
       env.ACCEPTANCE_MUTATIONS='I_UNDERSTAND_THIS_CREATES_TEMPORARY_RECORDS';
-      if(process.env.ADMIN_BOOTSTRAP_KEY)env.ACCEPTANCE_ADMIN_KEY=process.env.ADMIN_BOOTSTRAP_KEY;
+      if(adminUserId){
+        const token=crypto.randomBytes(32).toString('base64url');
+        const tokenHash=crypto.createHash('sha256').update(token).digest('hex');
+        const expiresAt=new Date(Date.now()+10*60*1000);
+        const [created]=await pool.query(
+          'INSERT INTO admin_sessions(user_id,token_hash,user_agent_hash,expires_at) VALUES (?,?,NULL,?)',
+          [adminUserId,tokenHash,expiresAt]
+        );
+        tempAdminSessionId=Number(created.insertId);
+        env.ACCEPTANCE_ADMIN_TOKEN=token;
+        delete env.ACCEPTANCE_ADMIN_KEY;
+      }else if(process.env.ADMIN_BOOTSTRAP_KEY){
+        env.ACCEPTANCE_ADMIN_KEY=process.env.ADMIN_BOOTSTRAP_KEY;
+      }
     }
-    const {stdout,stderr}=await execFileAsync(process.execPath,[path.join(apiRoot,file)],{
-      env,timeout:180000,maxBuffer:1024*1024
-    });
-    return {ok:true,stdout:String(stdout||'').slice(-16000),stderr:String(stderr||'').slice(-8000)};
+    try{
+      const {stdout,stderr}=await execFileAsync(process.execPath,[path.join(apiRoot,file)],{
+        env,timeout:180000,maxBuffer:1024*1024
+      });
+      return {ok:true,stdout:String(stdout||'').slice(-16000),stderr:String(stderr||'').slice(-8000)};
+    }finally{
+      if(tempAdminSessionId){
+        await pool.query('UPDATE admin_sessions SET revoked_at=UTC_TIMESTAMP() WHERE id=?',[tempAdminSessionId]).catch(()=>{});
+      }
+    }
   }catch(e){
     const err=Object.assign(new Error('launch_check_failed'),{status:409});
     err.payload={
@@ -66,7 +86,7 @@ router.post('/launch-checks/:kind',async(req,res,next)=>{
     }
   }
   try{
-    const result=await runLaunchScript(kind);
+    const result=await runLaunchScript(kind,req.admin?.user_id||null);
     await pool.query(`
       INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json)
       VALUES (?,'LAUNCH_CHECK_RUN','LAUNCH_ACCEPTANCE',?,JSON_OBJECT('kind',?,'result','PASS'))
