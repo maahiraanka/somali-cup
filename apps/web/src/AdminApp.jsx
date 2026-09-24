@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {
-  Activity,AlertTriangle,BarChart3,ChevronRight,ClipboardList,DoorOpen,
-  Flag,KeyRound,LayoutDashboard,LockKeyhole,Medal,Menu,Radio,RefreshCw,
+  Activity,AlertTriangle,BarChart3,CheckCircle2,ChevronRight,ClipboardList,DoorOpen,
+  Flag,KeyRound,LayoutDashboard,LockKeyhole,Medal,Menu,Radio,RefreshCw,Rocket,
   Search,ShieldCheck,Trophy,UserPlus,Users,X
 } from 'lucide-react';
 
@@ -67,6 +67,7 @@ function AdminAuth({onReady}){
 
 const nav=[
   ['overview','Overview',LayoutDashboard],
+  ['launch','Launch Readiness',Rocket],
   ['cities','Cities & Qualification',Flag],
   ['matches','Matches',Radio],
   ['tournament','Tournament',Trophy],
@@ -99,6 +100,7 @@ export default function AdminApp(){
 
   const endpoint=useMemo(()=>({
     overview:'/api/admin/overview',
+    launch:'/api/admin/launch-readiness',
     cities:'/api/admin/qualification',
     matches:'/api/admin/matches',
     tournament:'/api/tournament',
@@ -161,6 +163,7 @@ export default function AdminApp(){
       <main className="adminContent">
         {loading&&!data[view]?<div className="adminLoading"><RefreshCw className="spin"/><span>Loading verified competition data…</span></div>:
           view==='overview'?<Overview d={data.overview}/>:
+          view==='launch'?<LaunchReadiness d={data.launch}/>:
           view==='cities'?<CitiesAdmin d={data.cities} act={act}/>:
           view==='matches'?<MatchesAdmin d={data.matches} act={act}/>:
           view==='tournament'?<TournamentAdmin d={data.tournament} act={act}/>:
@@ -174,6 +177,53 @@ export default function AdminApp(){
     </section>
   </div>
 }
+
+function LaunchReadiness({d}){
+  const status=d?.overall||'BLOCKED';
+  const grouped=(d?.checks||[]).reduce((acc,c)=>{(acc[c.category]||=[]).push(c);return acc},{});
+  const order=['ENVIRONMENT','SECURITY','DATABASE','COMPETITION','INTEGRITY','MATCHES','OPERATIONS','PROOF'];
+  return <>
+    <section className={'launchReadinessHero '+status.toLowerCase()}>
+      <div className="launchReadinessIcon">{status==='READY'?<CheckCircle2 size={34}/>:status==='REVIEW'?<AlertTriangle size={34}/>:<LockKeyhole size={34}/>}</div>
+      <div>
+        <small>LAUNCH GATE</small>
+        <h2>{status==='READY'?'Somali Cup is ready for launch.':status==='REVIEW'?'Almost ready. Review the warnings.':'Launch is still blocked.'}</h2>
+        <p>{status==='READY'?'Every required production check and acceptance proof is green.':status==='REVIEW'?'There are no hard blockers, but one or more warnings still deserve review.':`${fmt(d?.blockers)} blocker(s) must be cleared before the public launch switch.`}</p>
+      </div>
+      <div className="launchReadinessCount">
+        <strong>{fmt((d?.checks||[]).filter(c=>c.status==='PASS').length)}</strong>
+        <span>PASS</span>
+      </div>
+    </section>
+
+    <div className="launchProofSummary">
+      <div><span>Blockers</span><strong>{fmt(d?.blockers)}</strong></div>
+      <div><span>Warnings</span><strong>{fmt(d?.warnings)}</strong></div>
+      <div><span>Checks</span><strong>{fmt(d?.checks?.length||0)}</strong></div>
+      <div><span>Evidence runs</span><strong>{fmt(d?.evidence?.length||0)}</strong></div>
+    </div>
+
+    {order.filter(k=>grouped[k]?.length).map(category=><section className="adminPanel launchCategory" key={category}>
+      <PanelHead eyebrow={category} title={nice(category.toLowerCase())}/>
+      <div className="launchCheckList">
+        {grouped[category].map(c=><div className={'launchCheck '+c.status.toLowerCase()} key={c.id}>
+          <div className="launchCheckIcon">{c.status==='PASS'?<CheckCircle2 size={17}/>:c.status==='WARNING'?<AlertTriangle size={17}/>:<LockKeyhole size={17}/>}</div>
+          <div><b>{c.label}</b><small>{c.detail}</small></div>
+          <span>{c.status}</span>
+        </div>)}
+      </div>
+    </section>)}
+
+    <section className="adminPanel">
+      <PanelHead eyebrow="PRODUCTION EVIDENCE" title="Latest acceptance runs"/>
+      {(d?.evidence||[]).length?<div className="launchEvidenceList">{d.evidence.map(e=><div key={e.id}>
+        <div><b>{nice(e.type)}</b><small>{e.origin||'No origin'} · {e.createdAt?new Date(e.createdAt).toLocaleString():'Unknown time'}</small></div>
+        <span className={'status '+String(e.status).toLowerCase()}>{e.status}</span>
+      </div>)}</div>:<Empty compact title="No production acceptance evidence yet" body="Run preflight, safe acceptance and controlled acceptance on Hostinger."/>}
+    </section>
+  </>
+}
+
 
 function Overview({d}){
   if(!d?.season)return <Empty title="No active season" body="Create or activate a Somali Cup season before competition operations begin."/>;
