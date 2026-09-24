@@ -8,6 +8,17 @@ import {
 const fmt=n=>Number(n||0).toLocaleString();
 const nice=v=>String(v||'').replaceAll('_',' ').replace(/\b\w/g,m=>m.toUpperCase());
 const humanErrorAdmin=e=>nice(e?.body?.error||e?.message||'request_failed');
+const launchFailureText=e=>{
+  const b=e?.body||{};
+  const parts=[];
+  if(b.message)parts.push('MESSAGE: '+b.message);
+  if(b.exitCode!==undefined&&b.exitCode!==null)parts.push('EXIT CODE: '+b.exitCode);
+  if(b.signal)parts.push('SIGNAL: '+b.signal);
+  if(b.stdout)parts.push('STDOUT:\n'+b.stdout);
+  if(b.stderr)parts.push('STDERR:\n'+b.stderr);
+  if(b.command)parts.push('COMMAND:\n'+b.command);
+  return parts.join('\n\n')||humanErrorAdmin(e);
+};
 const adminToken=()=>localStorage.getItem('somalicup_admin_session')||'';
 
 async function adminApi(path,opts={}){
@@ -254,7 +265,7 @@ function LaunchReadiness({d,act}){
             const d=await adminApi('/api/admin/launch-checks/preflight',{method:'POST'});
             setCheckOutput(d.stdout||'Preflight passed.');
             await act(async()=>d,'Production preflight passed');
-          }catch(e){setCheckOutput((e.body?.stdout||'')+'\n'+(e.body?.stderr||humanErrorAdmin(e)));}finally{setRunningCheck('')}
+          }catch(e){setCheckOutput(launchFailureText(e));}finally{setRunningCheck('')}
         }}><ShieldCheck size={17}/><div><b>{runningCheck==='preflight'?'RUNNING…':'RUN PREFLIGHT'}</b><small>Environment, DB, migrations, Goal integrity</small></div></button>
         <button disabled={Boolean(runningCheck)} onClick={async()=>{
           setRunningCheck('safe');setCheckOutput('');
@@ -262,7 +273,7 @@ function LaunchReadiness({d,act}){
             const d=await adminApi('/api/admin/launch-checks/safe',{method:'POST'});
             setCheckOutput(d.stdout||'Safe acceptance passed.');
             await act(async()=>d,'Safe acceptance passed');
-          }catch(e){setCheckOutput((e.body?.stdout||'')+'\n'+(e.body?.stderr||humanErrorAdmin(e)));}finally{setRunningCheck('')}
+          }catch(e){setCheckOutput(launchFailureText(e));}finally{setRunningCheck('')}
         }}><BarChart3 size={17}/><div><b>{runningCheck==='safe'?'RUNNING…':'RUN SAFE ACCEPTANCE'}</b><small>Public routes, security, APIs, response health</small></div></button>
         <button disabled={Boolean(runningCheck)} onClick={async()=>{
           if(!window.confirm('Run the controlled acceptance test now? It creates temporary tagged supporter and match records, proves the viral loop, then removes them.'))return;
@@ -271,7 +282,7 @@ function LaunchReadiness({d,act}){
             const d=await adminApi('/api/admin/launch-checks/controlled',{method:'POST',body:JSON.stringify({confirmation:'RUN CONTROLLED ACCEPTANCE'})});
             setCheckOutput(d.stdout||'Controlled acceptance passed.');
             await act(async()=>d,'Controlled acceptance passed');
-          }catch(e){setCheckOutput((e.body?.stdout||'')+'\n'+(e.body?.stderr||humanErrorAdmin(e)));}finally{setRunningCheck('')}
+          }catch(e){setCheckOutput(launchFailureText(e));}finally{setRunningCheck('')}
         }}><Activity size={17}/><div><b>{runningCheck==='controlled'?'RUNNING…':'RUN CONTROLLED ACCEPTANCE'}</b><small>Goal → Assist → Branch → Match → cleanup</small></div></button>
       </div>
       {checkOutput&&<pre className="launchCheckOutput">{checkOutput}</pre>}
