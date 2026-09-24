@@ -651,3 +651,20 @@ radial-gradient(circle at 50% 50%,#0c3f64,#071d34 57%,#04101b 76%);border:1px so
 .launchRunnerGrid>button>svg{flex:none;color:#62d9ff}.launchRunnerGrid b,.launchRunnerGrid small{display:block}.launchRunnerGrid b{font-size:8px}.launchRunnerGrid small{font-size:7px;color:#617b90;margin-top:3px;line-height:1.35}
 .launchCheckOutput{max-height:300px;overflow:auto;margin:10px 0 0;padding:12px;border-radius:10px;background:#020811;border:1px solid rgba(79,156,204,.08);color:#8fb3c8;font:7px/1.55 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;white-space:pre-wrap;word-break:break-word}
 @media(max-width:900px){.launchRunnerGrid{grid-template-columns:1fr}}
+
+
+/* v0.31 public legal and launch content */
+.publicLegalFooter{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 28px;border-top:1px solid rgba(79,155,202,.08);background:#020811;color:#557187;font-size:7px}
+.publicLegalFooter nav{display:flex;align-items:center;gap:14px;flex-wrap:wrap}.publicLegalFooter a{color:#7897ad;text-decoration:none;font-weight:800}.publicLegalFooter a:hover{color:#dceaf3}
+.comingSoonFooterWrap .publicLegalFooter{padding:10px 0 0;background:transparent;border-top:0}
+.legalPage{min-height:100vh;background:radial-gradient(circle at 12% 8%,rgba(47,194,255,.08),transparent 24%),#020811;color:#eef7ff;padding:24px}
+.legalGlow{position:fixed;inset:0;pointer-events:none;background:radial-gradient(circle at 90% 10%,rgba(255,203,69,.05),transparent 22%)}
+.legalTop{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:16px;max-width:980px;margin:0 auto 26px}
+.legalBrand{display:flex;align-items:center;gap:10px;color:#edf7ff;text-decoration:none;font-size:10px;letter-spacing:.08em}.legalBrand span{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:linear-gradient(145deg,#ffe27b,#c9870d);color:#07101a}
+.legalBack{display:flex;align-items:center;gap:6px;color:#7f9db2;text-decoration:none;font-size:8px}
+.legalDoc{position:relative;z-index:1;max-width:980px;margin:0 auto 22px;padding:28px;border-radius:22px;background:linear-gradient(180deg,#071521,#04101a);border:1px solid rgba(78,161,211,.1)}
+.legalTitle small{font-size:7px;letter-spacing:.16em;font-weight:1000;color:#63d9ff}.legalTitle h1{font-size:40px;letter-spacing:-.04em;margin:7px 0}.legalTitle>p{font-size:11px;line-height:1.6;color:#8aa2b5;max-width:720px;margin:0}
+.legalRule{display:flex;align-items:center;gap:9px;margin:22px 0;padding:11px 13px;border-radius:11px;background:#061d2a;border:1px solid rgba(73,192,242,.1);color:#8adfff;font-size:8px;font-weight:900}
+.legalDoc section{padding:18px 0;border-top:1px solid rgba(76,151,198,.07)}.legalDoc section h2{font-size:16px;margin:0 0 7px}.legalDoc section p{font-size:10px;line-height:1.7;color:#8199ad;margin:0;max-width:850px}
+.legalUpdated{margin-top:18px;padding-top:16px;border-top:1px solid rgba(76,151,198,.07);font-size:7px;color:#536d82;letter-spacing:.06em}
+@media(max-width:720px){.publicLegalFooter{align-items:flex-start;flex-direction:column;padding:16px 18px}.legalPage{padding:14px}.legalTop{align-items:flex-start}.legalDoc{padding:20px 16px}.legalTitle h1{font-size:31px}.comingSoonFooterWrap .publicLegalFooter{padding-top:8px}}
