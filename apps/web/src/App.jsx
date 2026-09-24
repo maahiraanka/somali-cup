@@ -94,7 +94,8 @@ async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer
   const file=new File([pngBlob],'somali-cup-status.png',{type:'image/png'});
   const fromParam=fromName?`&from=${encodeURIComponent(fromName)}`:'';
   const refParam=refPublicId?`&ref=${encodeURIComponent(refPublicId)}`:'';
-  const viralUrl=`${window.location.origin}/?city=${encodeURIComponent(city?.code||'')}&src=status${fromParam}${refParam}`;
+  const previewBase=window.location.pathname.startsWith('/preview')?'/preview':'';
+  const viralUrl=`${window.location.origin}${previewBase}/?city=${encodeURIComponent(city?.code||'')}&src=status${fromParam}${refParam}`;
   const lead=fromName?`${fromName} is backing ${city?.name}.\n`:'';
   const shareText=`${lead}${subtitle}\nJoin ${city?.name||'your city'}: ${viralUrl}`;
   if(navigator.share&&navigator.canShare?.({files:[file]})){
@@ -868,7 +869,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
   const commentary=(live?.activity||[]).slice(0,5);
   const join=async()=>{if(!me){onNeedIdentity();return}setBusy(true);setMsg('');try{const inviteToken=new URLSearchParams(window.location.search).get('invite')||'';const d=await api(`/api/matches/${match.publicId}/join`,{method:'POST',body:JSON.stringify({inviteToken})});setMine(d.participation);setMsg(d.created?'Place reserved.':'You are already registered.');await load(match)}catch(e){setMsg(e.message.replaceAll('_',' '))}finally{setBusy(false)}};
   const activate=async()=>{setBusy(true);setMsg('');try{const d=await api(`/api/matches/${match.publicId}/activate`,{method:'POST',body:'{}'});setMsg(d.goalAdded?'GOAL — your verified entry moved the score.':'Your Goal is already counted.');await load(match)}catch(e){setMsg(e.message.replaceAll('_',' '))}finally{setBusy(false)}};
-  const copyLink=async()=>{const token=mine?.share_token||mine?.shareToken;if(!token)return false;const from=encodeURIComponent(me?.user?.nickname||me?.user?.displayName||'');const url=`${window.location.origin}/?match=${match.publicId}&invite=${token}${from?'&from='+from:''}`;try{await navigator.clipboard.writeText(url);setBenchPulse(v=>v+1);setMsg('Match invite copied — bring one more person in.');return true}catch{setMsg(url);return false}};
+  const copyLink=async()=>{const token=mine?.share_token||mine?.shareToken;if(!token)return false;const from=encodeURIComponent(me?.user?.nickname||me?.user?.displayName||'');const previewBase=window.location.pathname.startsWith('/preview')?'/preview':'';const url=`${window.location.origin}${previewBase}/?match=${match.publicId}&invite=${token}${from?'&from='+from:''}`;try{await navigator.clipboard.writeText(url);setBenchPulse(v=>v+1);setMsg('Match invite copied — bring one more person in.');return true}catch{setMsg(url);return false}};
   const myMatchCity=me?.membership?.code===home.code?home:me?.membership?.code===away.code?away:null;
   const shareMoment=async(type)=>{
     const city=myMatchCity||leader||home;
