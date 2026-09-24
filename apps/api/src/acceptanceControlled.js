@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { pool } from './db/pool.js';
 import { config } from './config.js';
+import { recordLaunchEvidence } from './launchEvidence.js';
 
 const REQUIRED='I_UNDERSTAND_THIS_CREATES_TEMPORARY_RECORDS';
 if(process.env.ACCEPTANCE_MUTATIONS!==REQUIRED){
@@ -247,6 +248,12 @@ try{
   if(failures===0)fail('controlled_acceptance',e.message);
 }finally{
   await cleanup();
+  await recordLaunchEvidence({
+    runType:'CONTROLLED_ACCEPTANCE',
+    status:failures>0?'FAIL':'PASS',
+    failures,warnings:0,origin,
+    evidence:{goalA,goalB,matchPublicId,cleaned:true}
+  });
   await pool.end();
 }
 
