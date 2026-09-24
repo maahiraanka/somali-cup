@@ -193,6 +193,8 @@ export default function App(){
   const [notice,setNotice]=useState('');
   const [inviteBusy,setInviteBusy]=useState(false);
   const [matches,setMatches]=useState([]);
+  const [tournament,setTournament]=useState({season:null,stages:[]});
+  const [tournamentError,setTournamentError]=useState(false);
   const [selectedCity,setSelectedCity]=useState(null);
   const [mobileNav,setMobileNav]=useState(false);
 
@@ -238,6 +240,13 @@ export default function App(){
       setMatchesError(false);
     }catch{
       setMatchesError(true);
+    }
+    try{
+      const d=await api('/api/tournament');
+      setTournament({season:d?.season||null,stages:Array.isArray(d?.stages)?d.stages:[]});
+      setTournamentError(false);
+    }catch{
+      setTournamentError(true);
     }finally{
       setInitialLoading(false);
     }
@@ -290,6 +299,8 @@ export default function App(){
   const top=standings[0];
   const qualificationUnavailable=!initialLoading&&qualificationError&&standings.length===0;
   const matchesUnavailable=!initialLoading&&matchesError&&matches.length===0;
+  const hasTournament=Boolean(tournament?.stages?.length);
+  const tournamentUnavailable=!initialLoading&&tournamentError;
   const myCity=useMemo(()=>me?.membership?standings.find(c=>c.code===me.membership.code):null,[me,standings]);
   const total=standings.reduce((a,c)=>a+Number(c.verified_supporters||0),0);
   const viralFrom=(new URLSearchParams(window.location.search).get('from')||'').trim().slice(0,40);
@@ -347,6 +358,7 @@ export default function App(){
       <button className="brandButton" onClick={()=>setView('home')}><Logo/></button>
       <nav className={mobileNav?'nav open':'nav'}>
         {['home','cities','matches'].map(v=><button key={v} className={view===v?'active':''} onClick={()=>{setView(v);setMobileNav(false)}}>{v[0].toUpperCase()+v.slice(1)}</button>)}
+        {hasTournament&&<button className={view==='tournament'?'active':''} onClick={()=>{setView('tournament');setMobileNav(false)}}>Cup</button>}
         <button className={view==='qualification'?'active':''} onClick={()=>{setView('qualification');setMobileNav(false)}}>Live Table</button>
       </nav>
       <div className="topActions">
@@ -364,13 +376,14 @@ export default function App(){
         {view==='cities'&&(qualificationUnavailable?<LiveDataState title="City data unavailable" body="We couldn’t load the verified city list." onRetry={refresh}/>:<Cities standings={standings} openCity={openCity} onJoin={requestJoin}/>)}
         {view==='city'&&(qualificationUnavailable?<LiveDataState title="City data unavailable" body="We couldn’t load the verified city data." onRetry={refresh}/>:selectedCity&&<CityPage city={standings.find(c=>c.code===selectedCity.code)||selectedCity} me={me} onBack={()=>setView('cities')} onJoin={requestJoin}/>)}
         {view==='matches'&&(matchesUnavailable?<LiveDataState title="Live fixtures unavailable" body="We couldn’t load the verified Somali Cup fixtures. No sample scores are being shown." onRetry={refresh}/>:<MatchCenter matches={matches} me={me} onNeedIdentity={requestJoin}/>)}
+        {view==='tournament'&&(tournamentUnavailable?<LiveDataState title="Cup data unavailable" body="We couldn’t load the verified tournament state." onRetry={refresh}/>:<TournamentView tournament={tournament} myCityCode={me?.membership?.code||''} goMatches={()=>setView('matches')}/>)}
         {view==='profile'&&(qualificationUnavailable?<LiveDataState title="Supporter data unavailable" body="Your identity is safe, but the live city data could not be loaded." onRetry={refresh}/>:<SupporterProfile me={me} city={myCity} season={season} onJoin={requestJoin} onCity={()=>myCity&&openCity(myCity)} onMatches={()=>setView('matches')}/>)}
       </>}
     </main>
 
     {!viralCity&&!viralMatch&&<nav className="mobileDock">
       <button className={view==='home'?'active':''} onClick={()=>setView('home')}><Trophy size={18}/><span>Home</span></button>
-      <button className={view==='qualification'?'active':''} onClick={()=>setView('qualification')}><BarChart3 size={18}/><span>Table</span></button>
+      <button className={view===(hasTournament?'tournament':'qualification')?'active':''} onClick={()=>setView(hasTournament?'tournament':'qualification')}><BarChart3 size={18}/><span>{hasTournament?'Cup':'Table'}</span></button>
       <button className={view==='matches'?'active':''} onClick={()=>setView('matches')}><Radio size={18}/><span>Matches</span></button>
       <button className={view==='cities'?'active':''} onClick={()=>setView('cities')}><MapPin size={18}/><span>Cities</span></button>
       <button className={view==='profile'?'active':''} onClick={()=>me?.membership?setView('profile'):requestJoin()}><Users size={18}/><span>{me?.membership?'Me':'Join'}</span></button>
@@ -586,6 +599,66 @@ function Home({standings,top,total,season,myCity,me,matches,onJoin,openCity,goQu
     </>}
   </div>
 }
+function TournamentView({tournament,myCityCode,goMatches}){
+  const stages=tournament?.stages||[];
+  const defaultStage=stages.find(s=>s.status==='OPEN')||stages.find(s=>s.status!=='COMPLETE')||stages[stages.length-1]||null;
+  const [stageCode,setStageCode]=useState(defaultStage?.code||'');
+  useEffect(()=>{if(!stages.some(s=>s.code===stageCode))setStageCode(defaultStage?.code||'')},[stages,defaultStage?.code]);
+  if(!stages.length)return <div className="pageWrap"><section className="cupEmpty"><Trophy size={35}/><small>SOMALI CUP</small><h1>The tournament path is not published yet.</h1><p>Qualification is still deciding who enters the Cup. No bracket is being guessed or shown early.</p></section></div>;
+  const stage=stages.find(s=>s.code===stageCode)||defaultStage||stages[0];
+  let myGroup=null,myRow=null;
+  if(stage?.type==='GROUP'){
+    for(const group of stage.groups||[]){
+      const row=(group.table||[]).find(r=>r.city?.code===myCityCode);
+      if(row){myGroup=group;myRow=row;break}
+    }
+  }
+  const myKnockout=(stage?.matches||[]).find(m=>m.home?.code===myCityCode||m.away?.code===myCityCode);
+  return <div className="cupPage pageWrap">
+    <section className="cupHero">
+      <div><small>THE ROAD TO THE CUP</small><h1>Somali Cup <em>2027</em></h1><p>Verified results decide every table, every qualifier and every next match.</p></div>
+      <button className="glassBtn" onClick={goMatches}><Radio size={16}/> Match Centre</button>
+    </section>
+    <div className="cupStageRail">
+      {stages.map((s,i)=><button key={s.code} className={s.code===stage.code?'active':''} onClick={()=>setStageCode(s.code)}>
+        <span>{String(i+1).padStart(2,'0')}</span><div><b>{s.name}</b><small>{s.status}</small></div>
+      </button>)}
+    </div>
+
+    {(myRow||myKnockout)&&<section className="myCupState">
+      <div><small>YOUR CITY · {stage.name.toUpperCase()}</small>
+        <h2>{myRow?myRow.city.name:(myKnockout.home?.code===myCityCode?myKnockout.home.name:myKnockout.away.name)}</h2>
+        <p>{myRow?`#${myRow.rank} in ${myGroup.name} · ${myRow.points} pts · GD ${myRow.goalDiff>0?'+':''}${myRow.goalDiff}`:myKnockout.status==='FINAL'?'Result confirmed.':'Your next Cup fixture is set.'}</p>
+      </div>
+      <button className="goldBtn" onClick={goMatches}>{myKnockout?.status==='LIVE'?'ENTER MY MATCH':'OPEN MATCH CENTRE'} <ArrowRight size={15}/></button>
+    </section>}
+
+    {stage.type==='GROUP'?<div className="cupGroups">
+      {(stage.groups||[]).map(group=><section className="cupGroup" key={group.code}>
+        <div className="cupGroupHead"><div><small>{group.code}</small><h3>{group.name}</h3></div><span>{stage.advanceCount?stage.advanceCount+' advance':'GROUP STAGE'}</span></div>
+        <div className="cupTableHead"><span>#</span><span>City</span><span>P</span><span>W</span><span>GD</span><span>Pts</span></div>
+        {(group.table||[]).map(row=><div key={row.city.code} className={'cupTableRow '+(row.city.code===myCityCode?'mine':'')}>
+          <b>{row.rank}</b><div><strong>{row.city.name}</strong><small>{row.city.code}</small></div><span>{row.played}</span><span>{row.wins}</span><span>{row.goalDiff>0?'+':''}{row.goalDiff}</span><strong>{row.points}</strong>
+        </div>)}
+        <div className="cupGroupFixtures">
+          {(group.matches||[]).slice(0,4).map(m=><div key={m.publicId}><span>{m.status}</span><b>{m.home.code} {m.home.score} — {m.away.score} {m.away.code}</b></div>)}
+          {(group.matches||[]).length>4&&<small>+ {(group.matches||[]).length-4} more fixtures in Match Centre</small>}
+        </div>
+      </section>)}
+    </div>:<section className="cupKnockout">
+      <div className="cupKnockoutHead"><small>{stage.status}</small><h2>{stage.name}</h2><p>Only finalized winners move forward.</p></div>
+      <div className="knockoutMatches">
+        {(stage.matches||[]).length?(stage.matches||[]).map(m=><article key={m.publicId} className={m.home?.code===myCityCode||m.away?.code===myCityCode?'mine':''}>
+          <div><span>MATCH {m.matchNo||'—'}</span><b>{m.status}</b></div>
+          <section><strong>{m.home.name}</strong><em>{m.home.score}</em></section>
+          <section><strong>{m.away.name}</strong><em>{m.away.score}</em></section>
+          {m.winner&&<small><Trophy size={12}/> {m.winner.name} advance</small>}
+        </article>):<div className="truthEmpty"><ShieldCheck size={19}/><div><b>Bracket slots are waiting for verified qualifiers.</b><p>No placeholder cities are being shown.</p></div></div>}
+      </div>
+    </section>}
+  </div>
+}
+
 function Qualification({standings,season,onJoin,openCity}){
   return <div className="pageWrap">
     <section className="pageHero compact"><div><div className="liveBadge"><span/> {season?.status}</div><h1>Qualification <em>Leaderboard</em></h1><p>Every verified person scores exactly 1 Goal for their city. One person. One city. One season.</p></div><button className="goldBtn" onClick={onJoin}>Represent Your City <ArrowRight size={17}/></button></section>
