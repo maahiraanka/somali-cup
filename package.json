@@ -18,7 +18,8 @@
     "db:seed": "node apps/api/src/db/seed.js",
     "verify": "npm run build && node apps/api/src/verify.js",
     "preflight": "node apps/api/src/preflight.js",
-    "acceptance:safe": "node apps/api/src/acceptanceSafe.js"
+    "acceptance:safe": "node apps/api/src/acceptanceSafe.js",
+    "acceptance:controlled": "node apps/api/src/acceptanceControlled.js"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
