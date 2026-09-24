@@ -15,6 +15,8 @@ router.post('/join', async (req,res,next)=>{
   const nickname=clean(req.body?.nickname||displayName,80);
   const email=clean(req.body?.email,190).toLowerCase()||null;
   const cityCode=clean(req.body?.cityCode,12).toUpperCase();
+  const source=clean(req.body?.source,24)||'direct';
+  const referredBy=clean(req.body?.referredBy,80)||null;
   if(displayName.length<2) return res.status(400).json({error:'display_name_required'});
   if(!/^[A-Z0-9_-]{2,12}$/.test(cityCode)) return res.status(400).json({error:'city_required'});
   const conn=await pool.getConnection();
@@ -77,14 +79,32 @@ router.post('/join', async (req,res,next)=>{
     await conn.query(`INSERT INTO city_memberships(user_id,season_id,city_id,status,verification_status,verification_method,verified_at)
       VALUES (?,?,?,'ACTIVE','VERIFIED','DEVICE_SESSION',UTC_TIMESTAMP())`,[u.insertId,season.id,city.id]);
     await conn.query(`INSERT INTO qualification_events(season_id,city_id,user_id,type,delta,metadata_json)
-      VALUES (?,?,?,'SUPPORTER_VERIFIED',1,JSON_OBJECT('method','DEVICE_SESSION'))`,[season.id,city.id,u.insertId]);
+      VALUES (?,?,?,'SUPPORTER_VERIFIED',1,JSON_OBJECT('method','DEVICE_SESSION','source',?,'referredBy',?))`,[season.id,city.id,u.insertId,source,referredBy]);
+    const [[cityStats]]=await conn.query(`
+      SELECT sc.qualification_target,
+             COUNT(cm.id) verified_supporters
+      FROM season_cities sc
+      LEFT JOIN city_memberships cm
+        ON cm.season_id=sc.season_id AND cm.city_id=sc.city_id
+       AND cm.status='ACTIVE' AND cm.verification_status='VERIFIED'
+      WHERE sc.season_id=? AND sc.city_id=?
+      GROUP BY sc.qualification_target
+    `,[season.id,city.id]);
     await conn.commit();
     const session=await createSession(u.insertId,req.get('user-agent')||'');
+    const supporterNumber=Number(cityStats?.verified_supporters||0);
+    const qualificationTarget=Number(cityStats?.qualification_target||0);
     res.status(201).json({
       token:session.token,expiresAt:session.expiresAt,
       user:{publicId,displayName,nickname,email,role:'PLAYER'},
       season:{id:season.id,name:season.name,status:season.status},
-      city:{id:city.id,code:city.code,name:city.name,country:city.country}
+      city:{
+        id:city.id,code:city.code,name:city.name,country:city.country,
+        supporterNumber,
+        verified_supporters:supporterNumber,
+        qualification_target:qualificationTarget,
+        progress_pct:qualificationTarget?Math.min(100,Number((supporterNumber*100/qualificationTarget).toFixed(1))):0
+      }
     });
   }catch(e){
     await conn.rollback();
