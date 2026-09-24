@@ -46,13 +46,15 @@ router.post('/setup',async(req,res,next)=>{
       const type=clean(raw.type,16).toUpperCase();
       const sequence=Number(raw.sequence);
       const advanceCount=raw.advanceCount===null||raw.advanceCount===undefined?null:Number(raw.advanceCount);
-      if(!code||!name||!['GROUP','KNOCKOUT','FINAL'].includes(type)||!Number.isInteger(sequence)||sequence<1){
+      const tiePolicy=clean(raw.tiePolicy|| (type==='GROUP'?'DRAW_ALLOWED':'SUDDEN_DEATH'),24).toUpperCase();
+      const matchDurationMinutes=Math.max(1,Math.min(1440,Number(raw.matchDurationMinutes)||60));
+      if(!code||!name||!['GROUP','KNOCKOUT','FINAL'].includes(type)||!['DRAW_ALLOWED','SUDDEN_DEATH'].includes(tiePolicy)||!Number.isInteger(sequence)||sequence<1){
         throw Object.assign(new Error('invalid_stage_config'),{status:400});
       }
       const [inserted]=await conn.query(`
-        INSERT INTO tournament_stages(season_id,code,name,stage_type,sequence_no,advance_count)
-        VALUES (?,?,?,?,?,?)
-      `,[season.id,code,name,type,sequence,advanceCount]);
+        INSERT INTO tournament_stages(season_id,code,name,stage_type,sequence_no,advance_count,tie_policy,match_duration_minutes)
+        VALUES (?,?,?,?,?,?,?,?)
+      `,[season.id,code,name,type,sequence,advanceCount,tiePolicy,matchDurationMinutes]);
       stageIds[code]=inserted.insertId;
     }
 
@@ -154,7 +156,7 @@ router.post('/groups/:groupCode/generate-fixtures',async(req,res,next)=>{
     const season=await activeSeason(conn);
     if(!season) throw Object.assign(new Error('active_season_required'),{status:409});
     const [[group]]=await conn.query(`
-      SELECT tg.id,tg.stage_id,ts.code stage_code
+      SELECT tg.id,tg.stage_id,ts.code stage_code,ts.match_duration_minutes
       FROM tournament_groups tg
       JOIN tournament_stages ts ON ts.id=tg.stage_id
       WHERE ts.season_id=? AND tg.code=?
@@ -182,12 +184,13 @@ router.post('/groups/:groupCode/generate-fixtures',async(req,res,next)=>{
       for(const [homeId,awayId] of rounds[roundIndex]){
         const kickoff=new Date(cursor);
         const lobby=new Date(cursor-lobbyLead*60000);
+        const regulationEnd=new Date(cursor+Number(group.match_duration_minutes||60)*60000);
         const publicId=crypto.randomBytes(13).toString('hex');
         await conn.query(`
-          INSERT INTO matches(public_id,season_id,stage_id,group_id,round_code,match_no,home_city_id,away_city_id,starts_at,lobby_opens_at,status)
-          VALUES (?,?,?,?,?,?,?,?,?,?,'SCHEDULED')
+          INSERT INTO matches(public_id,season_id,stage_id,group_id,round_code,match_no,home_city_id,away_city_id,starts_at,regulation_ends_at,lobby_opens_at,status)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,'SCHEDULED')
         `,[
-          publicId,season.id,group.stage_id,group.id,'GROUP',matchNo,homeId,awayId,kickoff,lobby
+          publicId,season.id,group.stage_id,group.id,'GROUP',matchNo,homeId,awayId,kickoff,regulationEnd,lobby
         ]);
         created.push({
           publicId,matchNo,round:roundIndex+1,
@@ -309,6 +312,7 @@ async function rankGroup(conn,groupId){
     h.gf+=hs;h.ga+=as;a.gf+=as;a.ga+=hs;
     if(hs>as)h.points+=3;
     else if(as>hs)a.points+=3;
+    else {h.points+=1;a.points+=1;}
   }
   const ranked=[...rows.values()].sort((x,y)=>y.points-x.points||(y.gf-y.ga)-(x.gf-x.ga)||y.gf-x.gf||x.seed-y.seed||x.name.localeCompare(y.name));
   return {complete:true,rows:ranked};
@@ -417,16 +421,17 @@ router.post('/progress',async(_req,res,next)=>{
     for(const target of targets){
       const [[existing]]=await conn.query('SELECT id FROM matches WHERE stage_id=? AND match_no=? LIMIT 1',[target.target_stage_id,target.target_match_no]);
       if(existing)continue;
-      const [[stage]]=await conn.query('SELECT code,stage_type FROM tournament_stages WHERE id=? LIMIT 1',[target.target_stage_id]);
+      const [[stage]]=await conn.query('SELECT code,stage_type,match_duration_minutes FROM tournament_stages WHERE id=? LIMIT 1',[target.target_stage_id]);
       if(!target.target_starts_at)continue;
       const startsAt=target.target_starts_at;
       const publicId=crypto.randomBytes(13).toString('hex');
+      const regulationEnd=new Date(new Date(startsAt).getTime()+Number(stage.match_duration_minutes||60)*60000);
       await conn.query(`
-        INSERT INTO matches(public_id,season_id,stage_id,round_code,match_no,home_city_id,away_city_id,starts_at,lobby_opens_at,status)
-        VALUES (?,?,?,?,?,?,?,?,?,'SCHEDULED')
+        INSERT INTO matches(public_id,season_id,stage_id,round_code,match_no,home_city_id,away_city_id,starts_at,regulation_ends_at,lobby_opens_at,status)
+        VALUES (?,?,?,?,?,?,?,?,?,?,'SCHEDULED')
       `,[
         publicId,season.id,target.target_stage_id,stage.code,target.target_match_no,
-        target.home_city_id,target.away_city_id,startsAt,target.target_lobby_opens_at
+        target.home_city_id,target.away_city_id,startsAt,regulationEnd,target.target_lobby_opens_at
       ]);
       created++;
     }
