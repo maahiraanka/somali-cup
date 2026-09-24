@@ -89,7 +89,7 @@ export default function App(){
       <button className={view==='qualification'?'active':''} onClick={()=>setView('qualification')}><BarChart3 size={18}/><span>Table</span></button>
       <button className={view==='matches'?'active':''} onClick={()=>setView('matches')}><Radio size={18}/><span>Matches</span></button>
       <button className={view==='cities'?'active':''} onClick={()=>setView('cities')}><MapPin size={18}/><span>Cities</span></button>
-      <button onClick={requestJoin}><Users size={18}/><span>${me?.membership?'My City':'Join'}</span></button>
+      <button onClick={requestJoin}><Users size={18}/><span>{me?.membership?'My City':'Join'}</span></button>
     </nav>
 
     {showJoin&&!me?.membership&&<JoinExperience standings={standings.filter(c=>c.is_open)} onClose={()=>setShowJoin(false)} onJoined={joined}/>}
