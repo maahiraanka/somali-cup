@@ -633,3 +633,10 @@ radial-gradient(circle at 50% 50%,#0c3f64,#071d34 57%,#04101b 76%);border:1px so
 .launchGoLive{flex:none;min-width:150px}.launchRollback{display:inline-flex;align-items:center;justify-content:center;gap:7px;flex:none;border:1px solid rgba(255,107,126,.18);background:rgba(89,21,33,.16);color:#ff9ba8;border-radius:10px;padding:10px 12px;font-size:8px;font-weight:1000;cursor:pointer}
 .launchRollback:hover{background:rgba(110,25,40,.22)}
 @media(max-width:720px){.launchModePanel{align-items:stretch;flex-direction:column}.launchGoLive,.launchRollback{width:100%}}
+
+
+/* v0.29 launch fixture repair */
+.launchRepairCard{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:16px;margin-bottom:12px;border-radius:14px;background:rgba(123,74,10,.16);border:1px solid rgba(255,190,75,.14)}
+.launchRepairCard>div{min-width:0;flex:1}.launchRepairCard small{font-size:7px;font-weight:1000;letter-spacing:.13em;color:#ffd06c}.launchRepairCard h3{font-size:17px;margin:4px 0 3px}.launchRepairCard p{font-size:8px;color:#a88f66;line-height:1.5;margin:0;max-width:760px}
+.launchRepairCard .adminPrimary{flex:none}
+@media(max-width:720px){.launchRepairCard{align-items:stretch;flex-direction:column}.launchRepairCard .adminPrimary{width:100%}}
