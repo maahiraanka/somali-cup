@@ -288,3 +288,21 @@ linear-gradient(180deg,#091827,#030b14);border:1px solid rgba(75,190,250,.23);bo
 /* v0.12 rivalry urgency */
 .returningRival{margin:10px 0 12px;padding:10px 12px;border-radius:11px;font-size:9px;line-height:1.4;background:#071622;border:1px solid rgba(77,167,226,.12);color:#8ea7bd}.returningRival b{color:#fff}.returningRival.leading{border-color:rgba(77,232,157,.16);background:rgba(24,76,57,.16)}.returningRival.behind{border-color:rgba(255,201,65,.17);background:rgba(87,65,18,.14)}.returningRival.tied{border-color:rgba(64,198,255,.17);background:rgba(15,66,95,.14)}
 .viralUrgency.leading{border-color:rgba(65,232,154,.16);background:rgba(28,86,62,.14)}.viralUrgency.behind{border-color:rgba(255,206,71,.17);background:rgba(91,67,20,.14)}.viralUrgency.tied{border-color:rgba(73,194,255,.18);background:rgba(22,66,94,.16)}
+
+
+/* v0.13 verified assist reward loop */
+.assistMomentOverlay{position:fixed;inset:0;z-index:175;display:grid;place-items:center;padding:18px;background:
+radial-gradient(circle at 50% 24%,rgba(48,230,148,.12),transparent 28%),
+rgba(1,6,14,.92);backdrop-filter:blur(18px)}
+.assistMomentCard{width:min(500px,100%);padding:32px;border-radius:27px;text-align:center;position:relative;overflow:hidden;background:
+radial-gradient(circle at 50% 0%,rgba(47,230,147,.11),transparent 28%),
+linear-gradient(180deg,#081a20,#030b14);border:1px solid rgba(65,230,153,.2);box-shadow:0 40px 100px rgba(0,0,0,.58),0 0 55px rgba(37,221,142,.07)}
+.assistMomentCard:before{content:"ASSIST";position:absolute;left:50%;top:36%;transform:translate(-50%,-50%) rotate(-7deg);font-size:92px;font-weight:1000;letter-spacing:-.06em;color:rgba(255,255,255,.025);pointer-events:none}.assistMomentCard>*{position:relative;z-index:2}
+.assistIcon{width:78px;height:78px;margin:0 auto 13px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(180deg,#5af0a9,#24bf78);color:#03120b;box-shadow:0 0 0 8px rgba(64,224,147,.055),0 0 32px rgba(63,227,151,.16)}
+.assistMomentCard>small{color:#57eba0;font-size:9px;font-weight:1000;letter-spacing:.19em}.assistMomentCard h2{font-size:43px;line-height:.94;letter-spacing:-.05em;margin:8px 0 12px}.assistMomentCard h2 em{font-style:normal;color:#57eba0}.assistMomentCard>p{color:#8ea8b8;max-width:390px;margin:0 auto 18px;line-height:1.5}.assistMomentCard>p b{color:#fff}
+.assistImpact{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}.assistImpact>div{padding:13px 8px;border-radius:13px;background:#061621;border:1px solid rgba(73,178,220,.11)}.assistImpact span,.assistImpact strong{display:block}.assistImpact span{font-size:7px;color:#70899f;letter-spacing:.1em}.assistImpact strong{font-size:25px;margin-top:4px}.assistImpact>div:nth-child(2) strong{color:#58eaa0}
+.assistNext{display:flex;align-items:center;gap:10px;text-align:left;padding:12px 13px;border-radius:13px;background:rgba(255,200,48,.05);border:1px solid rgba(255,207,74,.11);margin-bottom:14px}.assistNext svg{color:#ffcf4a;flex:none}.assistNext b,.assistNext span{display:block}.assistNext b{font-size:11px}.assistNext span{font-size:9px;color:#7c94aa;margin-top:3px;line-height:1.4}
+
+@media(max-width:680px){
+  .assistMomentCard{padding:24px 18px;border-radius:22px}.assistMomentCard h2{font-size:37px}.assistMomentCard:before{font-size:68px}.assistImpact strong{font-size:22px}
+}
