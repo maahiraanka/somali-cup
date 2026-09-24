@@ -75,6 +75,14 @@ await check('best_city_competition_seed',async()=>{
   const [[r]]=await pool.query("SELECT id FROM competitions WHERE slug='best-city-somalia' AND language_preset='CITY' LIMIT 1");
   if(!r)throw new Error('Best City competition seed missing');
 });
+await check('public_content_reset_migration_applied',async()=>{
+  const [[r]]=await pool.query("SELECT filename FROM schema_migrations WHERE filename='022_reset_public_competition_content.sql' LIMIT 1");
+  if(!r)throw new Error('public content reset migration not applied');
+});
+await check('default_public_content_present',async()=>{
+  const [[r]]=await pool.query("SELECT SUM(slug='somali-cup') somali_cup,SUM(slug='best-city-somalia') best_city FROM competitions");
+  if(Number(r?.somali_cup||0)!==1||Number(r?.best_city||0)!==1)throw new Error('default public competitions missing');
+});
 await check('somali_cup_competition_backfill',async()=>{
   const [[r]]=await pool.query("SELECT id FROM competitions WHERE slug='somali-cup' LIMIT 1");
   if(!r)throw new Error('Somali Cup competition backfill missing');
