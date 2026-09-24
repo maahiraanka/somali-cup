@@ -7,6 +7,22 @@ import {
 
 const fmt=n=>Number(n||0).toLocaleString();
 const nice=v=>String(v||'').replaceAll('_',' ').replace(/\b\w/g,m=>m.toUpperCase());
+const asObj=v=>{
+  if(!v)return {};
+  if(typeof v==='object')return v;
+  try{return JSON.parse(v)}catch{return {}}
+};
+const auditDiffText=v=>{
+  const m=asObj(v);
+  if(m.before&&m.after){
+    const before=typeof m.before==='object'?Object.entries(m.before).map(([k,x])=>nice(k)+': '+String(x??'—')).join(' · '):String(m.before);
+    const after=typeof m.after==='object'?Object.entries(m.after).map(([k,x])=>nice(k)+': '+String(x??'—')).join(' · '):String(m.after);
+    return {before,after,reason:m.reason||''};
+  }
+  if(m.from!==undefined||m.to!==undefined)return {before:String(m.from??'—'),after:String(m.to??'—'),reason:m.reason||''};
+  const entries=Object.entries(m).filter(([,x])=>['string','number','boolean'].includes(typeof x)).slice(0,5);
+  return entries.length?{summary:entries.map(([k,x])=>nice(k)+': '+String(x)).join(' · ')}:{};
+};
 const humanErrorAdmin=e=>nice(e?.body?.error||e?.message||'request_failed');
 const launchFailureText=e=>{
   const b=e?.body||{};
