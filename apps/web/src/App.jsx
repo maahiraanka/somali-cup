@@ -274,6 +274,7 @@ function CityPage({city,me,onBack,onJoin}){
 }
 
 function SupporterProfile({me,city,season,onJoin,onCity,onMatches}){
+  const [showStudio,setShowStudio]=useState(false);
   if(!me?.membership||!city)return <div className="pageWrap"><section className="pageHero compact"><div><small className="kicker">SUPPORTER IDENTITY</small><h1>Your Somali Cup <em>story starts here.</em></h1><p>Choose one city for the season and your supporter pass will live here.</p></div><button className="goldBtn" onClick={onJoin}>Choose Your City</button></section></div>;
   const name=me.user.nickname||me.user.displayName;
   const remaining=Math.max(0,Number(city.qualification_target||0)-Number(city.verified_supporters||0));
@@ -293,7 +294,7 @@ function SupporterProfile({me,city,season,onJoin,onCity,onMatches}){
         <div className="passCity"><CityThumb city={city} size="lg"/><div><span>YOUR CITY</span><strong>{city.name}</strong><small>Rank #{city.rank} · {city.tier}</small></div></div>
         <div className="passFooter"><span>SC-{String(me.user.publicId||'SUPPORTER').slice(-8).toUpperCase()}</span><b>ONE CITY · ONE SEASON</b></div>
       </div>
-      <div className="supporterHeroCopy"><small>YOUR SOMALI CUP IDENTITY</small><h2>You don’t just watch.<br/><em>You represent.</em></h2><p>Your supporter pass follows your city through qualification and into every match.</p><div className="supporterHeroBtns"><button className="goldBtn" onClick={()=>create('identity')}><Share2 size={16}/> Share My Pass</button><button className="glassBtn" onClick={onMatches}><Radio size={16}/> Match Centre</button></div></div>
+      <div className="supporterHeroCopy"><small>YOUR SOMALI CUP IDENTITY</small><h2>You don’t just watch.<br/><em>You represent.</em></h2><p>Your supporter pass follows your city through qualification and into every match.</p><div className="supporterHeroBtns"><button className="goldBtn" onClick={()=>create('qualification')}><Share2 size={16}/> SHARE {city.name.toUpperCase()}</button><button className="heroTextLink light" onClick={onMatches}><Radio size={15}/> Go to Match Centre</button></div></div>
     </section>
 
     <section className="supporterDashboard">
@@ -303,15 +304,18 @@ function SupporterProfile({me,city,season,onJoin,onCity,onMatches}){
       <div className="supporterStat highlight"><span>Your status</span><strong>ACTIVE</strong><small>Verified city member</small></div>
     </section>
 
-    <section className="shareStudio">
+    <section className="shareChoice">
+      <div><small>YOUR NEXT MOVE</small><h3>Help {city.name} bring the next supporter.</h3><p>Your qualification poster already shows the live city progress. Share it first. Use the studio only when you want another format.</p></div>
+      <div className="shareChoiceActions"><button className="goldBtn" onClick={()=>create('qualification')}><Share2 size={16}/> Share City Now</button><button className="glassBtn" onClick={()=>setShowStudio(v=>!v)}>{showStudio?'Hide Poster Studio':'More Poster Options'}</button></div>
+    </section>
+    {showStudio&&<>    <section className="shareStudio">
       <div className="shareStudioHead"><div><small>SHARE STUDIO</small><h3>Make your city impossible to ignore.</h3><p>Built for WhatsApp Status, group chats and social sharing.</p></div><Share2 size={28}/></div>
       <div className="shareCards">
         <button onClick={()=>create('identity')}><div className="sharePreview identity"><span>SOMALI CUP</span><strong>I REPRESENT<br/>{city.name.toUpperCase()}</strong><small>{name}</small></div><b>Supporter Pass</b><small>Show your city identity</small></button>
         <button onClick={()=>create('qualification')}><div className="sharePreview qualification"><span>QUALIFICATION</span><strong>{fmt(remaining)}<br/>MORE NEEDED</strong><small>{city.name}</small></div><b>Qualification Push</b><small>Call your city to action</small></button>
         <button onClick={()=>create('callup')}><div className="sharePreview callup"><span>CALL-UP</span><strong>MY CITY<br/>NEEDS YOU</strong><small>{city.name} · 2027</small></div><b>City Call-Up</b><small>Bring people into the movement</small></button>
       </div>
-    </section>
-
+    </section></>}
     <section className="profileActions"><button className="glassBtn" onClick={onCity}><MapPin size={15}/> Open {city.name}</button><button className="goldBtn" onClick={()=>create('qualification')}><Share2 size={15}/> Share Qualification Poster</button></section>
   </div>
 }
@@ -323,12 +327,13 @@ function MatchCenter({matches,me,onNeedIdentity}){
   const [busy,setBusy]=useState(false);
   const [msg,setMsg]=useState('');
   const [benchPulse,setBenchPulse]=useState(0);
+  const [showMatchDepth,setShowMatchDepth]=useState(false);
   const load=async(match=selected)=>{if(!match)return;try{setLive(await api(`/api/matches/${match.publicId}/live`))}catch{setLive({match,counts:{homeActive:0,awayActive:0,registered:0,total:0},activity:[]})}if(me){try{const d=await api(`/api/matches/${match.publicId}/me`);setMine(d.participation)}catch{setMine(null)}}else setMine(null)};
   useEffect(()=>{if(!selected&&matches[0])setSelected(matches[0])},[matches,selected]);
   useEffect(()=>{load()},[selected?.publicId,Boolean(me)]);
   const match=live?.match||selected;
   if(!match)return <div className="pageWrap"><section className="pageHero compact"><h1>No fixtures yet.</h1></section></div>;
-  const home=match.home||{code:match.home_code,name:match.home_name,country:'Australia',score:match.home_score||0};
+  const home=match.home||{code:match.home_code,name:match.home_name,country:'Somalia',score:match.home_score||0};
   const away=match.away||{code:match.away_code,name:match.away_name,country:'Somalia',score:match.away_score||0};
   const homeScore=Number(home.score||0),awayScore=Number(away.score||0);
   const leader=homeScore===awayScore?null:(homeScore>awayScore?home:away);
@@ -360,6 +365,30 @@ function MatchCenter({matches,me,onNeedIdentity}){
     </section>
     <section className="supportMeter"><div><b>58%</b><span>{fmt(live?.counts?.homeActive||0)} supporters</span></div><div className="meterTrack"><i/><em/></div><div><b>42%</b><span>{fmt(live?.counts?.awayActive||0)} supporters</span></div></section>
 
+    <section className="matchNextAction">
+      <div className="nextActionCopy">
+        <small>YOUR NEXT MOVE</small>
+        {!me?<><h3>Choose your city first.</h3><p>Your city identity decides which side you can represent in Somali Cup.</p></>:
+        !myMatchCity?<><h3>Watch this rivalry.</h3><p>Your city is not playing in this fixture, so there is nothing you need to do here.</p></>:
+        !mine?<><h3>Join {myMatchCity.name} in this match.</h3><p>Reserve your place. When the match goes live, one verified entry adds one goal.</p></>:
+        mine.status==='REGISTERED'&&match.status==='LIVE'?<><h3>Enter now. Score once.</h3><p>Your verified entry will add exactly one goal for {myMatchCity.name}.</p></>:
+        mine.status==='REGISTERED'?<><h3>Your place is reserved.</h3><p>Use your personal link to bring your city into the lobby before kickoff.</p></>:
+        match.status==='FINAL'?<><h3>Full time. Share the result.</h3><p>Turn the finish into the next Somali Cup moment.</p></>:
+        <><h3>Your goal is counted. Call the bench.</h3><p>Bring up to three verified supporters from {myMatchCity.name}. Each person scores only for themselves.</p></>}
+      </div>
+      <div className="nextActionButton">
+        {!me?<button className="goldBtn" onClick={onNeedIdentity}>CHOOSE MY CITY <ArrowRight size={16}/></button>:
+        !myMatchCity?<button className="glassBtn" onClick={()=>setShowMatchDepth(v=>!v)}>{showMatchDepth?'Hide Match Detail':'Watch Match Detail'}</button>:
+        !mine?<button className="goldBtn" disabled={busy} onClick={join}>{busy?'Joining…':'JOIN THIS MATCH'} <ArrowRight size={16}/></button>:
+        mine.status==='REGISTERED'&&match.status==='LIVE'?<button className="goldBtn" disabled={busy} onClick={activate}>{busy?'Entering…':'ENTER & SCORE'} <Play size={16}/></button>:
+        mine.status==='REGISTERED'?<button className="goldBtn" onClick={copyLink}><Share2 size={16}/> CALL MY CITY</button>:
+        match.status==='FINAL'?<button className="goldBtn" onClick={()=>shareMoment('fulltime')}><Share2 size={16}/> SHARE RESULT</button>:
+        <button className="goldBtn" onClick={copyLink}><UserPlus size={16}/> CALL THE BENCH</button>}
+      </div>
+    </section>
+
+    <div className="matchDepthToggle"><button onClick={()=>setShowMatchDepth(v=>!v)}>{showMatchDepth?'Hide live detail':'See live match detail'} <ChevronRight size={14}/></button></div>
+    {(showMatchDepth||mine?.status==='ACTIVE'||match.status==='FINAL')&&<>
     <section className={"matchNarrative "+(leader?'hasLeader':'level')}>
       <div className="narrativeState">
         <span className="statePulse"/>
@@ -390,7 +419,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
 
     <section className="matchContentGrid">
       <div className="panel momentumPanel"><div className="panelHead"><div><small>LIVE PRESSURE</small><h3>Match Momentum</h3></div><Sparkles/></div><div className="momentumChart"><svg viewBox="0 0 600 210" preserveAspectRatio="none"><defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#23c9ff" stopOpacity=".5"/><stop offset="100%" stopColor="#23c9ff" stopOpacity="0"/></linearGradient></defs><path d="M0 160 C45 140 55 95 95 122 S150 92 180 115 S230 60 265 95 S330 145 355 115 S410 55 450 90 S515 62 600 80 L600 210 L0 210Z" fill="url(#area)"/><path d="M0 160 C45 140 55 95 95 122 S150 92 180 115 S230 60 265 95 S330 145 355 115 S410 55 450 90 S515 62 600 80" fill="none" stroke="#23c9ff" strokeWidth="5"/></svg><span className="eventDot d1">⚽</span><span className="eventDot d2">⚡</span><span className="eventDot d3">⚽</span></div></div>
-      <div className="panel activityPanel"><div className="panelHead"><div><small>RIGHT NOW</small><h3>Live Fan Activity</h3></div><span className="activityFilter">All Activity</span></div><div className="activityFeed">{['Ayaan M. · Melbourne','Ubah M. · London','Yusuf H. · Nairobi','Fadumo S. · Mogadishu'].map((n,i)=><div key={n}><span className="feedAvatar">{n[0]}</span><div><b>{n}</b><small>{i===0?'Goal Melbourne! 🔥':i===1?'Still in this! London 💛':'Proud of our people! 🌍'}</small></div><strong>♥ {142-i*27}</strong></div>)}</div></div>
+      <div className="panel activityPanel"><div className="panelHead"><div><small>RIGHT NOW</small><h3>Live Fan Activity</h3></div><span className="activityFilter">All Activity</span></div><div className="activityFeed">{['Ayaan M. · Mogadishu','Ubah M. · Hargeisa','Yusuf H. · Kismayo','Fadumo S. · Garowe'].map((n,i)=><div key={n}><span className="feedAvatar">{n[0]}</span><div><b>{n}</b><small>{i===0?'Mogadishu is pushing! 🔥':i===1?'Hargeisa responds! 💛':'City pride is building. 🇸🇴'}</small></div><strong>♥ {142-i*27}</strong></div>)}</div></div>
     </section>
 
     <section className="benchAndCommentary">
@@ -431,6 +460,8 @@ function MatchCenter({matches,me,onNeedIdentity}){
       <div className="actionPanel impactPoints"><small>CONTRIBUTE TO IMPACT</small><div><span>⚽</span><b>Goal</b><strong>+500</strong></div><div><span>🟢</span><b>Assist</b><strong>+250</strong></div><div><span>🤝</span><b>Branch</b><strong>+100</strong></div></div>
       <div className="actionPanel shareMoments"><small>SHARE THE MOMENT</small><h3>Turn your match into a Status.</h3><div className="momentButtons"><button onClick={()=>shareMoment('callup')}><Share2 size={14}/> Call-Up</button>{mine?.status==='ACTIVE'&&<button onClick={()=>shareMoment('goal')}>⚽ Goal</button>}{Number(mine?.assists??mine?.direct_joins??0)>0&&<button onClick={()=>shareMoment('assist')}>🟢 Assist</button>}<button onClick={()=>shareMoment('motm')}><Trophy size={14}/> Impact</button></div></div>
     </section>
+    </>}
+
     {match.status==='FINAL'&&<section className="fullTimeStage">
       <div className="fullTimeGlow"/>
       <Trophy size={44}/>
