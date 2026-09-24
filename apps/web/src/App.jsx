@@ -518,9 +518,7 @@ export default function App(){
 
 function TournamentHub({competitions,error,onOpen,onRetry}){
   const live=competitions.filter(c=>c.status==='LIVE'||c.status==='OPEN');
-  const coming=[
-    {slug:'best-university',name:'Best Somali University',shortName:'Best University',choiceType:'UNIVERSITY',status:'COMING SOON',choiceCount:0,supporterCount:0},
-  ];
+  const coming=[];
   return <div className="hubPage">
     <header className="hubTop">
       <Logo/>
@@ -540,7 +538,7 @@ function TournamentHub({competitions,error,onOpen,onRetry}){
     </section>
     <section className="hubSection">
       <div className="hubSectionHead"><div><small>LIVE NOW</small><h2>What do you want to support?</h2></div></div>
-      {error&&!competitions.length?<LiveDataState title="Competitions are unavailable" body="We could not load the live competitions." onRetry={onRetry}/>:<div className="hubCards">
+      {error&&!competitions.length?<LiveDataState title="Competitions are unavailable" body="We could not load the live competitions." onRetry={onRetry}/>:!live.length?<div className="hubEmptyState"><Trophy size={28}/><h3>No competitions yet</h3><p>New competitions will appear here after Admin creates and launches them.</p></div>:<div className="hubCards">
         {live.map((competition,index)=><button className={'hubCard '+(competition.slug==='best-city-somalia'?'cityCompetition':'cupCompetition')} key={competition.slug} onClick={()=>onOpen(competition.slug)}>
           <div className="hubCardTop"><span className="hubLive"><i/> LIVE</span><span>{competition.choiceCount||0} {competition.choiceType==='CITY'?'cities':'choices'}</span></div>
           <div className="hubCardIcon">{competition.slug==='best-city-somalia'?'🏙️':'🏆'}</div>

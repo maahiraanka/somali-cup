@@ -4,7 +4,7 @@ import { pool } from '../db/pool.js';
 import { requireAdminKey } from '../auth.js';
 import { languageFor, supportedLanguagePresets } from '../competitionLanguage.js';
 import { closeCompetitionStage, openCompetitionStage } from '../competitionProgress.js';
-import { resetPublicCompetitionContent } from '../competitionDefaults.js';
+import { clearPublicCompetitionContent } from '../competitionDefaults.js';
 
 const router=Router();
 router.use(requireAdminKey);
@@ -63,16 +63,16 @@ router.post('/',async(req,res,next)=>{
 
 
 
-router.post('/reset-defaults',async(req,res,next)=>{
+router.post('/clear-content',async(req,res,next)=>{
   const confirmation=clean(req.body?.confirmation,80);
   if(confirmation!=='RESET PUBLIC CONTENT')return res.status(400).json({error:'confirmation_required'});
   const conn=await pool.getConnection();
   try{
     await conn.beginTransaction();
-    const result=await resetPublicCompetitionContent(conn);
+    const result=await clearPublicCompetitionContent(conn);
     await conn.query(
       'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
-      [req.admin?.user_id||null,'PUBLIC_COMPETITION_CONTENT_RESET','SYSTEM','competition-content',JSON.stringify(result)]
+      [req.admin?.user_id||null,'PUBLIC_COMPETITION_CONTENT_CLEARED','SYSTEM','competition-content-clear',JSON.stringify(result)]
     );
     await conn.commit();
     res.json({ok:true,...result});

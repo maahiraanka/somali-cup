@@ -359,11 +359,11 @@ function CompetitionsAdmin({d,act,refresh}){
   };
 
   const resetPublicContent=async()=>{
-    const confirmation=window.prompt('This will remove all public competition content and rebuild Somali Cup + Best City. Type RESET PUBLIC CONTENT to continue.');
-    if(confirmation!=='RESET PUBLIC CONTENT')return;
+    const confirmation=window.prompt('This will remove all cities, supporters, competitions, matches and public activity. The functionality stays. Type CLEAR PUBLIC CONTENT to continue.');
+    if(confirmation!=='CLEAR PUBLIC CONTENT')return;
     setContentBusy(true);setCreatorError('');
     try{
-      await adminApi('/api/admin/competitions/reset-defaults',{method:'POST',body:JSON.stringify({confirmation})});
+      await adminApi('/api/admin/competitions/clear-content',{method:'POST',body:JSON.stringify({confirmation})});
       setSelectedId(null);setStages([]);setChoices([]);setEditingCompetition(null);setEditingChoice(null);
       await refresh();
     }catch(e){setCreatorError(humanErrorAdmin(e))}
@@ -498,8 +498,8 @@ function CompetitionsAdmin({d,act,refresh}){
       </section>
 
       <section className="adminPanel dangerZone">
-        <div><small>CONTENT RECOVERY</small><h3>Reset public content</h3><p>Remove all public competition content and rebuild the default Somali Cup and Best City setup. Admin accounts, audit history and security evidence are kept.</p></div>
-        <button className="danger" onClick={resetPublicContent} disabled={contentBusy}><RefreshCw size={14}/> RESET & REBUILD</button>
+        <div><small>CONTENT RECOVERY</small><h3>Reset public content</h3><p>Remove all public competition data and leave the system empty. Admin accounts, audit history and system functionality are kept.</p></div>
+        <button className="danger" onClick={resetPublicContent} disabled={contentBusy}><RefreshCw size={14}/> CLEAR ALL CONTENT</button>
       </section>
       {creatorError&&<div className="adminError"><AlertTriangle size={16}/>{creatorError}</div>}
     </>}
