@@ -63,13 +63,25 @@ async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer
     <text x="72" y="1580" fill="#6f8ea8" font-family="Arial,sans-serif" font-size="28">somalicup.com</text>
     <text x="72" y="1805" fill="#31516d" font-family="Arial,sans-serif" font-size="28" font-weight="700" letter-spacing="5">ONE CITY • ONE SEASON • ONE CUP</text>
   </svg>`;
-  const blob=new Blob([svg],{type:'image/svg+xml'});
-  const file=new File([blob],'somali-cup-poster.svg',{type:'image/svg+xml'});
+  const svgBlob=new Blob([svg],{type:'image/svg+xml'});
+  const svgUrl=URL.createObjectURL(svgBlob);
+  const pngBlob=await new Promise((resolve,reject)=>{
+    const image=new Image();
+    image.onload=()=>{
+      const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=1920;
+      const ctx=canvas.getContext('2d');ctx.drawImage(image,0,0,1080,1920);
+      URL.revokeObjectURL(svgUrl);
+      canvas.toBlob(blob=>blob?resolve(blob):reject(new Error('poster_render_failed')),'image/png',.94);
+    };
+    image.onerror=()=>{URL.revokeObjectURL(svgUrl);reject(new Error('poster_render_failed'))};
+    image.src=svgUrl;
+  });
+  const file=new File([pngBlob],'somali-cup-status.png',{type:'image/png'});
   if(navigator.share&&navigator.canShare?.({files:[file]})){
     try{await navigator.share({title:'Somali Cup',text:subtitle,files:[file]});return 'shared'}catch(e){if(e?.name==='AbortError')return 'cancelled'}
   }
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download='somali-cup-poster.svg';document.body.appendChild(a);a.click();a.remove();
+  const url=URL.createObjectURL(pngBlob);
+  const a=document.createElement('a');a.href=url;a.download='somali-cup-status.png';document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1200);
   return 'downloaded';
 }
@@ -349,6 +361,18 @@ function MatchCenter({matches,me,onNeedIdentity}){
   const join=async()=>{if(!me){onNeedIdentity();return}setBusy(true);setMsg('');try{const inviteToken=new URLSearchParams(window.location.search).get('invite')||'';const d=await api(`/api/matches/${match.publicId}/join`,{method:'POST',body:JSON.stringify({inviteToken})});setMine(d.participation);setMsg(d.created?'Place reserved.':'You are already registered.');await load(match)}catch(e){setMsg(e.message.replaceAll('_',' '))}finally{setBusy(false)}};
   const activate=async()=>{setBusy(true);setMsg('');try{const d=await api(`/api/matches/${match.publicId}/activate`,{method:'POST',body:'{}'});setMsg(d.goalAdded?'GOAL — your verified entry moved the score.':'Your goal is already counted.');await load(match)}catch(e){setMsg(e.message.replaceAll('_',' '))}finally{setBusy(false)}};
   const copyLink=async()=>{const token=mine?.share_token||mine?.shareToken;if(!token)return;const url=`${window.location.origin}/?match=${match.publicId}&invite=${token}`;try{await navigator.clipboard.writeText(url);setBenchPulse(v=>v+1);setMsg('Bench link copied — bring your people into the match.')}catch{setMsg(url)}};
+  const myMatchCity=me?.membership?.code===home.code?home:me?.membership?.code===away.code?away:null;
+  const shareMoment=async(type)=>{
+    const city=myMatchCity||leader||home;
+    const presets={
+      callup:{eyebrow:'MATCH CALL-UP',title:`${city.name.toUpperCase()} NEEDS YOU`,subtitle:`${home.name} ${homeScore} — ${awayScore} ${away.name}`,footer:'Join my city in the Somali Cup match'},
+      goal:{eyebrow:'GOAL · VERIFIED',title:'I SCORED FOR MY CITY',subtitle:`${city.name} · Somali Cup 2027`,footer:'One verified supporter. One goal.'},
+      assist:{eyebrow:'ASSIST · VERIFIED',title:'I BROUGHT MY PEOPLE',subtitle:`${mine?.assists??mine?.direct_joins??0} assists · ${mine?.downstream_joins??0} branch impact`,footer:`${city.name} is stronger together`},
+      fulltime:{eyebrow:'FULL TIME',title:`${(match.winner?.name||leader?.name||city.name).toUpperCase()}`,subtitle:`${home.code} ${homeScore} — ${awayScore} ${away.code}`,footer:'Somali Cup · The city story continues'},
+      motm:{eyebrow:'MAN OF THE MATCH',title:'THE IMPACT RACE',subtitle:`${mine?.assists??mine?.direct_joins??0} assists · ${mine?.downstream_joins??0} branch`,footer:'Verified impact. Real supporters.'}
+    };
+    try{await sharePoster({city,...presets[type]});setMsg('Your Somali Cup poster is ready.')}catch{setMsg('Could not create poster on this device.')}
+  };
 
   return <div className="matchExperience">
     <section className="broadcastHero">
@@ -427,6 +451,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
       <div className="actionPanel"><small>SUPPORT YOUR CITY</small><h3>Every supporter moves the match.</h3>{!me?<button className="blueBtn" onClick={onNeedIdentity}>Create supporter identity</button>:!mine?<button className="blueBtn" disabled={busy} onClick={join}>Join this match</button>:mine.status==='REGISTERED'&&match.status==='LIVE'?<button className="goldBtn" disabled={busy} onClick={activate}><Play size={16}/> Enter Live & Score</button>:<div className="activeState"><Check/> You're active in this match</div>}</div>
       <div className="actionPanel"><small>YOUR MATCH LINK</small><h3>Bring your people into the stadium.</h3><div className="shareFake">{mine?'somalicup.com/your-match-link':'Join the match to unlock your link'}<Link2 size={15}/></div>{mine&&<button className="glassBtn" onClick={copyLink}><Share2 size={15}/> Copy Personal Link</button>}</div>
       <div className="actionPanel impactPoints"><small>CONTRIBUTE TO IMPACT</small><div><span>⚽</span><b>Goal</b><strong>+500</strong></div><div><span>🟢</span><b>Assist</b><strong>+250</strong></div><div><span>🤝</span><b>Branch</b><strong>+100</strong></div></div>
+      <div className="actionPanel shareMoments"><small>SHARE THE MOMENT</small><h3>Turn your match into a Status.</h3><div className="momentButtons"><button onClick={()=>shareMoment('callup')}><Share2 size={14}/> Call-Up</button>{mine?.status==='ACTIVE'&&<button onClick={()=>shareMoment('goal')}>⚽ Goal</button>}{Number(mine?.assists??mine?.direct_joins??0)>0&&<button onClick={()=>shareMoment('assist')}>🟢 Assist</button>}<button onClick={()=>shareMoment('motm')}><Trophy size={14}/> Impact</button></div></div>
     </section>
     {match.status==='FINAL'&&<section className="fullTimeStage">
       <div className="fullTimeGlow"/>
@@ -435,7 +460,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
       <h2>{match.winner?.name||leader?.name||'Match complete'}</h2>
       <p>{match.winner?'Advance to the next stage. The city story continues.':'Full-time result recorded.'}</p>
       <div className="fullTimeScore"><span>{home.code}</span><b>{homeScore} — {awayScore}</b><span>{away.code}</span></div>
-      <button className="goldBtn"><Share2 size={16}/> Share Full-Time Result</button>
+      <button className="goldBtn" onClick={()=>shareMoment('fulltime')}><Share2 size={16}/> Share Full-Time Result</button>
     </section>}
     {msg&&<div className="matchMsg">{msg}</div>}
   </div>
@@ -455,7 +480,7 @@ function JoinExperience({standings,onClose,onJoined}){
       <Logo/>
       <div className="joinSteps"><div className={step>=1?'active':''}><span>1</span><b>Choose City</b></div><i/><div className={step>=2?'active':''}><span>2</span><b>Create Identity</b></div><i/><div className={step>=3?'active':''}><span>3</span><b>Confirm & Join</b></div></div>
 
-      {step===1&&<><div className="joinTitle"><small>ONE CITY. A GLOBAL FAMILY.</small><h2>Choose your city</h2><p>Represent the city closest to your heart. Your city identity stays with you for the season.</p></div><div className="joinCityGrid">{standings.slice(0,8).map(c=><button key={c.code} className={city?.code===c.code?'selected':''} onClick={()=>setCity(c)} style={{backgroundImage:`linear-gradient(180deg,transparent,rgba(2,8,18,.94)),url("${imgFor(c)}")`}}><span>{flag(c.country)}</span><b>{c.name}</b><small>{fmt(c.verified_supporters)} supporters</small>{city?.code===c.code&&<i><Check size={13}/></i>}</button>)}</div><button className="goldBtn full" disabled={!city} onClick={()=>setStep(2)}>Continue with {city?.name||'your city'} <ArrowRight size={16}/></button></>}
+      {step===1&&<><div className="joinTitle"><small>ONE CITY. ONE NATION.</small><h2>Choose your city</h2><p>Represent the city closest to your heart. Your city identity stays with you for the season.</p></div><div className="joinCityGrid">{standings.slice(0,8).map(c=><button key={c.code} className={city?.code===c.code?'selected':''} onClick={()=>setCity(c)} style={{backgroundImage:`linear-gradient(180deg,transparent,rgba(2,8,18,.94)),url("${imgFor(c)}")`}}><span>{flag(c.country)}</span><b>{c.name}</b><small>{fmt(c.verified_supporters)} supporters</small>{city?.code===c.code&&<i><Check size={13}/></i>}</button>)}</div><button className="goldBtn full" disabled={!city} onClick={()=>setStep(2)}>Continue with {city?.name||'your city'} <ArrowRight size={16}/></button></>}
 
       {step===2&&<><div className="joinTitle"><small>CREATE YOUR SUPPORTER IDENTITY</small><h2>You’re joining {city.name}</h2><p>This is how you’ll appear on match activity, leaderboards and community moments.</p></div><div className="identityForm"><label>Display Name<input value={form.displayName} onChange={e=>setForm({...form,displayName:e.target.value})} placeholder="AbdiAli"/></label><label>Nickname <small>optional</small><input value={form.nickname} onChange={e=>setForm({...form,nickname:e.target.value})} placeholder="What should the stadium call you?"/></label><label>Email Address <small>optional</small><input type="email" value={form.email} onChange={e=>setForm({...form,email:e.target.value})} placeholder="abdi@somalicup.com"/></label><div className="avatarChooser"><span className="avatarPick">A</span><span>Y</span><span>M</span><span>N</span><button>+</button></div></div><div className="joinFooterBtns"><button className="glassBtn" onClick={()=>setStep(1)}>Back</button><button className="goldBtn" disabled={form.displayName.trim().length<2} onClick={()=>setStep(3)}>Continue <ArrowRight size={16}/></button></div></>}
 
