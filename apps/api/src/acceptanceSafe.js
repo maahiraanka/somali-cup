@@ -203,7 +203,11 @@ await check('best_city_competition_detail',async()=>{
   if(response.status!==200||body?.competition?.slug!=='best-city-somalia'||!Array.isArray(body?.choices))throw new Error('invalid Best City competition detail');
   if(body?.competition?.language?.join!=='Support this city')throw new Error('Best City simple language missing');
   if(body?.competition?.allowNominations!==true)throw new Error('Best City nominations should be open');
-  return body.choices.length+' cities · simple city language verified';
+  if(!Array.isArray(body?.stages)||body.stages.length!==4)throw new Error('Best City round path missing');
+  if(!body?.currentStage||body.currentStage.status!=='OPEN')throw new Error('Best City current round missing');
+  const names=body.stages.map(s=>s.name);
+  for(const required of ['Round 1','Group Round','Semi Final','Final'])if(!names.includes(required))throw new Error('missing round '+required);
+  return body.choices.length+' cities · 4 rounds · simple city language verified';
 });
 
 await check('identity_protected_without_session',async()=>{
