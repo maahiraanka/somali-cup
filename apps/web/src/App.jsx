@@ -102,7 +102,52 @@ const shareResultMessage=result=>({
 })[result]||'Share ready.';
 
 function Logo(){return <div className="logoLock"><div className="cupMark">🏆</div><div><strong>SOMALI CUP</strong><small>Different cities. One people.</small></div></div>}
-function Progress({value}){const v=Math.max(0,Math.min(100,Number(value)||0));return <div className="progressTrack"><span style={{width:`${v}%`}}/></div>}
+function useReducedMotion(){
+  const [reduced,setReduced]=useState(()=>typeof window!=='undefined'&&window.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+  useEffect(()=>{
+    const mq=window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    if(!mq)return;
+    const onChange=()=>setReduced(mq.matches);
+    mq.addEventListener?.('change',onChange);
+    return()=>mq.removeEventListener?.('change',onChange);
+  },[]);
+  return reduced;
+}
+function MotionNumber({value,duration=650,suffix='',prefix='',className=''}) {
+  const target=Number(value||0);
+  const reduced=useReducedMotion();
+  const [shown,setShown]=useState(reduced?target:0);
+  const prev=useRef(reduced?target:0);
+  useEffect(()=>{
+    if(reduced){setShown(target);prev.current=target;return}
+    const start=prev.current;
+    const delta=target-start;
+    if(!delta){setShown(target);return}
+    const begin=performance.now();
+    let frame;
+    const tick=now=>{
+      const t=Math.min(1,(now-begin)/duration);
+      const eased=1-Math.pow(1-t,3);
+      const next=start+delta*eased;
+      setShown(next);
+      if(t<1)frame=requestAnimationFrame(tick);
+      else prev.current=target;
+    };
+    frame=requestAnimationFrame(tick);
+    return()=>cancelAnimationFrame(frame);
+  },[target,duration,reduced]);
+  const decimals=Number.isInteger(target)?0:1;
+  return <span className={`motionNumber ${className}`}>{prefix}{Number(shown).toLocaleString(undefined,{minimumFractionDigits:decimals,maximumFractionDigits:decimals})}{suffix}</span>
+}
+function AmbientMotion(){
+  return <div className="ambientMotion" aria-hidden="true"><i/><i/><i/><span/><span/></div>
+}
+function CelebrationParticles({tone='gold',fireworks=false}){
+  return <div className={`celebrationParticles ${tone} ${fireworks?'fireworks':''}`} aria-hidden="true">
+    {Array.from({length:fireworks?18:10},(_,i)=><i key={i} style={{'--i':i}}/> )}
+  </div>
+}
+function Progress({value}){const v=Math.max(0,Math.min(100,Number(value)||0));return <div className="progressTrack"><span className="motionProgress" style={{width:`${v}%`}}/></div>}
 function CityThumb({city,size='md'}){return <div className={`cityThumb ${size}`} style={{backgroundImage:`linear-gradient(180deg,transparent,rgba(1,8,18,.85)),url("${imgFor(city)}")`}}><span>{flag(city?.country)}</span><b>{city?.code}</b></div>}
 
 export default function App(){
@@ -272,6 +317,7 @@ export default function App(){
       </div>
     </header></>}
 
+    <AmbientMotion/>
     <main className={(viralCity&&!me?.membership)||viralMatch?'mainStage viralStage':'mainStage'}>
       {viralMatch?<ViralMatchLanding data={viralMatch} me={me} matches={matches} busy={inviteBusy} onIdentity={()=>requestJoin()} onEnter={enterInvitedMatch} onLeave={leaveMatchInvite}/>:viralCity&&!me?.membership?<ViralCityLanding city={viralCity} standings={standings} fromName={viralFrom} onJoin={()=>requestJoin(viralCity)} onOther={leaveViralLanding}/>:initialLoading?<LiveDataState loading onRetry={refresh}/>:<>
         {view==='home'&&(qualificationUnavailable?<LiveDataState title="Live city race unavailable" body="We couldn’t load the verified city standings. No demo numbers are being shown." onRetry={refresh}/>:<Home standings={standings} top={top} total={total} season={season} myCity={myCity} onJoin={requestJoin} openCity={openCity} goQualification={()=>setView('qualification')} goMatches={()=>setView('matches')}/>)}
@@ -409,7 +455,7 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
         </>:<>
           <div className="returningCity">
             <div className="returningCityTop"><CityThumb city={myCity} size="md"/><div><small>YOU REPRESENT</small><strong>{myCity.name}</strong><span>#{myCity.rank} in qualification</span></div></div>
-            <div className="returningProgress"><div><span>{fmt(myCity.verified_supporters)} / {fmt(myCity.qualification_target)}</span><b>{remaining?fmt(remaining)+' Goals needed':'TARGET REACHED'}</b></div><Progress value={myCity.progress_pct}/></div>
+            <div className="returningProgress"><div><span><MotionNumber value={myCity.verified_supporters}/> / {fmt(myCity.qualification_target)}</span><b>{remaining?fmt(remaining)+' Goals needed':'TARGET REACHED'}</b></div><Progress value={myCity.progress_pct}/></div>
             {myRival&&<div className={"returningRival "+myRelation.toLowerCase()}>{myRelation==='LEADING'?<><b>Lead {myRival.name} by {fmt(myGap)}.</b> Protect it.</>:myRelation==='BEHIND'?<><b>{fmt(myGap)} behind {myRival.name}.</b> Close the gap.</>:<><b>Level with {myRival.name}.</b> Next Goal leads.</>}</div>}
             <button className="heroPrimary" onClick={shareMyCity}><Share2 size={18}/> {myRelation==='LEADING'?'PROTECT THE LEAD':myRelation==='BEHIND'?'CLOSE THE GAP':myRelation==='TIED'?'TAKE THE LEAD':'SHARE '+myCity.name.toUpperCase()}</button>
           </div>
@@ -421,10 +467,10 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
         {leaders.map(c=><button key={c.code} className="heroRaceRow" onClick={()=>openCity(c)}>
           <span className="heroRank">#{c.rank}</span>
           <CityThumb city={c} size="sm"/>
-          <div className="heroRaceName"><b>{c.name}</b><small>{fmt(c.verified_supporters)} Goals</small></div>
+          <div className="heroRaceName"><b>{c.name}</b><small><MotionNumber value={c.verified_supporters}/> Goals</small></div>
           <div className="heroRaceProgress"><strong>{Number(c.progress_pct||0).toFixed(0)}%</strong><Progress value={c.progress_pct}/></div>
         </button>)}
-        <div className="heroRaceFooter"><Users size={14}/><span>{fmt(total)} Goals scored across {standings.length} cities</span></div>
+        <div className="heroRaceFooter"><Users size={14}/><span><MotionNumber value={total}/> Goals scored across {standings.length} cities</span></div>
       </div>
     </section>
 
@@ -474,7 +520,7 @@ function Qualification({standings,season,onJoin,openCity}){
     <div className="qualificationGrid">
       <section className="panel fullTable">
         <div className="leaderCols large"><span>#</span><span>City</span><span>Tier</span><span>Verified</span><span>Target</span><span>Progress</span><span>Status</span></div>
-        {standings.map(c=><button className="leaderRow large" key={c.code} onClick={()=>openCity(c)}><b>{c.rank}</b><div className="cityInline"><span>{flag(c.country)}</span><div><strong>{c.name}</strong><small>{c.country}</small></div></div><span className="tierTag">{c.tier}</span><strong>{fmt(c.verified_supporters)}</strong><span>{fmt(c.qualification_target)}</span><div className="leaderProgress"><Progress value={c.progress_pct}/><small>{Number(c.progress_pct||0).toFixed(1)}%</small></div><span className="statusTag">{c.status}</span></button>)}
+        {standings.map(c=><button className="leaderRow large" key={c.code} onClick={()=>openCity(c)}><b>{c.rank}</b><div className="cityInline"><span>{flag(c.country)}</span><div><strong>{c.name}</strong><small>{c.country}</small></div></div><span className="tierTag">{c.tier}</span><strong><MotionNumber value={c.verified_supporters}/></strong><span>{fmt(c.qualification_target)}</span><div className="leaderProgress"><Progress value={c.progress_pct}/><small>{Number(c.progress_pct||0).toFixed(1)}%</small></div><span className="statusTag">{c.status}</span></button>)}
       </section>
       <aside className="integrityCard"><div className="shieldBig">★</div><small>COMPETITION INTEGRITY</small><h3>One city per season.</h3><p>Your supporter identity is locked to one city for the active season. This protects the tournament and keeps every city’s numbers meaningful.</p><ul><li><Check/>1 verified person = 1 Goal</li><li><Check/>Clicks do not score Goals</li><li><Check/>Repeat joins are blocked</li><li><Check/>Admin changes are audited</li></ul></aside>
     </div>
@@ -539,8 +585,8 @@ function SupporterProfile({me,city,season,onJoin,onCity,onMatches}){
 
     <section className="supporterDashboard">
       <div className="supporterStat highlight"><span>Your Goal</span><strong>{goalNumber?`#${fmt(goalNumber)}`:'1'}</strong><small>{goalNumber?'Your permanent city Goal number':`You joined ${city.name}`}</small></div>
-      <div className="supporterStat"><span>Your Assists</span><strong>{fmt(me.qualificationImpact?.assists||0)}</strong><small>People who joined through you</small></div>
-      <div className="supporterStat"><span>Your Branch</span><strong>{fmt(me.qualificationImpact?.branch||0)}</strong><small>Your full chain</small></div>
+      <div className="supporterStat"><span>Your Assists</span><strong><MotionNumber value={me.qualificationImpact?.assists||0}/></strong><small>People who joined through you</small></div>
+      <div className="supporterStat"><span>Your Branch</span><strong><MotionNumber value={me.qualificationImpact?.branch||0}/></strong><small>Your full chain</small></div>
       <div className="supporterStat"><span>City rank</span><strong>#{city.rank}</strong><small>{fmt(city.verified_supporters)} Goals</small></div>
     </section>
 
@@ -696,9 +742,9 @@ function MatchCenter({matches,me,onNeedIdentity}){
 
   return <div className="matchExperience">
     <section className="broadcastHero">
-      <div className="matchSide homeSide" style={{backgroundImage:`linear-gradient(90deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(home)}")`}}><CityThumb city={home} size="lg"/><h2>{home.name}</h2><small>{home.code}</small></div>
-      <div className="scoreBoard"><div className={"liveBadge "+(match.status==='LIVE'?'red':'')}><span/> {match.status}</div><small>{match.roundCode||match.round_code}</small><strong>{fmt(home.score)} <em>–</em> {fmt(away.score)}</strong><span className="matchClock">{match.status==='LIVE'?'VERIFIED SCORE':match.status==='LOBBY'?'LOBBY OPEN':match.status==='SCHEDULED'?'UPCOMING':match.status}</span>{scoreMoment&&<div className="scoreMoment"><span>VERIFIED GOAL</span><b>{scoreMoment.city} scored.</b><small>{scoreMoment.message}</small></div>}</div>
-      <div className="matchSide awaySide" style={{backgroundImage:`linear-gradient(270deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(away)}")`}}><CityThumb city={away} size="lg"/><h2>{away.name}</h2><small>{away.code}</small></div>
+      <div className={`matchSide homeSide ${scoreMoment?.code===home.code?'scoredNow':''}`} style={{backgroundImage:`linear-gradient(90deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(home)}")`}}><CityThumb city={home} size="lg"/><h2>{home.name}</h2><small>{home.code}</small></div>
+      <div className="scoreBoard"><div className={"liveBadge "+(match.status==='LIVE'?'red':'')}><span/> {match.status}</div><small>{match.roundCode||match.round_code}</small><strong><MotionNumber value={home.score}/> <em>–</em> <MotionNumber value={away.score}/></strong><span className="matchClock">{match.status==='LIVE'?'VERIFIED SCORE':match.status==='LOBBY'?'LOBBY OPEN':match.status==='SCHEDULED'?'UPCOMING':match.status}</span>{scoreMoment&&<div className="scoreMoment"><span>VERIFIED GOAL</span><b>{scoreMoment.city} scored.</b><small>{scoreMoment.message}</small></div>}</div>
+      <div className={`matchSide awaySide ${scoreMoment?.code===away.code?'scoredNow':''}`} style={{backgroundImage:`linear-gradient(270deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(away)}")`}}><CityThumb city={away} size="lg"/><h2>{away.name}</h2><small>{away.code}</small></div>
     </section>
     <section className="supportMeter"><div><b>{homeSupportPct}%</b><span>{fmt(homeActive)} active</span></div><div className="meterTrack"><i style={{width:`${homeSupportPct}%`}}/><em style={{width:`${awaySupportPct}%`}}/></div><div><b>{awaySupportPct}%</b><span>{fmt(awayActive)} active</span></div></section>
 
@@ -802,15 +848,16 @@ function MatchAssistMoment({moment,onCall,onDone}){
   const branch=Number(moment?.branch||0);
   const indirect=Number(moment?.indirect||0);
   return <div className="matchAssistOverlay">
-    <section className="matchAssistCard">
+    <CelebrationParticles tone="gold"/>
+    <section className="matchAssistCard motionEntrance">
       <div className="matchAssistBadge"><UserPlus size={27}/></div>
       <small>MATCH ASSIST · VERIFIED</small>
       <h2>You got<br/><em>the Assist.</em></h2>
       <p><b>{moment?.latest?.name||'Someone'}</b> entered through your call-up and scored a verified Goal for {moment?.city?.name}.</p>
       <div className="matchAssistImpact">
-        <div><span>DIRECT ASSISTS</span><strong>{fmt(assists)}</strong></div>
-        <div><span>MORE THROUGH CHAIN</span><strong>{fmt(indirect)}</strong></div>
-        <div><span>YOUR BRANCH</span><strong>{fmt(branch)}</strong></div>
+        <div><span>DIRECT ASSISTS</span><strong><MotionNumber value={assists}/></strong></div>
+        <div><span>MORE THROUGH CHAIN</span><strong><MotionNumber value={indirect}/></strong></div>
+        <div><span>YOUR BRANCH</span><strong><MotionNumber value={branch}/></strong></div>
       </div>
       <div className="matchAssistMeaning"><Zap size={18}/><div><b>Your call-up changed the match.</b><span>Call one more person. Their verified Goal can become your next Assist.</span></div></div>
       <button className="joinedPrimary" disabled={copying} onClick={callAgain}>{copying?'COPYING…':copied?'MATCH LINK COPIED':'CALL ONE MORE'} <UserPlus size={17}/></button>
@@ -842,15 +889,16 @@ function AssistMoment({moment,city,onDone}){
     }finally{setSharing(false)}
   };
   return <div className="assistMomentOverlay">
-    <section className="assistMomentCard">
+    <CelebrationParticles tone="green"/>
+    <section className="assistMomentCard motionEntrance">
       <div className="assistIcon"><Check size={28}/></div>
       <small>ASSIST · VERIFIED</small>
       <h2>You got<br/><em>the Assist.</em></h2>
       <p><b>{name}</b> joined through your link and scored a Goal for {city?.name}.</p>
       <div className="assistImpact">
         <div><span>YOUR GOAL</span><strong>1</strong></div>
-        <div><span>ASSISTS</span><strong>{fmt(assists)}</strong></div>
-        <div><span>BRANCH</span><strong>{fmt(branch)}</strong></div>
+        <div><span>ASSISTS</span><strong><MotionNumber value={assists}/></strong></div>
+        <div><span>BRANCH</span><strong><MotionNumber value={branch}/></strong></div>
       </div>
       <div className="assistNext"><Zap size={18}/><div><b>Keep the chain moving.</b><span>One more person can become your next Assist and their own Goal.</span></div></div>
       <button className="joinedPrimary" disabled={sharing} onClick={share}>{sharing?'CREATING POSTER…':'GO FOR ANOTHER ASSIST'} <Share2 size={17}/></button>
@@ -869,6 +917,7 @@ function JoinedMoment({payload,city,onDone}){
   const remaining=Math.max(0,target-supporters);
   const nextNumber=goalNumber+1;
   const supporterName=payload.user?.nickname||payload.user?.displayName||'';
+  const milestone=[100,250,500].includes(goalNumber);
   const rivalry=payload.rivalry;
   const rivalryLine=!rivalry?'':rivalry.relation==='LEADING'
     ?`${city.name} leads ${rivalry.rival.name} by ${rivalry.gap} ${rivalry.gap===1?'Goal':'Goals'} — protect the lead.`
@@ -891,11 +940,12 @@ function JoinedMoment({payload,city,onDone}){
     }finally{setSharing(false)}
   };
   return <div className="joinedMomentOverlay">
-    <section className="joinedMomentCard">
+    <CelebrationParticles tone="gold" fireworks={milestone}/>
+    <section className={`joinedMomentCard motionEntrance ${milestone?'milestoneMoment':''}`}>
       <div className="joinedBurst">★</div>
       <small>YOU’RE IN</small>
       <h2>You represent<br/><em>{city.name}.</em></h2>
-      <div className="joinedNumber"><span>YOU SCORED</span><strong>GOAL #{fmt(goalNumber)}</strong><small>for {city.name} · permanently yours</small></div>
+      <div className="joinedNumber"><span>YOU SCORED</span><strong>GOAL #<MotionNumber value={goalNumber}/></strong><small>for {city.name} · permanently yours</small></div>
       <p>You scored 1 Goal for {city.name}. {rivalryLine||'Now go for the Assist.'}</p>
       <div className="joinedCityStrip"><CityThumb city={city} size="lg"/><div><span>YOUR CITY</span><strong>{city.name}</strong><small>{remaining?fmt(remaining)+' Goals needed to reach the target':'Qualification target reached'}</small></div></div>
       <div className="joinedShareReason"><Share2 size={18}/><div><b>{rivalry?.relation==='LEADING'?`Protect the lead. Make Goal #${fmt(nextNumber)} happen.`:rivalry?.relation==='BEHIND'?`Close the gap. Make Goal #${fmt(nextNumber)} happen.`:rivalry?.relation==='TIED'?`Take the lead. Make Goal #${fmt(nextNumber)} happen.`:`Help ${city.name} score Goal #${fmt(nextNumber)}.`}</b><span>Bring one person through your link. If they join, you get the Assist and they score the next Goal.</span></div></div>
