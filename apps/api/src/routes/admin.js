@@ -432,6 +432,16 @@ router.post('/tournament/groups/:groupId/cities',async(req,res,next)=>{
   try{
     const [[city]]=await pool.query('SELECT id,name FROM cities WHERE code=? AND is_active=1 LIMIT 1',[cityCode]);
     if(!city)return res.status(404).json({error:'city_not_found'});
+    const [[group]]=await pool.query('SELECT id,stage_id FROM tournament_groups WHERE id=? LIMIT 1',[groupId]);
+    if(!group)return res.status(404).json({error:'group_not_found'});
+    const [[existing]]=await pool.query(`
+      SELECT tg.id group_id,tg.name group_name
+      FROM tournament_group_cities tgc
+      JOIN tournament_groups tg ON tg.id=tgc.group_id
+      WHERE tg.stage_id=? AND tgc.city_id=? AND tg.id<>?
+      LIMIT 1
+    `,[group.stage_id,city.id,groupId]);
+    if(existing)return res.status(409).json({error:'city_already_in_stage_group',groupName:existing.group_name});
     await pool.query('INSERT INTO tournament_group_cities(group_id,city_id,seed_no) VALUES (?,?,?) ON DUPLICATE KEY UPDATE seed_no=VALUES(seed_no)',[groupId,city.id,seedNo]);
     await pool.query('INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
       [req.admin?.user_id||null,'TOURNAMENT_GROUP_CITY_ASSIGNED','TOURNAMENT_GROUP',String(groupId),JSON.stringify({cityCode,cityId:city.id,seedNo})]);
