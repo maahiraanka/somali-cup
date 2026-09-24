@@ -14,25 +14,6 @@ const cityImages={
   JOW:'https://images.unsplash.com/photo-1477959858617-67f85cf4f1df?auto=format&fit=crop&w=1000&q=88',
   BUR:'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?auto=format&fit=crop&w=1000&q=88'
 };
-const demoStandings=[
-  {rank:1,code:'MOG',name:'Mogadishu',country:'Somalia',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:418,progress_pct:83.6,is_open:1},
-  {rank:2,code:'HAR',name:'Hargeisa',country:'Somalia',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:397,progress_pct:79.4,is_open:1},
-  {rank:3,code:'KIS',name:'Kismayo',country:'Somalia',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:346,progress_pct:69.2,is_open:1},
-  {rank:4,code:'GAR',name:'Garowe',country:'Somalia',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:319,progress_pct:63.8,is_open:1},
-  {rank:5,code:'BOS',name:'Bosaso',country:'Somalia',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:288,progress_pct:57.6,is_open:1},
-  {rank:6,code:'BAI',name:'Baidoa',country:'Somalia',tier:'PREMIER',status:'QUALIFYING',qualification_target:500,verified_supporters:271,progress_pct:54.2,is_open:1},
-  {rank:7,code:'BLW',name:'Beledweyne',country:'Somalia',tier:'CHAMPIONSHIP',status:'QUALIFYING',qualification_target:300,verified_supporters:182,progress_pct:60.7,is_open:1},
-  {rank:8,code:'GAL',name:'Galkayo',country:'Somalia',tier:'CHAMPIONSHIP',status:'QUALIFYING',qualification_target:300,verified_supporters:161,progress_pct:53.7,is_open:1},
-  {rank:9,code:'JOW',name:'Jowhar',country:'Somalia',tier:'CHAMPIONSHIP',status:'QUALIFYING',qualification_target:300,verified_supporters:149,progress_pct:49.7,is_open:1},
-  {rank:10,code:'BUR',name:'Burco',country:'Somalia',tier:'CHAMPIONSHIP',status:'QUALIFYING',qualification_target:300,verified_supporters:141,progress_pct:47,is_open:1}
-];
-const demoMatches=[
-  {publicId:'sc2027-mog-har-group-01',seasonName:'Somali Cup 2027',roundCode:'GROUP',status:'LOBBY',startsAt:'2027-06-12T09:30:00.000Z',lobbyOpensAt:'2027-06-12T09:00:00.000Z',scoreVersion:0,home:{code:'MOG',name:'Mogadishu',country:'Somalia',score:0},away:{code:'HAR',name:'Hargeisa',country:'Somalia',score:0}},
-  {publicId:'sc2027-kis-gar-group-01',seasonName:'Somali Cup 2027',roundCode:'GROUP',status:'LOBBY',startsAt:'2027-06-12T10:00:00.000Z',lobbyOpensAt:'2027-06-12T09:30:00.000Z',scoreVersion:0,home:{code:'KIS',name:'Kismayo',country:'Somalia',score:0},away:{code:'GAR',name:'Garowe',country:'Somalia',score:0}},
-  {publicId:'sc2027-bos-bai-group-01',seasonName:'Somali Cup 2027',roundCode:'GROUP',status:'LOBBY',startsAt:'2027-06-12T10:30:00.000Z',lobbyOpensAt:'2027-06-12T10:00:00.000Z',scoreVersion:0,home:{code:'BOS',name:'Bosaso',country:'Somalia',score:0},away:{code:'BAI',name:'Baidoa',country:'Somalia',score:0}},
-  {publicId:'sc2027-blw-gal-group-01',seasonName:'Somali Cup 2027',roundCode:'GROUP',status:'LOBBY',startsAt:'2027-06-12T11:00:00.000Z',lobbyOpensAt:'2027-06-12T10:30:00.000Z',scoreVersion:0,home:{code:'BLW',name:'Beledweyne',country:'Somalia',score:0},away:{code:'GAL',name:'Galkayo',country:'Somalia',score:0}},
-  {publicId:'sc2027-jow-bur-group-01',seasonName:'Somali Cup 2027',roundCode:'GROUP',status:'LOBBY',startsAt:'2027-06-12T11:30:00.000Z',lobbyOpensAt:'2027-06-12T11:00:00.000Z',scoreVersion:0,home:{code:'JOW',name:'Jowhar',country:'Somalia',score:0},away:{code:'BUR',name:'Burco',country:'Somalia',score:0}}
-];
 
 const flag=(country)=>({Australia:'🇦🇺','United Kingdom':'🇬🇧',Canada:'🇨🇦',Kenya:'🇰🇪','United States':'🇺🇸',Somalia:'🇸🇴',Sweden:'🇸🇪',Norway:'🇳🇴','United Arab Emirates':'🇦🇪'})[country]||'🌍';
 const fmt=n=>Number(n||0).toLocaleString();
@@ -119,8 +100,11 @@ function CityThumb({city,size='md'}){return <div className={`cityThumb ${size}`}
 
 export default function App(){
   const [view,setView]=useState('home');
-  const [standings,setStandings]=useState(demoStandings);
-  const [season,setSeason]=useState({name:'Somali Cup 2027',status:'QUALIFICATION'});
+  const [standings,setStandings]=useState([]);
+  const [season,setSeason]=useState({name:'Somali Cup 2027',status:null});
+  const [qualificationError,setQualificationError]=useState(false);
+  const [matchesError,setMatchesError]=useState(false);
+  const [initialLoading,setInitialLoading]=useState(true);
   const [me,setMe]=useState(null);
   const [identityChecked,setIdentityChecked]=useState(false);
   const [showJoin,setShowJoin]=useState(false);
@@ -131,12 +115,19 @@ export default function App(){
   const [assistMoment,setAssistMoment]=useState(null);
   const [notice,setNotice]=useState('');
   const [inviteBusy,setInviteBusy]=useState(false);
-  const [matches,setMatches]=useState(demoMatches);
+  const [matches,setMatches]=useState([]);
   const [selectedCity,setSelectedCity]=useState(null);
   const [mobileNav,setMobileNav]=useState(false);
 
   const refresh=async()=>{
-    try{const d=await api('/api/qualification');if(d?.standings?.length){setStandings(d.standings);setSeason(d.season||season)}}catch{}
+    try{
+      const d=await api('/api/qualification');
+      setStandings(Array.isArray(d?.standings)?d.standings:[]);
+      if(d?.season)setSeason(d.season);
+      setQualificationError(false);
+    }catch{
+      setQualificationError(true);
+    }
     try{
       const d=await api('/api/identity/me');
       const latest=d?.qualificationImpact?.latestAssist;
@@ -151,7 +142,15 @@ export default function App(){
       }
       setMe(d)
     }catch{setMe(null)}finally{setIdentityChecked(true)}
-    try{const d=await api('/api/matches');if(d?.matches?.length)setMatches(d.matches)}catch{}
+    try{
+      const d=await api('/api/matches');
+      setMatches(Array.isArray(d?.matches)?d.matches:[]);
+      setMatchesError(false);
+    }catch{
+      setMatchesError(true);
+    }finally{
+      setInitialLoading(false);
+    }
   };
   useEffect(()=>{refresh()},[]);
   useEffect(()=>{
@@ -181,7 +180,7 @@ export default function App(){
     return()=>{cancelled=true;clearInterval(id);window.removeEventListener('focus',onFocus)}
   },[me?.membership?.season_id,me?.user?.publicId]);
   useEffect(()=>{
-    if(!identityChecked||me?.membership)return;
+    if(!identityChecked||me?.membership||qualificationError)return;
     const code=new URLSearchParams(window.location.search).get('city')?.toUpperCase();
     if(!code){setViralCity(null);return}
     const city=standings.find(c=>c.code===code&&c.is_open);
@@ -199,6 +198,8 @@ export default function App(){
     return()=>{cancelled=true}
   },[]);
   const top=standings[0];
+  const qualificationUnavailable=!initialLoading&&qualificationError&&standings.length===0;
+  const matchesUnavailable=!initialLoading&&matchesError&&matches.length===0;
   const myCity=useMemo(()=>me?.membership?standings.find(c=>c.code===me.membership.code):null,[me,standings]);
   const total=standings.reduce((a,c)=>a+Number(c.verified_supporters||0),0);
   const viralFrom=(new URLSearchParams(window.location.search).get('from')||'').trim().slice(0,40);
@@ -265,13 +266,13 @@ export default function App(){
     </header></>}
 
     <main className={(viralCity&&!me?.membership)||viralMatch?'mainStage viralStage':'mainStage'}>
-      {viralMatch?<ViralMatchLanding data={viralMatch} me={me} matches={matches} busy={inviteBusy} onIdentity={()=>requestJoin()} onEnter={enterInvitedMatch} onLeave={leaveMatchInvite}/>:viralCity&&!me?.membership?<ViralCityLanding city={viralCity} standings={standings} fromName={viralFrom} onJoin={()=>requestJoin(viralCity)} onOther={leaveViralLanding}/>:<>
-        {view==='home'&&<Home standings={standings} top={top} total={total} season={season} myCity={myCity} onJoin={requestJoin} openCity={openCity} goQualification={()=>setView('qualification')} goMatches={()=>setView('matches')}/>}
-        {view==='qualification'&&<Qualification standings={standings} season={season} onJoin={requestJoin} openCity={openCity}/>}
-        {view==='cities'&&<Cities standings={standings} openCity={openCity} onJoin={requestJoin}/>}
-        {view==='city'&&selectedCity&&<CityPage city={standings.find(c=>c.code===selectedCity.code)||selectedCity} me={me} onBack={()=>setView('cities')} onJoin={requestJoin}/>} 
-        {view==='matches'&&<MatchCenter matches={matches} me={me} onNeedIdentity={requestJoin}/>}
-        {view==='profile'&&<SupporterProfile me={me} city={myCity} season={season} onJoin={requestJoin} onCity={()=>myCity&&openCity(myCity)} onMatches={()=>setView('matches')}/>}
+      {viralMatch?<ViralMatchLanding data={viralMatch} me={me} matches={matches} busy={inviteBusy} onIdentity={()=>requestJoin()} onEnter={enterInvitedMatch} onLeave={leaveMatchInvite}/>:viralCity&&!me?.membership?<ViralCityLanding city={viralCity} standings={standings} fromName={viralFrom} onJoin={()=>requestJoin(viralCity)} onOther={leaveViralLanding}/>:initialLoading?<LiveDataState loading onRetry={refresh}/>:<>
+        {view==='home'&&(qualificationUnavailable?<LiveDataState title="Live city race unavailable" body="We couldn’t load the verified city standings. No demo numbers are being shown." onRetry={refresh}/>:<Home standings={standings} top={top} total={total} season={season} myCity={myCity} onJoin={requestJoin} openCity={openCity} goQualification={()=>setView('qualification')} goMatches={()=>setView('matches')}/>)}
+        {view==='qualification'&&(qualificationUnavailable?<LiveDataState title="Live table unavailable" body="The verified qualification table could not be loaded." onRetry={refresh}/>:<Qualification standings={standings} season={season} onJoin={requestJoin} openCity={openCity}/>)}
+        {view==='cities'&&(qualificationUnavailable?<LiveDataState title="City data unavailable" body="We couldn’t load the verified city list." onRetry={refresh}/>:<Cities standings={standings} openCity={openCity} onJoin={requestJoin}/>)}
+        {view==='city'&&(qualificationUnavailable?<LiveDataState title="City data unavailable" body="We couldn’t load the verified city data." onRetry={refresh}/>:selectedCity&&<CityPage city={standings.find(c=>c.code===selectedCity.code)||selectedCity} me={me} onBack={()=>setView('cities')} onJoin={requestJoin}/>)}
+        {view==='matches'&&(matchesUnavailable?<LiveDataState title="Live fixtures unavailable" body="We couldn’t load the verified Somali Cup fixtures. No sample scores are being shown." onRetry={refresh}/>:<MatchCenter matches={matches} me={me} onNeedIdentity={requestJoin}/>)}
+        {view==='profile'&&(qualificationUnavailable?<LiveDataState title="Supporter data unavailable" body="Your identity is safe, but the live city data could not be loaded." onRetry={refresh}/>:<SupporterProfile me={me} city={myCity} season={season} onJoin={requestJoin} onCity={()=>myCity&&openCity(myCity)} onMatches={()=>setView('matches')}/>)}
       </>}
     </main>
 
@@ -283,11 +284,24 @@ export default function App(){
       <button className={view==='profile'?'active':''} onClick={()=>me?.membership?setView('profile'):requestJoin()}><Users size={18}/><span>{me?.membership?'Me':'Join'}</span></button>
     </nav>}
 
-    {showJoin&&!me?.membership&&<JoinExperience standings={standings.filter(c=>c.is_open)} initialCity={joinCity} onClose={()=>{setShowJoin(false);setJoinCity(null)}} onJoined={joined}/>}
+    {showJoin&&!me?.membership&&standings.length>0&&<JoinExperience standings={standings.filter(c=>c.is_open)} initialCity={joinCity} onClose={()=>{setShowJoin(false);setJoinCity(null)}} onJoined={joined}/>}
+    {showJoin&&!me?.membership&&standings.length===0&&!initialLoading&&<LiveDataState overlay title="Joining is temporarily unavailable" body="We couldn’t load the verified city list, so Somali Cup won’t guess or show sample data." onRetry={refresh} onClose={()=>{setShowJoin(false);setJoinCity(null)}}/>}
     {joinedMoment&&<JoinedMoment payload={joinedMoment} city={{...(standings.find(c=>c.code===joinedMoment.city.code)||{}),...joinedMoment.city}} onDone={()=>{setJoinedMoment(null);setView(new URLSearchParams(window.location.search).get('match')?'matches':'profile')}}/>}
     {assistMoment&&<AssistMoment moment={assistMoment} city={standings.find(c=>c.code===assistMoment.membership?.code)||assistMoment.membership} onDone={()=>setAssistMoment(null)}/>}
     {notice&&<div className="toast"><Check size={16}/>{notice}</div>}
   </div>
+}
+
+function LiveDataState({loading=false,title='Loading verified Somali Cup data',body='Getting the latest verified information.',onRetry,onClose,overlay=false}){
+  const content=<section className="liveDataState">
+    <div className={loading?'liveDataMark loading':'liveDataMark'}><ShieldCheck size={26}/></div>
+    <small>VERIFIED DATA</small>
+    <h2>{loading?'Loading live data…':title}</h2>
+    <p>{loading?body:body}</p>
+    {!loading&&onRetry&&<button className="goldBtn" onClick={onRetry}>TRY AGAIN <ArrowRight size={16}/></button>}
+    {onClose&&<button className="joinedSecondary" onClick={onClose}>Close</button>}
+  </section>;
+  return overlay?<div className="liveDataOverlay">{content}</div>:<div className="liveDataWrap">{content}</div>
 }
 
 function ViralMatchLanding({data,me,matches,busy,onIdentity,onEnter,onLeave}){
