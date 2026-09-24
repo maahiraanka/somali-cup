@@ -24,6 +24,7 @@ DELETE FROM tournament_stages;
 DELETE FROM qualification_referrals;
 DELETE FROM qualification_events;
 DELETE FROM city_memberships;
+DELETE FROM season_cities;
 DELETE FROM season_device_claims;
 DELETE FROM identity_integrity_events;
 DELETE FROM funnel_events;
