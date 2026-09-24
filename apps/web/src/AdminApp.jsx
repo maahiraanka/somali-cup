@@ -7,6 +7,7 @@ import {
 
 const fmt=n=>Number(n||0).toLocaleString();
 const nice=v=>String(v||'').replaceAll('_',' ').replace(/\b\w/g,m=>m.toUpperCase());
+const humanErrorAdmin=e=>nice(e?.body?.error||e?.message||'request_failed');
 const adminToken=()=>localStorage.getItem('somalicup_admin_session')||'';
 
 async function adminApi(path,opts={}){
@@ -180,6 +181,8 @@ export default function AdminApp(){
 
 function LaunchReadiness({d,act}){
   const status=d?.overall||'BLOCKED';
+  const [runningCheck,setRunningCheck]=useState('');
+  const [checkOutput,setCheckOutput]=useState('');
   const fixtureBlocker=(d?.checks||[]).find(c=>c.id==='fixture_health'&&c.status==='BLOCKER');
   const grouped=(d?.checks||[]).reduce((acc,c)=>{(acc[c.category]||=[]).push(c);return acc},{});
   const order=['ENVIRONMENT','SECURITY','DATABASE','COMPETITION','INTEGRITY','MATCHES','OPERATIONS','PROOF'];
@@ -238,6 +241,41 @@ function LaunchReadiness({d,act}){
         </div>)}
       </div>
     </section>)}
+
+    <section className="adminPanel launchRunner">
+      <div className="adminPanelAction">
+        <PanelHead eyebrow="RUN FROM CONTROL CENTRE" title="Production proof"/>
+        <span className="launchRunnerHint">No Hostinger terminal required</span>
+      </div>
+      <div className="launchRunnerGrid">
+        <button disabled={Boolean(runningCheck)} onClick={async()=>{
+          setRunningCheck('preflight');setCheckOutput('');
+          try{
+            const d=await adminApi('/api/admin/launch-checks/preflight',{method:'POST'});
+            setCheckOutput(d.stdout||'Preflight passed.');
+            await act(async()=>d,'Production preflight passed');
+          }catch(e){setCheckOutput((e.body?.stdout||'')+'\n'+(e.body?.stderr||humanErrorAdmin(e)));}finally{setRunningCheck('')}
+        }}><ShieldCheck size={17}/><div><b>{runningCheck==='preflight'?'RUNNING…':'RUN PREFLIGHT'}</b><small>Environment, DB, migrations, Goal integrity</small></div></button>
+        <button disabled={Boolean(runningCheck)} onClick={async()=>{
+          setRunningCheck('safe');setCheckOutput('');
+          try{
+            const d=await adminApi('/api/admin/launch-checks/safe',{method:'POST'});
+            setCheckOutput(d.stdout||'Safe acceptance passed.');
+            await act(async()=>d,'Safe acceptance passed');
+          }catch(e){setCheckOutput((e.body?.stdout||'')+'\n'+(e.body?.stderr||humanErrorAdmin(e)));}finally{setRunningCheck('')}
+        }}><BarChart3 size={17}/><div><b>{runningCheck==='safe'?'RUNNING…':'RUN SAFE ACCEPTANCE'}</b><small>Public routes, security, APIs, response health</small></div></button>
+        <button disabled={Boolean(runningCheck)} onClick={async()=>{
+          if(!window.confirm('Run the controlled acceptance test now? It creates temporary tagged supporter and match records, proves the viral loop, then removes them.'))return;
+          setRunningCheck('controlled');setCheckOutput('');
+          try{
+            const d=await adminApi('/api/admin/launch-checks/controlled',{method:'POST',body:JSON.stringify({confirmation:'RUN CONTROLLED ACCEPTANCE'})});
+            setCheckOutput(d.stdout||'Controlled acceptance passed.');
+            await act(async()=>d,'Controlled acceptance passed');
+          }catch(e){setCheckOutput((e.body?.stdout||'')+'\n'+(e.body?.stderr||humanErrorAdmin(e)));}finally{setRunningCheck('')}
+        }}><Activity size={17}/><div><b>{runningCheck==='controlled'?'RUNNING…':'RUN CONTROLLED ACCEPTANCE'}</b><small>Goal → Assist → Branch → Match → cleanup</small></div></button>
+      </div>
+      {checkOutput&&<pre className="launchCheckOutput">{checkOutput}</pre>}
+    </section>
 
     <section className="adminPanel">
       <PanelHead eyebrow="PRODUCTION EVIDENCE" title="Latest acceptance runs"/>
