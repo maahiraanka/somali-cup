@@ -33,7 +33,7 @@ const fmt=n=>Number(n||0).toLocaleString();
 function api(path,opts={}){const token=localStorage.getItem('somalicup_session');const headers={'Content-Type':'application/json',...(opts.headers||{})};if(token)headers.Authorization=`Bearer ${token}`;return fetch(path,{...opts,headers}).then(async r=>{const body=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(body.error||'request_failed'),{status:r.status,body});return body})}
 const imgFor=c=>cityImages[c?.code]||heroImage;
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[m]));
-async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer='Different cities. One people.',accent='#ffcf4a',fromName=''}){
+async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer='Different cities. One people.',accent='#ffcf4a',fromName='',refPublicId=''}){
   const titleSize=String(title||'').length>24?58:String(title||'').length>18?68:82;
   const subtitleSize=String(subtitle||'').length>44?28:String(subtitle||'').length>30?32:38;
   const footerSize=String(footer||'').length>46?30:String(footer||'').length>34?36:46;
@@ -85,8 +85,9 @@ async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer
   if(navigator.share&&navigator.canShare?.({files:[file]})){
     try{
       const fromParam=fromName?`&from=${encodeURIComponent(fromName)}`:'';
+      const refParam=refPublicId?`&ref=${encodeURIComponent(refPublicId)}`:'';
       const lead=fromName?`${fromName} is backing ${city?.name}.\n`:'';
-      await navigator.share({title:'Somali Cup',text:`${lead}${subtitle}\nJoin ${city?.name||'your city'}: ${window.location.origin}/?city=${city?.code||''}&src=status${fromParam}`,files:[file]});
+      await navigator.share({title:'Somali Cup',text:`${lead}${subtitle}\nJoin ${city?.name||'your city'}: ${window.location.origin}/?city=${city?.code||''}&src=status${fromParam}${refParam}`,files:[file]});
       return 'shared'
     }catch(e){if(e?.name==='AbortError')return 'cancelled'}
   }
@@ -354,7 +355,7 @@ function SupporterProfile({me,city,season,onJoin,onCity,onMatches}){
       qualification:{title:`${city.name.toUpperCase()} NEEDS ${fmt(remaining)} MORE`,subtitle:`${fmt(city.verified_supporters)} Goals scored · ${Number(city.progress_pct||0).toFixed(0)}% complete`,footer:`Help ${city.name} reach Somali Cup 2027`},
       callup:{title:'CALLING MY CITY',subtitle:`${city.name} supporters — join me in Somali Cup`,footer:'Represent your city at somalicup.com'}
     };
-    return sharePoster({city,...presets[kind],fromName:name});
+    return sharePoster({city,...presets[kind],fromName:name,refPublicId:me.user.publicId});
   };
   return <div className="supporterPage">
     <section className="supporterHero" style={{backgroundImage:`linear-gradient(90deg,rgba(2,8,18,.98),rgba(2,8,18,.58),rgba(2,8,18,.85)),url("${imgFor(city)}")`}}>
@@ -368,14 +369,14 @@ function SupporterProfile({me,city,season,onJoin,onCity,onMatches}){
     </section>
 
     <section className="supporterDashboard">
-      <div className="supporterStat"><span>City rank</span><strong>#{city.rank}</strong><small>{city.name}</small></div>
-      <div className="supporterStat"><span>Goals scored</span><strong>{fmt(city.verified_supporters)}</strong><small>{fmt(remaining)} still needed</small></div>
-      <div className="supporterStat"><span>Qualification</span><strong>{Number(city.progress_pct||0).toFixed(0)}%</strong><Progress value={city.progress_pct}/></div>
-      <div className="supporterStat highlight"><span>Your status</span><strong>ACTIVE</strong><small>Verified city member</small></div>
+      <div className="supporterStat highlight"><span>Your Goal</span><strong>1</strong><small>You joined {city.name}</small></div>
+      <div className="supporterStat"><span>Your Assists</span><strong>{fmt(me.qualificationImpact?.assists||0)}</strong><small>People who joined through you</small></div>
+      <div className="supporterStat"><span>Your Branch</span><strong>{fmt(me.qualificationImpact?.branch||0)}</strong><small>Your full chain</small></div>
+      <div className="supporterStat"><span>City rank</span><strong>#{city.rank}</strong><small>{fmt(city.verified_supporters)} Goals</small></div>
     </section>
 
     <section className="shareChoice">
-      <div><small>YOUR NEXT MOVE</small><h3>Help {city.name} bring the next supporter.</h3><p>Your qualification poster already shows the live city progress. Share it first. Use the studio only when you want another format.</p></div>
+      <div><small>YOUR NEXT MOVE</small><h3>Go for your next Assist.</h3><p>Share your city. When one person joins through your link, your Assist count goes up and they score their own Goal.</p></div>
       <div className="shareChoiceActions"><button className="goldBtn" onClick={()=>create('qualification')}><Share2 size={16}/> Share City Now</button><button className="glassBtn" onClick={()=>setShowStudio(v=>!v)}>{showStudio?'Hide Poster Studio':'More Poster Options'}</button></div>
     </section>
     {showStudio&&<>    <section className="shareStudio">
@@ -424,7 +425,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
       fulltime:{eyebrow:'FULL TIME',title:`${(match.winner?.name||leader?.name||city.name).toUpperCase()}`,subtitle:`${home.code} ${homeScore} — ${awayScore} ${away.code}`,footer:'Somali Cup · The city story continues'},
       motm:{eyebrow:'MAN OF THE MATCH',title:'THE IMPACT RACE',subtitle:`${mine?.assists??mine?.direct_joins??0} assists · ${mine?.downstream_joins??0} branch`,footer:'Verified impact. Real supporters.'}
     };
-    try{await sharePoster({city,...presets[type],fromName:me?.user?.nickname||me?.user?.displayName||''});setMsg('Your Somali Cup poster is ready.')}catch{setMsg('Could not create poster on this device.')}
+    try{await sharePoster({city,...presets[type],fromName:me?.user?.nickname||me?.user?.displayName||'',refPublicId:me?.user?.publicId||''});setMsg('Your Somali Cup poster is ready.')}catch{setMsg('Could not create poster on this device.')}
   };
 
   return <div className="matchExperience">
@@ -567,7 +568,8 @@ function JoinedMoment({payload,city,onDone}){
         title:`I REPRESENT ${city.name.toUpperCase()}`,
         subtitle:`${supporters?'Goal #'+fmt(supporters)+' for '+city.name:'My Goal now counts'}`,
         footer:rivalryLine||(remaining?`I scored Goal #${fmt(supporters)} — help ${city.name} score Goal #${fmt(nextNumber)}`:`${city.name} reached its target`),
-        fromName:supporterName
+        fromName:supporterName,
+        refPublicId:payload.user?.publicId||''
       });
     }finally{setSharing(false)}
   };
@@ -599,7 +601,8 @@ function JoinExperience({standings,initialCity,onClose,onJoined}){
       const payload=await api('/api/identity/join',{method:'POST',body:JSON.stringify({
         displayName,nickname:'',email:'',cityCode:city.code,
         source:(params.get('src')||'direct').slice(0,24),
-        referredBy:(params.get('from')||'').slice(0,80)
+        referredBy:(params.get('from')||'').slice(0,80),
+        refPublicId:(params.get('ref')||'').slice(0,64)
       })});
       onJoined(payload);
     }catch(e){setError(e.message.replaceAll('_',' '))}
@@ -628,7 +631,7 @@ function JoinExperience({standings,initialCity,onClose,onJoined}){
 
       {step===2&&<>
         <div className="joinTitle"><small>STEP 2 OF 2</small><h2>Join {city.name}.</h2><p>Add your name. Then your city gets your Goal.</p></div>
-        <div className="joinSelectedCity"><CityThumb city={city} size="lg"/><div><small>YOU ARE JOINING</small><h3>{city.name}</h3><span>{fmt(Math.max(0,Number(city.qualification_target||0)-Number(city.verified_supporters||0)))} more supporters needed</span></div></div>
+        <div className="joinSelectedCity"><CityThumb city={city} size="lg"/><div><small>YOU ARE JOINING</small><h3>{city.name}</h3><span>{fmt(Math.max(0,Number(city.qualification_target||0)-Number(city.verified_supporters||0)))} Goals needed</span></div></div>
         <label className="singleNameField">Your name<input value={displayName} onChange={e=>setDisplayName(e.target.value)} autoFocus placeholder="Your name"/></label>
         <div className="joinPromise"><ShieldCheck/><span>One city. One season. One Goal from you.</span></div>
         {error&&<div className="errorBox">{error}</div>}
