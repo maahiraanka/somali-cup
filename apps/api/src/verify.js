@@ -49,6 +49,13 @@ await check('tournament_events_table',()=>pool.query("SELECT event_type,created_
 await check('competitions_table',()=>pool.query("SELECT slug,competition_type,choice_type,language_preset,status FROM competitions LIMIT 1"));
 await check('competition_choices_table',()=>pool.query("SELECT competition_id,name,code,choice_type,status FROM competition_choices LIMIT 1"));
 await check('competition_nominations_table',()=>pool.query("SELECT competition_id,name,status FROM competition_nominations LIMIT 1"));
+await check('competition_supporters_table',()=>pool.query("SELECT competition_id,choice_id,user_id,supporter_no FROM competition_supporters LIMIT 1"));
+await check('competition_device_claims_table',()=>pool.query("SELECT competition_id,user_id,device_hash FROM competition_device_claims LIMIT 1"));
+await check('competition_referrals_table',()=>pool.query("SELECT competition_id,choice_id,referrer_user_id,referred_user_id FROM competition_referrals LIMIT 1"));
+await check('best_city_competition_seed',async()=>{
+  const [[r]]=await pool.query("SELECT id FROM competitions WHERE slug='best-city-somalia' AND language_preset='CITY' LIMIT 1");
+  if(!r)throw new Error('Best City competition seed missing');
+});
 await check('somali_cup_competition_backfill',async()=>{
   const [[r]]=await pool.query("SELECT id FROM competitions WHERE slug='somali-cup' LIMIT 1");
   if(!r)throw new Error('Somali Cup competition backfill missing');
