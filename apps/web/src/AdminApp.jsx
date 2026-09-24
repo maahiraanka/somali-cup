@@ -224,7 +224,7 @@ function MatchesAdmin({d,act}){
 function TournamentAdmin({d,act}){
   return <>
     <section className="adminPanel"><div className="adminPanelAction"><PanelHead eyebrow="ROAD TO THE CUP" title={d?.season?.name||'Tournament'}/><button className="adminPrimary compact" onClick={()=>act(()=>adminApi('/api/admin/tournament/progress',{method:'POST'}),'Tournament progression checked')}>RUN PROGRESSION <ChevronRight size={14}/></button></div>
-      {(d?.stages||[]).length?<div className="adminStageGrid">{d.stages.map(s=><article key={s.code}><div><small>{s.type}</small><h3>{s.name}</h3></div><span className={'status '+String(s.status).toLowerCase()}>{s.status}</span><p>{s.type==='GROUP'?fmt(s.groups?.length)+' groups':fmt(s.matches?.length)+' fixtures'}</p></article>)}</div>:<Empty title="Tournament structure not published" body="The engine is ready. Configure stages after qualification decides the field."/ >}
+      {(d?.stages||[]).length?<div className="adminStageGrid">{d.stages.map(s=><article key={s.code}><div><small>{s.type}</small><h3>{s.name}</h3></div><span className={'status '+String(s.status).toLowerCase()}>{s.status}</span><p>{s.type==='GROUP'?fmt(s.groups?.length)+' groups':fmt(s.matches?.length)+' fixtures'}</p></article>)}</div>:<Empty title="Tournament structure not published" body="The engine is ready. Configure stages after qualification decides the field."/>}
     </section>
   </>
 }
@@ -239,7 +239,7 @@ function IntegrityAdmin({d}){
   const s=d?.summary||{};
   return <>
     <div className="adminStats integrity"><Stat label="Device claims" value={s.deviceClaims} detail="Bound supporter identities"/><Stat label="Recoveries" value={s.deviceRecoveries} detail="Sessions restored"/><Stat label="Duplicate blocks" value={s.duplicateDeviceBlocks} detail="Same-device repeat attempts"/><Stat label="Network bursts" value={s.networkBurstSignals} detail="Review only" tone={s.networkBurstSignals?'warn':''}/></div>
-    <section className="adminPanel"><PanelHead eyebrow="REVIEW EVIDENCE" title="Recent integrity signals"/><div className="adminSignalList">{(d?.recent||[]).length?(d.recent||[]).map(r=><div key={r.id}><ShieldCheck size={16}/><div><b>{nice(r.event_type)}</b><small>{r.display_name||'Anonymous attempt'} · {new Date(r.created_at).toLocaleString()}</small></div><span>{r.device_hint||r.network_hint||'—'}</span></div>):<Empty compact title="No review signals" body="No recent duplicate-device or burst events."/ >}</div></section>
+    <section className="adminPanel"><PanelHead eyebrow="REVIEW EVIDENCE" title="Recent integrity signals"/><div className="adminSignalList">{(d?.recent||[]).length?(d.recent||[]).map(r=><div key={r.id}><ShieldCheck size={16}/><div><b>{nice(r.event_type)}</b><small>{r.display_name||'Anonymous attempt'} · {new Date(r.created_at).toLocaleString()}</small></div><span>{r.device_hint||r.network_hint||'—'}</span></div>):<Empty compact title="No review signals" body="No recent duplicate-device or burst events."/>}</div></section>
   </>
 }
 
@@ -271,6 +271,6 @@ function AwardsAdmin({d,confirmed,act}){
 }
 
 function AuditAdmin({d}){return <section className="adminPanel"><PanelHead eyebrow="IMMUTABLE HISTORY" title="Control actions"/><AuditRows rows={d?.audit||[]}/></section>}
-function AuditRows({rows}){return <div className="adminAuditRows">{rows.length?rows.map(r=><div key={r.id}><Activity size={15}/><div><b>{nice(r.action)}</b><small>{r.entity_type} · {r.entity_id} · {r.actor_name||'System'}</small></div><span>{new Date(r.created_at).toLocaleString()}</span></div>):<Empty compact title="No audit events yet" body="Operational changes will appear here."/ >}</div>}
+function AuditRows({rows}){return <div className="adminAuditRows">{rows.length?rows.map(r=><div key={r.id}><Activity size={15}/><div><b>{nice(r.action)}</b><small>{r.entity_type} · {r.entity_id} · {r.actor_name||'System'}</small></div><span>{new Date(r.created_at).toLocaleString()}</span></div>):<Empty compact title="No audit events yet" body="Operational changes will appear here."/>}</div>}
 function PanelHead({eyebrow,title}){return <div className="adminPanelHead"><small>{eyebrow}</small><h2>{title}</h2></div>}
 function Empty({title,body,compact=false}){return <div className={'adminEmpty '+(compact?'compact':'')}><LockKeyhole size={compact?17:25}/><div><b>{title}</b><p>{body}</p></div></div>}
