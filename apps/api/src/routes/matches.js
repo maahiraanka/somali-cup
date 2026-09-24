@@ -107,6 +107,7 @@ router.get('/:publicId',async(req,res,next)=>{
 });
 
 router.post('/:publicId/join',requireSession,async(req,res,next)=>{
+  try{const [[op]]=await pool.query("SELECT setting_value FROM platform_settings WHERE setting_key='MATCH_OPERATIONS_MODE' LIMIT 1");if(op?.setting_value==='FROZEN')return res.status(503).json({error:'match_operations_temporarily_frozen'})}catch(e){return next(e)}
   await syncMatchLifecycle(req.params.publicId).catch(()=>{});
   const inviteToken=typeof req.body?.inviteToken==='string'?req.body.inviteToken.trim().slice(0,32):'';
   const conn=await pool.getConnection();
@@ -146,6 +147,7 @@ router.post('/:publicId/join',requireSession,async(req,res,next)=>{
 });
 
 router.post('/:publicId/activate',requireSession,async(req,res,next)=>{
+  try{const [[op]]=await pool.query("SELECT setting_value FROM platform_settings WHERE setting_key='MATCH_OPERATIONS_MODE' LIMIT 1");if(op?.setting_value==='FROZEN')return res.status(503).json({error:'match_operations_temporarily_frozen'})}catch(e){return next(e)}
   await syncMatchLifecycle(req.params.publicId).catch(()=>{});
   const conn=await pool.getConnection();
   try{
