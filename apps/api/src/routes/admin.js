@@ -475,6 +475,79 @@ router.post('/matches',async(req,res,next)=>{
   }catch(e){await conn.rollback();if(e.status)return res.status(e.status).json({error:e.message});next(e)}finally{conn.release()}
 });
 
+router.patch('/matches/:publicId',async(req,res,next)=>{
+  const startsAt=req.body?.startsAt;
+  const lobbyOpensAt=req.body?.lobbyOpensAt||null;
+  const roundCode=String(req.body?.roundCode||'').trim().slice(0,40);
+  const homeCode=String(req.body?.homeCityCode||'').trim().toUpperCase();
+  const awayCode=String(req.body?.awayCityCode||'').trim().toUpperCase();
+  const durationMinutes=Math.max(1,Math.min(1440,Number(req.body?.durationMinutes)||60));
+  if(!startsAt||!roundCode||!homeCode||!awayCode||homeCode===awayCode)return res.status(400).json({error:'invalid_fixture'});
+  const startDate=new Date(startsAt);
+  if(Number.isNaN(startDate.getTime()))return res.status(400).json({error:'invalid_fixture_time'});
+  const regulationEndsAt=new Date(startDate.getTime()+durationMinutes*60000);
+  const conn=await pool.getConnection();
+  try{
+    await conn.beginTransaction();
+    const [[match]]=await conn.query('SELECT * FROM matches WHERE public_id=? LIMIT 1 FOR UPDATE',[req.params.publicId]);
+    if(!match)throw Object.assign(new Error('match_not_found'),{status:404});
+    if(!['SCHEDULED','LOBBY'].includes(match.status))throw Object.assign(new Error('fixture_edit_locked_after_live'),{status:409});
+    const [cities]=await conn.query('SELECT id,code FROM cities WHERE code IN (?,?) AND is_active=1',[homeCode,awayCode]);
+    if(cities.length!==2)throw Object.assign(new Error('city_not_found'),{status:404});
+    const home=cities.find(c=>c.code===homeCode),away=cities.find(c=>c.code===awayCode);
+    const before={homeCityId:match.home_city_id,awayCityId:match.away_city_id,roundCode:match.round_code,startsAt:match.starts_at,lobbyOpensAt:match.lobby_opens_at,regulationEndsAt:match.regulation_ends_at};
+    await conn.query('UPDATE matches SET home_city_id=?,away_city_id=?,round_code=?,starts_at=?,lobby_opens_at=?,regulation_ends_at=? WHERE id=?',
+      [home.id,away.id,roundCode,startDate,lobbyOpensAt,regulationEndsAt,match.id]);
+    await conn.query('INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'MATCH_UPDATED','MATCH',String(match.id),JSON.stringify({before,after:{homeCode,awayCode,roundCode,startsAt,lobbyOpensAt,regulationEndsAt,durationMinutes}})]);
+    await conn.commit();
+    res.json({ok:true});
+  }catch(e){
+    await conn.rollback();
+    if(e.status)return res.status(e.status).json({error:e.message});
+    next(e);
+  }finally{conn.release()}
+});
+
+router.post('/matches/:publicId/score-adjustment',async(req,res,next)=>{
+  const homeScore=Number(req.body?.homeScore);
+  const awayScore=Number(req.body?.awayScore);
+  const reason=String(req.body?.reason||'').trim().slice(0,255);
+  if(!Number.isInteger(homeScore)||homeScore<0||!Number.isInteger(awayScore)||awayScore<0||reason.length<5){
+    return res.status(400).json({error:'valid_scores_and_reason_required'});
+  }
+  if(String(req.body?.confirmation||'')!=='CONFIRM SCORE CORRECTION'){
+    return res.status(400).json({error:'score_correction_confirmation_required'});
+  }
+  const conn=await pool.getConnection();
+  try{
+    await conn.beginTransaction();
+    const [[match]]=await conn.query('SELECT * FROM matches WHERE public_id=? LIMIT 1 FOR UPDATE',[req.params.publicId]);
+    if(!match)throw Object.assign(new Error('match_not_found'),{status:404});
+    if(match.status!=='LIVE')throw Object.assign(new Error('score_correction_live_only'),{status:409});
+    const adjustments=[
+      {cityId:match.home_city_id,delta:homeScore-Number(match.home_score||0),side:'HOME'},
+      {cityId:match.away_city_id,delta:awayScore-Number(match.away_score||0),side:'AWAY'}
+    ].filter(x=>x.delta!==0);
+    if(!adjustments.length){await conn.commit();return res.json({ok:true,changed:false})}
+    for(const a of adjustments){
+      const idem='admin-adjust:'+match.id+':'+Date.now()+':'+a.side+':'+crypto.randomBytes(4).toString('hex');
+      await conn.query("INSERT INTO scoring_events(match_id,city_id,participation_id,type,points,reason,idempotency_key) VALUES (?,?,NULL,'ADJUSTMENT',?,?,?)",
+        [match.id,a.cityId,a.delta,'ADMIN CORRECTION: '+reason,idem]);
+    }
+    const before={homeScore:Number(match.home_score||0),awayScore:Number(match.away_score||0)};
+    await conn.query('UPDATE matches SET home_score=?,away_score=?,score_version=score_version+1 WHERE id=?',[homeScore,awayScore,match.id]);
+    await conn.query('INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'MATCH_SCORE_CORRECTED','MATCH',String(match.id),JSON.stringify({before,after:{homeScore,awayScore},reason})]);
+    await conn.commit();
+    res.json({ok:true,changed:true});
+  }catch(e){
+    await conn.rollback();
+    if(e.status)return res.status(e.status).json({error:e.message});
+    next(e);
+  }finally{conn.release()}
+});
+
 router.patch('/matches/:publicId/state',async(req,res,next)=>{
   const target=String(req.body?.status||'').toUpperCase();
   const transitions={SCHEDULED:['LOBBY','CANCELLED'],LOBBY:['LIVE','CANCELLED'],LIVE:['FINAL','CANCELLED'],FINAL:[],CANCELLED:[]};
