@@ -459,6 +459,10 @@ function MatchesAdmin({d,act}){
   const [showCreate,setShowCreate]=useState(false);
   const [editing,setEditing]=useState(null);
   const [scoreEdit,setScoreEdit]=useState(null);
+  const [detailId,setDetailId]=useState(null);
+  const [detail,setDetail]=useState(null);
+  const [detailLoading,setDetailLoading]=useState(false);
+  const [recoveryReason,setRecoveryReason]=useState('');
   const blank={homeCityCode:'',awayCityCode:'',roundCode:'GROUP',startsAt:'',lobbyOpensAt:'',durationMinutes:60};
   const [form,setForm]=useState(blank);
   const [editForm,setEditForm]=useState(blank);
@@ -490,10 +494,23 @@ function MatchesAdmin({d,act}){
   const saveFixture=m=>act(()=>adminApi('/api/admin/matches/'+m.public_id,{method:'PATCH',body:JSON.stringify({
     ...editForm,startsAt:iso(editForm.startsAt),lobbyOpensAt:editForm.lobbyOpensAt?iso(editForm.lobbyOpensAt):null
   })}),'Fixture updated');
+  const inspect=async publicId=>{
+    if(detailId===publicId){setDetailId(null);setDetail(null);return}
+    setDetailId(publicId);setDetail(null);setDetailLoading(true);setRecoveryReason('');
+    try{setDetail(await adminApi('/api/admin/matches/'+publicId+'/detail'))}
+    finally{setDetailLoading(false)}
+  };
+  const recoverReservation=(m,p,status)=>{
+    if(recoveryReason.trim().length<5)return;
+    if(!window.confirm((status==='REVOKED'?'Revoke':'Restore')+' this unused reservation? The action will be audited.'))return;
+    act(()=>adminApi('/api/admin/matches/'+m.public_id+'/participations/'+p.id,{method:'PATCH',body:JSON.stringify({
+      status,reason:recoveryReason,confirmation:'CONFIRM RESERVATION RECOVERY'
+    })}),status==='REVOKED'?'Reservation revoked':'Reservation restored').then(()=>{setDetailId(null);setDetail(null)});
+  };
 
   return <>
     <section className="matchOpsHeader">
-      <div><small>FIXTURE OPERATIONS</small><h2>Run the match calendar</h2><p>Create, reschedule, open, start, finish or cancel fixtures from one control desk.</p></div>
+      <div><small>FIXTURE OPERATIONS</small><h2>Run the match calendar</h2><p>Create, reschedule, inspect, recover, start, finish or cancel fixtures from one control desk.</p></div>
       <button className="adminPrimary" onClick={()=>setShowCreate(v=>!v)}><Plus size={15}/> {showCreate?'CLOSE FORM':'CREATE FIXTURE'}</button>
     </section>
 
@@ -525,6 +542,7 @@ function MatchesAdmin({d,act}){
             if(target==='FINAL'&&!window.confirm('Finish this match now? The winner will be calculated from the verified score.'))return;
             act(()=>adminApi('/api/admin/matches/'+m.public_id+'/state',{method:'PATCH',body:JSON.stringify({status:target})}),'Match moved to '+target)
           }}>{next[m.status]==='FINAL'?'FULL TIME':'MOVE TO '+nice(next[m.status])} <ChevronRight size={12}/></button>}
+          <button onClick={()=>inspect(m.public_id)}><Activity size={12}/> {detailId===m.public_id?'CLOSE DETAIL':'INSPECT'}</button>
           {['SCHEDULED','LOBBY'].includes(m.status)&&<button onClick={()=>editing===m.public_id?setEditing(null):openEdit(m)}><Pencil size={12}/> EDIT</button>}
           {m.status==='LIVE'&&<button onClick={()=>{setScoreEdit(scoreEdit===m.public_id?null:m.public_id);setScoreForm({homeScore:Number(m.home_score),awayScore:Number(m.away_score),reason:''})}}><Pencil size={12}/> SCORE CORRECTION</button>}
           {['SCHEDULED','LOBBY','LIVE'].includes(m.status)&&<button className="danger" onClick={()=>{
@@ -538,6 +556,7 @@ function MatchesAdmin({d,act}){
             }
           }}><RefreshCw size={12}/> REOPEN</button>}
         </div>
+
         {editing===m.public_id&&<div className="matchInlineEditor">
           <div className="opsFormGrid">
             <label><span>Home</span><select value={editForm.homeCityCode} onChange={e=>setEditForm({...editForm,homeCityCode:e.target.value})}>{cities.map(c=><option key={c.code} value={c.code}>{c.name}</option>)}</select></label>
@@ -549,6 +568,7 @@ function MatchesAdmin({d,act}){
           </div>
           <button className="adminPrimary compact" onClick={()=>saveFixture(m)}><Save size={13}/> SAVE FIXTURE</button>
         </div>}
+
         {scoreEdit===m.public_id&&<div className="scoreCorrection">
           <div><label><span>{m.home_code}</span><input type="number" min="0" value={scoreForm.homeScore} onChange={e=>setScoreForm({...scoreForm,homeScore:Number(e.target.value)})}/></label><label><span>{m.away_code}</span><input type="number" min="0" value={scoreForm.awayScore} onChange={e=>setScoreForm({...scoreForm,awayScore:Number(e.target.value)})}/></label></div>
           <label><span>Reason for correction</span><input value={scoreForm.reason} onChange={e=>setScoreForm({...scoreForm,reason:e.target.value})} placeholder="Explain the verified correction"/></label>
@@ -557,6 +577,31 @@ function MatchesAdmin({d,act}){
               act(()=>adminApi('/api/admin/matches/'+m.public_id+'/score-adjustment',{method:'POST',body:JSON.stringify({...scoreForm,confirmation:'CONFIRM SCORE CORRECTION'})}),'Score corrected')
             }
           }}><Save size={13}/> APPLY AUDITED CORRECTION</button>
+        </div>}
+
+        {detailId===m.public_id&&<div className="matchInvestigation">
+          {detailLoading?<div className="adminLoading compact"><RefreshCw className="spin" size={16}/><span>Loading match evidence…</span></div>:detail&&<>
+            <div className="investigationStats">
+              <div><span>Participants</span><strong>{fmt(detail.participants?.length||0)}</strong></div>
+              <div><span>Score events</span><strong>{fmt(detail.scores?.length||0)}</strong></div>
+              <div><span>Assists</span><strong>{fmt(detail.assists?.length||0)}</strong></div>
+              <div><span>State events</span><strong>{fmt(detail.states?.length||0)}</strong></div>
+            </div>
+            <div className="investigationGrid">
+              <section><h4>Score ledger</h4><div className="evidenceRows">{(detail.scores||[]).length?detail.scores.map(x=><div key={x.id}><span className={'evidenceType '+String(x.type).toLowerCase()}>{x.type}</span><div><b>{x.city_code} {x.points>0?'+':''}{x.points}</b><small>{x.supporter_name||'Operator / system'}{x.reason?' · '+x.reason:''}</small></div><time>{new Date(x.created_at).toLocaleString()}</time></div>):<p>No score events.</p>}</div></section>
+              <section><h4>State timeline</h4><div className="evidenceRows">{(detail.states||[]).length?detail.states.map(x=><div key={x.id}><Activity size={13}/><div><b>{x.from_status||'—'} → {x.to_status}</b><small>{x.actor_name||'System / lifecycle'}</small></div><time>{new Date(x.created_at).toLocaleString()}</time></div>):<p>No state events.</p>}</div></section>
+            </div>
+            <section className="participantRecovery">
+              <div className="participantRecoveryHead"><div><h4>Participants & safe recovery</h4><p>Only unused REGISTERED/REVOKED reservations can be changed here. Scored participation is locked.</p></div><input value={recoveryReason} onChange={e=>setRecoveryReason(e.target.value)} placeholder="Recovery reason"/></div>
+              <div className="participantRows">{(detail.participants||[]).map(p=><div key={p.id}>
+                <div><b>{p.nickname||p.display_name}</b><small>{p.city_code} · {p.status} · generation {p.generation}</small></div>
+                <span>{p.scored?'GOAL SCORED':p.assists?fmt(p.assists)+' assists':'Unused'}</span>
+                {!p.scored&&p.status==='REGISTERED'&&<button className="danger" disabled={recoveryReason.trim().length<5} onClick={()=>recoverReservation(m,p,'REVOKED')}>REVOKE</button>}
+                {!p.scored&&p.status==='REVOKED'&&<button disabled={recoveryReason.trim().length<5} onClick={()=>recoverReservation(m,p,'REGISTERED')}>RESTORE</button>}
+              </div>)}</div>
+            </section>
+            <section className="matchAuditMini"><h4>Match audit</h4><AuditRows rows={detail.audit||[]}/></section>
+          </>}
         </div>}
       </article>)}</div>
     </section>
