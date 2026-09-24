@@ -26,7 +26,13 @@ const demoStandings=[
   {rank:9,code:'JOW',name:'Jowhar',country:'Somalia',tier:'CHAMPIONSHIP',status:'QUALIFYING',qualification_target:300,verified_supporters:149,progress_pct:49.7,is_open:1},
   {rank:10,code:'BUR',name:'Burco',country:'Somalia',tier:'CHAMPIONSHIP',status:'QUALIFYING',qualification_target:300,verified_supporters:141,progress_pct:47,is_open:1}
 ];
-const demoMatches=[{publicId:'sc2027mellondonqf000000001',seasonName:'Somali Cup 2027',roundCode:'QUARTERFINAL',status:'LOBBY',startsAt:'2027-06-12T09:30:00.000Z',lobbyOpensAt:'2027-06-12T09:00:00.000Z',scoreVersion:0,home:{code:'MOG',name:'Mogadishu',country:'Somalia',score:0},away:{code:'HAR',name:'Hargeisa',country:'Somalia',score:0}}];
+const demoMatches=[
+  {publicId:'sc2027-mog-har-group-01',seasonName:'Somali Cup 2027',roundCode:'GROUP',status:'LOBBY',startsAt:'2027-06-12T09:30:00.000Z',lobbyOpensAt:'2027-06-12T09:00:00.000Z',scoreVersion:0,home:{code:'MOG',name:'Mogadishu',country:'Somalia',score:0},away:{code:'HAR',name:'Hargeisa',country:'Somalia',score:0}},
+  {publicId:'sc2027-kis-gar-group-01',seasonName:'Somali Cup 2027',roundCode:'GROUP',status:'LOBBY',startsAt:'2027-06-12T10:00:00.000Z',lobbyOpensAt:'2027-06-12T09:30:00.000Z',scoreVersion:0,home:{code:'KIS',name:'Kismayo',country:'Somalia',score:0},away:{code:'GAR',name:'Garowe',country:'Somalia',score:0}},
+  {publicId:'sc2027-bos-bai-group-01',seasonName:'Somali Cup 2027',roundCode:'GROUP',status:'LOBBY',startsAt:'2027-06-12T10:30:00.000Z',lobbyOpensAt:'2027-06-12T10:00:00.000Z',scoreVersion:0,home:{code:'BOS',name:'Bosaso',country:'Somalia',score:0},away:{code:'BAI',name:'Baidoa',country:'Somalia',score:0}},
+  {publicId:'sc2027-blw-gal-group-01',seasonName:'Somali Cup 2027',roundCode:'GROUP',status:'LOBBY',startsAt:'2027-06-12T11:00:00.000Z',lobbyOpensAt:'2027-06-12T10:30:00.000Z',scoreVersion:0,home:{code:'BLW',name:'Beledweyne',country:'Somalia',score:0},away:{code:'GAL',name:'Galkayo',country:'Somalia',score:0}},
+  {publicId:'sc2027-jow-bur-group-01',seasonName:'Somali Cup 2027',roundCode:'GROUP',status:'LOBBY',startsAt:'2027-06-12T11:30:00.000Z',lobbyOpensAt:'2027-06-12T11:00:00.000Z',scoreVersion:0,home:{code:'JOW',name:'Jowhar',country:'Somalia',score:0},away:{code:'BUR',name:'Burco',country:'Somalia',score:0}}
+];
 
 const flag=(country)=>({Australia:'🇦🇺','United Kingdom':'🇬🇧',Canada:'🇨🇦',Kenya:'🇰🇪','United States':'🇺🇸',Somalia:'🇸🇴',Sweden:'🇸🇪',Norway:'🇳🇴','United Arab Emirates':'🇦🇪'})[country]||'🌍';
 const fmt=n=>Number(n||0).toLocaleString();
@@ -210,13 +216,17 @@ export default function App(){
   const leaveViralLanding=()=>{setViralCity(null);window.history.replaceState({},'',window.location.pathname);setView('home')};
   const enterInvitedMatch=async()=>{
     if(!viralMatch?.match){setViralMatch(null);setView('matches');return}
-    const home=viralMatch.match.home,away=viralMatch.match.away;
-    const eligible=me?.membership?.code===home?.code||me?.membership?.code===away?.code;
+    const cityCode=me?.membership?.code;
+    const ownMatch=cityCode?matches.find(m=>m.home?.code===cityCode||m.away?.code===cityCode):null;
+    const target=ownMatch||viralMatch.match;
+    const home=target.home,away=target.away;
+    const eligible=cityCode===home?.code||cityCode===away?.code;
     if(eligible){
-      const invite=new URLSearchParams(window.location.search).get('invite')||'';
+      const rawInvite=new URLSearchParams(window.location.search).get('invite')||'';
+      const inviteToken=target.publicId===viralMatch.match.publicId?rawInvite:'';
       setInviteBusy(true);
       try{
-        await api(`/api/matches/${viralMatch.match.publicId}/join`,{method:'POST',body:JSON.stringify({inviteToken:invite})});
+        await api(`/api/matches/${target.publicId}/join`,{method:'POST',body:JSON.stringify({inviteToken})});
         setNotice(`You're in the ${me.membership.name} match squad.`);
         setTimeout(()=>setNotice(''),2200);
       }catch(e){
@@ -245,7 +255,7 @@ export default function App(){
     </header></>}
 
     <main className={(viralCity&&!me?.membership)||viralMatch?'mainStage viralStage':'mainStage'}>
-      {viralMatch?<ViralMatchLanding data={viralMatch} me={me} busy={inviteBusy} onIdentity={()=>requestJoin()} onEnter={enterInvitedMatch} onLeave={leaveMatchInvite}/>:viralCity&&!me?.membership?<ViralCityLanding city={viralCity} standings={standings} fromName={viralFrom} onJoin={()=>requestJoin(viralCity)} onOther={leaveViralLanding}/>:<>
+      {viralMatch?<ViralMatchLanding data={viralMatch} me={me} matches={matches} busy={inviteBusy} onIdentity={()=>requestJoin()} onEnter={enterInvitedMatch} onLeave={leaveMatchInvite}/>:viralCity&&!me?.membership?<ViralCityLanding city={viralCity} standings={standings} fromName={viralFrom} onJoin={()=>requestJoin(viralCity)} onOther={leaveViralLanding}/>:<>
         {view==='home'&&<Home standings={standings} top={top} total={total} season={season} myCity={myCity} onJoin={requestJoin} openCity={openCity} goQualification={()=>setView('qualification')} goMatches={()=>setView('matches')}/>}
         {view==='qualification'&&<Qualification standings={standings} season={season} onJoin={requestJoin} openCity={openCity}/>}
         {view==='cities'&&<Cities standings={standings} openCity={openCity} onJoin={requestJoin}/>}
@@ -270,15 +280,18 @@ export default function App(){
   </div>
 }
 
-function ViralMatchLanding({data,me,busy,onIdentity,onEnter,onLeave}){
-  const match=data?.match;
+function ViralMatchLanding({data,me,matches,busy,onIdentity,onEnter,onLeave}){
   const invite=data?.invite;
-  if(!match)return null;
+  const invitedMatch=data?.match;
+  if(!invitedMatch)return null;
+  const memberCode=me?.membership?.code;
+  const ownMatch=memberCode?matches.find(m=>m.home?.code===memberCode||m.away?.code===memberCode):null;
+  const match=ownMatch||invitedMatch;
   const home=match.home,away=match.away;
   const homeScore=Number(home?.score||0),awayScore=Number(away?.score||0);
-  const memberCode=me?.membership?.code;
   const memberCity=memberCode===home?.code?home:memberCode===away?.code?away:null;
   const inviterCity=invite?.city;
+  const redirected=Boolean(ownMatch&&ownMatch.publicId!==invitedMatch.publicId);
   const leader=homeScore===awayScore?null:(homeScore>awayScore?home:away);
   const gap=Math.abs(homeScore-awayScore);
   const statusCopy=match.status==='LIVE'
@@ -287,7 +300,7 @@ function ViralMatchLanding({data,me,busy,onIdentity,onEnter,onLeave}){
   return <div className="matchInviteLanding">
     <section className="matchInviteHero">
       <div className="matchInviteTop"><Logo/><span className={match.status==='LIVE'?'inviteLive live':'inviteLive'}><i/> {match.status}</span></div>
-      <div className="matchInviteCallout"><UserPlus size={16}/><span><b>{invite?.from||'A supporter'}</b> from {inviterCity?.name||'their city'} called you into this match.</span></div>
+      <div className="matchInviteCallout"><UserPlus size={16}/><span>{redirected?<><b>{invite?.from||'A supporter'}</b> called you into Somali Cup. We opened your own city’s fixture.</>:<><b>{invite?.from||'A supporter'}</b> from {inviterCity?.name||'their city'} called you into this match.</>}</span></div>
       <div className="matchInviteVersus">
         <div className="inviteCity" style={{backgroundImage:`linear-gradient(180deg,rgba(2,8,18,.18),rgba(2,8,18,.95)),url("${imgFor(home)}")`}}><CityThumb city={home} size="lg"/><small>{home.code}</small><h2>{home.name}</h2><strong>{fmt(homeScore)}</strong></div>
         <div className="inviteVs"><small>{match.roundCode||'SOMALI CUP'}</small><b>VS</b><span>{match.status==='LIVE'?'LIVE SCORE':'FIXTURE'}</span></div>
@@ -295,8 +308,8 @@ function ViralMatchLanding({data,me,busy,onIdentity,onEnter,onLeave}){
       </div>
       <div className="matchInviteAction">
         <small>THE MATCH IS CALLING</small>
-        <h1>{memberCity?`Your city is in this.`:!me?'Which city is yours?':'Watch the rivalry unfold.'}</h1>
-        <p>{statusCopy} {memberCity?`Enter for ${memberCity.name}. Your verified entry can score exactly 1 Goal.`:!me?'Choose your real city first. If your city is playing, you can enter its side.':'Your city is not playing in this fixture, but you can watch the verified score.'}</p>
+        <h1>{memberCity?`Your city is playing.`:!me?'Which city is yours?':'Your city has a fixture.'}</h1>
+        <p>{statusCopy} {memberCity?`Enter for ${memberCity.name}. Your verified entry can score exactly 1 Goal.`:!me?'Choose your real city first. Every active city has a current fixture.':'Somali Cup is opening your city’s current fixture.'}</p>
         {!me?<button className="matchInvitePrimary" onClick={onIdentity}>CHOOSE MY CITY <ArrowRight size={18}/></button>:
           memberCity?<button className="matchInvitePrimary" disabled={busy} onClick={onEnter}>{busy?'ENTERING…':`ENTER FOR ${memberCity.name.toUpperCase()}`} <ArrowRight size={18}/></button>:
           <button className="matchInvitePrimary watch" onClick={onEnter}>WATCH THE MATCH <Radio size={17}/></button>}
@@ -517,9 +530,11 @@ function MatchCenter({matches,me,onNeedIdentity}){
   useEffect(()=>{
     const wanted=new URLSearchParams(window.location.search).get('match');
     const deep=wanted?matches.find(m=>m.publicId===wanted):null;
-    if(deep && selected?.publicId!==deep.publicId)setSelected(deep);
-    else if(!selected&&matches[0])setSelected(matches[0]);
-  },[matches,selected]);
+    const cityCode=me?.membership?.code;
+    const own=cityCode?matches.find(m=>m.home?.code===cityCode||m.away?.code===cityCode):null;
+    const target=own||deep||matches[0]||null;
+    if(target && selected?.publicId!==target.publicId)setSelected(target);
+  },[matches,selected?.publicId,me?.membership?.code]);
   useEffect(()=>{load()},[selected?.publicId,Boolean(me)]);
   const match=live?.match||selected;
   if(!match)return <div className="pageWrap"><section className="pageHero compact"><h1>No fixtures yet.</h1></section></div>;
@@ -567,7 +582,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
       <div className="nextActionCopy">
         <small>YOUR NEXT MOVE</small>
         {!me?<><h3>Choose your city first.</h3><p>Your city identity decides which side you can represent in Somali Cup.</p></>:
-        !myMatchCity?<><h3>Watch this rivalry.</h3><p>Your city is not playing in this fixture, so there is nothing you need to do here.</p></>:
+        !myMatchCity?<><h3>Taking you to your city’s match.</h3><p>Every active city has a current Somali Cup fixture.</p></>:
         !mine?<><h3>Join {myMatchCity.name} in this match.</h3><p>Reserve your place. When it goes live, your verified entry scores 1 Goal.</p></>:
         mine.status==='REGISTERED'&&match.status==='LIVE'?<><h3>Enter now. Score once.</h3><p>Your verified entry scores exactly 1 Goal for {myMatchCity.name}.</p></>:
         mine.status==='REGISTERED'?<><h3>Your place is reserved.</h3><p>Use your personal link to bring your city into the lobby before kickoff.</p></>:
@@ -576,7 +591,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
       </div>
       <div className="nextActionButton">
         {!me?<button className="goldBtn" onClick={onNeedIdentity}>CHOOSE MY CITY <ArrowRight size={16}/></button>:
-        !myMatchCity?<button className="glassBtn" onClick={()=>setShowMatchDepth(v=>!v)}>{showMatchDepth?'Hide Match Detail':'Watch Match Detail'}</button>:
+        !myMatchCity?<button className="goldBtn" onClick={()=>{const own=matches.find(m=>m.home?.code===me?.membership?.code||m.away?.code===me?.membership?.code);if(own)setSelected(own)}}>OPEN MY CITY MATCH <ArrowRight size={16}/></button>:
         !mine?<button className="goldBtn" disabled={busy} onClick={join}>{busy?'Joining…':'JOIN THIS MATCH'} <ArrowRight size={16}/></button>:
         mine.status==='REGISTERED'&&match.status==='LIVE'?<button className="goldBtn" disabled={busy} onClick={activate}>{busy?'Entering…':'ENTER & SCORE'} <Play size={16}/></button>:
         mine.status==='REGISTERED'?<button className="goldBtn" onClick={copyLink}><Share2 size={16}/> CALL MY CITY</button>:
