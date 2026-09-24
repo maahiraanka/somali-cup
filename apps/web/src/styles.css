@@ -71,3 +71,37 @@ box-shadow:inset 0 0 0 1px rgba(95,215,255,.25),0 0 45px rgba(28,167,255,.16)}.g
   .matchTabs{overflow:auto;justify-content:flex-start}.supportMeter{grid-template-columns:64px 1fr 64px;padding:12px 10px}.supportMeter b{font-size:19px}.supportMeter span{font-size:7px}.broadcastHero{border-radius:16px}.scoreBoard strong{font-size:52px}
   .joinPanel{padding:22px 16px}.joinSteps>div{min-width:65px}.joinSteps>div b{font-size:7px}.joinCityGrid button{height:128px}.joinFooterBtns{flex-direction:column-reverse}.joinFooterBtns>*{width:100%}
 }
+
+
+/* v0.4 visual upgrade: national broadcast layer */
+.broadcastTicker{display:grid;grid-template-columns:1fr 1.2fr 1fr;border:1px solid rgba(77,182,255,.2);border-radius:14px;overflow:hidden;background:linear-gradient(180deg,rgba(8,20,35,.98),rgba(3,10,19,.98));box-shadow:0 14px 40px rgba(0,0,0,.24),inset 0 1px rgba(255,255,255,.02)}
+.broadcastTicker>div{min-height:64px;padding:12px 16px;display:grid;align-content:center;gap:2px;border-right:1px solid rgba(74,160,225,.12);position:relative}
+.broadcastTicker>div:last-child{border-right:0}.broadcastTicker b{font-size:10px;letter-spacing:.12em;color:#d9f0ff}.broadcastTicker em{font-style:normal;color:#8ca5bf;font-size:11px}.broadcastTicker span:not(.tickerLive){color:#ffcf4a;font-size:9px;font-weight:900}.tickerLive{position:absolute;right:10px;top:10px;background:#ef3148;color:#fff;border-radius:999px;padding:4px 7px;font-size:8px;font-weight:1000;box-shadow:0 0 18px rgba(239,49,72,.28)}
+
+.rivalrySpotlight{display:grid;grid-template-columns:1.05fr 1fr .72fr;align-items:stretch;min-height:220px;border:1px solid rgba(76,182,255,.22);border-radius:20px;overflow:hidden;background:
+radial-gradient(circle at 50% 50%,rgba(30,151,255,.13),transparent 26%),
+linear-gradient(135deg,#071727,#020811 70%);position:relative}
+.rivalrySpotlight:before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent 0 48%,rgba(255,255,255,.025) 50%,transparent 52%);pointer-events:none}
+.rivalryCopy{padding:28px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start}.rivalryCopy>small{color:#54d0ff;font-size:9px;letter-spacing:.16em;font-weight:1000}.rivalryCopy h3{font-size:34px;margin:7px 0 8px;letter-spacing:-.04em}.rivalryCopy h3 span{color:#6f88a3;font-size:18px;font-weight:700;margin:0 5px}.rivalryCopy p{margin:0 0 16px;color:#8fa5bd;max-width:520px;line-height:1.55;font-size:12px}
+.rivalryCities{display:flex;align-items:center;justify-content:center;gap:22px;padding:18px;border-left:1px solid rgba(75,164,224,.1);border-right:1px solid rgba(75,164,224,.1)}.rivalryCities>div{display:grid;justify-items:center;gap:4px}.rivalryCities strong{font-size:17px;letter-spacing:.12em}.rivalryCities span{font-size:10px;color:#8fa7bf}.versus{font-size:14px;color:#ffcf4a;background:#101d2d;border:1px solid rgba(255,207,74,.16);border-radius:999px;padding:9px}
+.rivalryMeta{display:flex;flex-direction:column;justify-content:center;padding:24px;background:linear-gradient(180deg,rgba(255,199,56,.055),rgba(255,199,56,.01))}.rivalryMeta>span{font-size:9px;color:#ffcf4a;font-weight:1000;letter-spacing:.15em}.rivalryMeta>b{font-size:22px;line-height:1.1;margin:8px 0}.rivalryMeta>small{color:#8298ae}
+
+.heroVisual{isolation:isolate}.heroVisual:before{content:"";position:absolute;inset:0;z-index:1;background:
+linear-gradient(115deg,rgba(1,7,17,.96) 0 33%,rgba(1,7,17,.34) 58%,rgba(1,7,17,.72) 100%),
+radial-gradient(circle at 73% 30%,rgba(24,160,255,.24),transparent 22%);pointer-events:none}.heroCopy,.heroImpact{z-index:3}.heroCopy h1{text-shadow:0 10px 35px rgba(0,0,0,.45)}.heroCopy h2{font-weight:850}.heroCopy p{font-weight:500}.panel,.cityCard,.cityPoster,.rivalrySpotlight,.heroVisual,.broadcastHero,.joinPanel{transition:border-color .2s ease,box-shadow .2s ease,transform .2s ease}.panel:hover{border-color:rgba(83,190,255,.27)}
+
+.cityCard:before,.cityPoster:before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(22,150,255,.03),transparent 35%,rgba(1,6,15,.2));pointer-events:none}
+.cityCardBody h4,.cityPoster h3{font-weight:900;letter-spacing:-.025em}
+.cityPoster:hover{transform:translateY(-4px);border-color:#2bc7ff;box-shadow:0 18px 45px rgba(0,117,196,.2)}
+.cityPoster:after{content:"";position:absolute;left:18px;right:18px;top:18px;height:1px;background:linear-gradient(90deg,#32cfff,transparent)}
+
+.matchExperience{position:relative}.matchExperience:before{content:"MATCH DAY";position:absolute;right:1%;top:-14px;font-size:56px;font-weight:1000;letter-spacing:-.05em;color:rgba(255,255,255,.025);pointer-events:none}.broadcastHero{box-shadow:0 26px 80px rgba(0,0,0,.36),0 0 50px rgba(25,146,255,.07)}.scoreBoard{position:relative}.scoreBoard:before{content:"SOMALI CUP";position:absolute;top:18px;color:rgba(255,255,255,.09);font-size:10px;font-weight:1000;letter-spacing:.3em}.matchSide{position:relative}.matchSide:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 60%,rgba(2,8,18,.45));pointer-events:none}.matchSide>*{position:relative;z-index:2}.supportMeter{box-shadow:inset 0 0 0 1px rgba(255,255,255,.015)}
+
+.joinOverlay{background:
+radial-gradient(circle at 20% 20%,rgba(30,151,255,.12),transparent 30%),
+#010610}.joinPanel{box-shadow:-30px 0 80px rgba(0,0,0,.45)}.joinTitle h2{font-size:40px}.joinCityGrid button{transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}.joinCityGrid button:hover{transform:translateY(-2px);border-color:rgba(42,201,255,.72)}.joinCityGrid button.selected:before{content:"SELECTED";position:absolute;top:8px;left:8px;background:#20c7ff;color:#00101a;border-radius:999px;padding:4px 6px;font-size:7px;font-weight:1000;letter-spacing:.08em}
+
+@media(max-width:900px){
+  .broadcastTicker{grid-template-columns:1fr}.broadcastTicker>div{border-right:0;border-bottom:1px solid rgba(74,160,225,.12)}.broadcastTicker>div:last-child{border-bottom:0}
+  .rivalrySpotlight{grid-template-columns:1fr}.rivalryCities{border-left:0;border-right:0;border-top:1px solid rgba(75,164,224,.1);border-bottom:1px solid rgba(75,164,224,.1)}
+}
