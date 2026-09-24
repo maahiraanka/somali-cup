@@ -24,6 +24,14 @@ function analyticsId(){
   if(!id){id=crypto.randomUUID?.()||('sc-'+Date.now()+'-'+Math.random().toString(36).slice(2));localStorage.setItem('somalicup_anon',id)}
   return id;
 }
+function deviceKey(){
+  let key=localStorage.getItem('somalicup_device');
+  if(!key){
+    key=crypto.randomUUID?.()||('device-'+Date.now()+'-'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2));
+    localStorage.setItem('somalicup_device',key);
+  }
+  return key;
+}
 function trackEvent(eventName,{cityCode='',matchPublicId='',source='',metadata={}}={}){
   const token=localStorage.getItem('somalicup_session');
   fetch('/api/analytics/event',{
@@ -198,7 +206,20 @@ export default function App(){
       setQualificationError(true);
     }
     try{
-      const d=await api('/api/identity/me');
+      let d;
+      try{
+        d=await api('/api/identity/me');
+      }catch(firstError){
+        if(firstError?.status===401){
+          try{
+            const recovered=await api('/api/identity/recover-device',{method:'POST',body:JSON.stringify({deviceKey:deviceKey()})});
+            if(recovered?.token){
+              localStorage.setItem('somalicup_session',recovered.token);
+              d=await api('/api/identity/me');
+            }else throw firstError;
+          }catch{throw firstError}
+        }else throw firstError;
+      }
       const latest=d?.qualificationImpact?.latestAssist;
       const publicId=d?.user?.publicId;
       if(publicId){
@@ -1021,10 +1042,16 @@ function JoinExperience({standings,initialCity,onClose,onJoined}){
         displayName,nickname:'',email:'',cityCode:city.code,
         source:(params.get('src')||'direct').slice(0,24),
         referredBy:(params.get('from')||'').slice(0,80),
-        refPublicId:(params.get('ref')||'').slice(0,64)
+        refPublicId:(params.get('ref')||'').slice(0,64),
+        deviceKey:deviceKey()
       })});
       onJoined(payload);
-    }catch(e){setError(e.message.replaceAll('_',' '))}
+    }catch(e){
+      if(e?.body?.error==='device_already_registered'){
+        const cityName=e.body?.city?.name;
+        setError(cityName?`This device already represents ${cityName} this season.`:'This device already has a Somali Cup supporter identity for this season.');
+      }else setError(e.message.replaceAll('_',' '))
+    }
     finally{setBusy(false)}
   };
 
