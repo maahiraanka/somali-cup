@@ -65,6 +65,12 @@ await check('best_city_rounds_seeded',async()=>{
   if(Number(r?.total||0)!==4)throw new Error('Best City must have 4 rounds');
   if(Number(r?.open_rounds||0)!==1)throw new Error('Best City must have exactly one open round');
 });
+await check('competition_creator_schema_ready',async()=>{
+  await pool.query("SELECT id,slug,status FROM competitions LIMIT 1");
+  await pool.query("SELECT id,competition_id,code FROM competition_choices LIMIT 1");
+  await pool.query("SELECT id,competition_id,sequence_no,status FROM competition_stages LIMIT 1");
+  await pool.query("SELECT stage_id,choice_id FROM competition_stage_choices LIMIT 1");
+});
 await check('best_city_competition_seed',async()=>{
   const [[r]]=await pool.query("SELECT id FROM competitions WHERE slug='best-city-somalia' AND language_preset='CITY' LIMIT 1");
   if(!r)throw new Error('Best City competition seed missing');
