@@ -202,6 +202,33 @@ router.get('/:publicId/me',requireSession,async(req,res,next)=>{
         (SELECT COUNT(*) FROM match_assists ma WHERE ma.assister_participation_id=mp.id) assists
       FROM match_participations mp JOIN cities c ON c.id=mp.city_id
       WHERE mp.match_id=? AND mp.user_id=? LIMIT 1`,[match.id,req.identity.user_id]);
+
+    let latestAssist=null;
+    if(p?.id){
+      const [[latest]]=await pool.query(`
+        SELECT ma.id,ma.created_at,u.display_name,u.nickname,c.code city_code,c.name city_name
+        FROM match_assists ma
+        JOIN match_participations scorer ON scorer.id=ma.scorer_participation_id
+        JOIN users u ON u.id=scorer.user_id
+        JOIN cities c ON c.id=ma.city_id
+        WHERE ma.match_id=? AND ma.assister_participation_id=?
+        ORDER BY ma.id DESC
+        LIMIT 1
+      `,[match.id,p.id]);
+      if(latest){
+        latestAssist={
+          id:Number(latest.id),
+          name:latest.nickname||latest.display_name||'Someone',
+          city:{code:latest.city_code,name:latest.city_name},
+          createdAt:latest.created_at
+        };
+      }
+      p.assists=Number(p.assists||0);
+      p.direct_joins=Number(p.direct_joins||0);
+      p.downstream_joins=Number(p.downstream_joins||0);
+      p.indirect_joins=Math.max(0,p.downstream_joins-p.direct_joins);
+      p.latestAssist=latestAssist;
+    }
     res.json({match:publicMatch(match),participation:p||null});
   }catch(e){next(e)}
 });
