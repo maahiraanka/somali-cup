@@ -94,6 +94,13 @@ async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer
   return linkCopied?'downloaded_link_copied':'downloaded';
 }
 
+const shareResultMessage=result=>({
+  shared:'Shared successfully.',
+  downloaded_link_copied:'Poster saved · invite link copied.',
+  downloaded:'Poster saved. Copy your invite link before posting it.',
+  cancelled:'Share cancelled.'
+})[result]||'Share ready.';
+
 function Logo(){return <div className="logoLock"><div className="cupMark">🏆</div><div><strong>SOMALI CUP</strong><small>Different cities. One people.</small></div></div>}
 function Progress({value}){const v=Math.max(0,Math.min(100,Number(value)||0));return <div className="progressTrack"><span style={{width:`${v}%`}}/></div>}
 function CityThumb({city,size='md'}){return <div className={`cityThumb ${size}`} style={{backgroundImage:`linear-gradient(180deg,transparent,rgba(1,8,18,.85)),url("${imgFor(city)}")`}}><span>{flag(city?.country)}</span><b>{city?.code}</b></div>}
@@ -497,17 +504,27 @@ function CityPage({city,me,onBack,onJoin}){
 
 function SupporterProfile({me,city,season,onJoin,onCity,onMatches}){
   const [showStudio,setShowStudio]=useState(false);
+  const [shareMsg,setShareMsg]=useState('');
   if(!me?.membership||!city)return <div className="pageWrap"><section className="pageHero compact"><div><small className="kicker">SUPPORTER IDENTITY</small><h1>Your Somali Cup <em>story starts here.</em></h1><p>Choose one city for the season and your supporter pass will live here.</p></div><button className="goldBtn" onClick={onJoin}>Choose Your City</button></section></div>;
   const name=me.user.nickname||me.user.displayName;
   const goalNumber=Number(me.qualificationImpact?.goalNumber||me.membership?.goal_number||0);
   const remaining=Math.max(0,Number(city.qualification_target||0)-Number(city.verified_supporters||0));
-  const create=(kind)=>{
+  const create=async(kind)=>{
     const presets={
       identity:{title:`I REPRESENT ${city.name.toUpperCase()}`,subtitle:`${name} · Verified Somali Cup supporter`,footer:'My city. My season. My Cup.'},
       qualification:{title:`${city.name.toUpperCase()} NEEDS ${fmt(remaining)} MORE`,subtitle:`${fmt(city.verified_supporters)} Goals scored · ${Number(city.progress_pct||0).toFixed(0)}% complete`,footer:`Help ${city.name} reach Somali Cup 2027`},
       callup:{title:'CALLING MY CITY',subtitle:`${city.name} supporters — join me in Somali Cup`,footer:'Represent your city at somalicup.com'}
     };
-    return sharePoster({city,...presets[kind],fromName:name,refPublicId:me.user.publicId});
+    try{
+      const result=await sharePoster({city,...presets[kind],fromName:name,refPublicId:me.user.publicId});
+      setShareMsg(shareResultMessage(result));
+      setTimeout(()=>setShareMsg(''),2600);
+      return result;
+    }catch{
+      setShareMsg('Could not create the poster on this device.');
+      setTimeout(()=>setShareMsg(''),2600);
+      return 'error';
+    }
   };
   return <div className="supporterPage">
     <section className="supporterHero" style={{backgroundImage:`linear-gradient(90deg,rgba(2,8,18,.98),rgba(2,8,18,.58),rgba(2,8,18,.85)),url("${imgFor(city)}")`}}>
@@ -540,6 +557,7 @@ function SupporterProfile({me,city,season,onJoin,onCity,onMatches}){
       </div>
     </section></>}
     <section className="profileActions"><button className="glassBtn" onClick={onCity}><MapPin size={15}/> Open {city.name}</button><button className="goldBtn" onClick={()=>create('qualification')}><Share2 size={15}/> Share Qualification Poster</button></section>
+    {shareMsg&&<div className="shareResultNotice"><Check size={15}/>{shareMsg}</div>}
   </div>
 }
 
@@ -643,7 +661,10 @@ function MatchCenter({matches,me,onNeedIdentity}){
       fulltime:{eyebrow:'FULL TIME',title:`${(match.winner?.name||leader?.name||city.name).toUpperCase()}`,subtitle:`${home.code} ${homeScore} — ${awayScore} ${away.code}`,footer:'Somali Cup · The city story continues'},
       motm:{eyebrow:'MAN OF THE MATCH',title:'THE IMPACT RACE',subtitle:`${mine?.assists??mine?.direct_joins??0} assists · ${mine?.downstream_joins??0} branch`,footer:'Verified impact. Real supporters.'}
     };
-    try{await sharePoster({city,...presets[type],fromName:me?.user?.nickname||me?.user?.displayName||'',refPublicId:me?.user?.publicId||''});setMsg('Your Somali Cup poster is ready.')}catch{setMsg('Could not create poster on this device.')}
+    try{
+      const result=await sharePoster({city,...presets[type],fromName:me?.user?.nickname||me?.user?.displayName||'',refPublicId:me?.user?.publicId||''});
+      setMsg(shareResultMessage(result));
+    }catch{setMsg('Could not create poster on this device.')}
   };
 
   return <div className="matchExperience">
@@ -737,6 +758,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
 
 function AssistMoment({moment,city,onDone}){
   const [sharing,setSharing]=useState(false);
+  const [shareMsg,setShareMsg]=useState('');
   const assists=Number(moment?.impact?.assists||0);
   const branch=Number(moment?.impact?.branch||0);
   const name=moment?.latest?.name||'Someone';
@@ -744,7 +766,7 @@ function AssistMoment({moment,city,onDone}){
   const share=async()=>{
     setSharing(true);
     try{
-      await sharePoster({
+      const result=await sharePoster({
         city,
         eyebrow:'ASSIST · VERIFIED',
         title:'I GOT THE ASSIST',
@@ -753,6 +775,7 @@ function AssistMoment({moment,city,onDone}){
         fromName:supporterName,
         refPublicId:moment?.user?.publicId||''
       });
+      setShareMsg(shareResultMessage(result));
     }finally{setSharing(false)}
   };
   return <div className="assistMomentOverlay">
@@ -768,6 +791,7 @@ function AssistMoment({moment,city,onDone}){
       </div>
       <div className="assistNext"><Zap size={18}/><div><b>Keep the chain moving.</b><span>One more person can become your next Assist and their own Goal.</span></div></div>
       <button className="joinedPrimary" disabled={sharing} onClick={share}>{sharing?'CREATING POSTER…':'GO FOR ANOTHER ASSIST'} <Share2 size={17}/></button>
+      {shareMsg&&<div className="momentShareResult">{shareMsg}</div>}
       <button className="joinedSecondary" onClick={onDone}>Not now</button>
     </section>
   </div>
@@ -775,6 +799,7 @@ function AssistMoment({moment,city,onDone}){
 
 function JoinedMoment({payload,city,onDone}){
   const [sharing,setSharing]=useState(false);
+  const [shareMsg,setShareMsg]=useState('');
   const supporters=Number(city.supporterNumber||city.verified_supporters||0);
   const goalNumber=Number(city.goalNumber||payload.city?.goalNumber||supporters);
   const target=Number(city.qualification_target||500);
@@ -790,7 +815,7 @@ function JoinedMoment({payload,city,onDone}){
   const share=async()=>{
     setSharing(true);
     try{
-      await sharePoster({
+      const result=await sharePoster({
         city,
         eyebrow:'I’M IN · SOMALI CUP 2027',
         title:`I REPRESENT ${city.name.toUpperCase()}`,
@@ -799,6 +824,7 @@ function JoinedMoment({payload,city,onDone}){
         fromName:supporterName,
         refPublicId:payload.user?.publicId||''
       });
+      setShareMsg(shareResultMessage(result));
     }finally{setSharing(false)}
   };
   return <div className="joinedMomentOverlay">
@@ -811,6 +837,7 @@ function JoinedMoment({payload,city,onDone}){
       <div className="joinedCityStrip"><CityThumb city={city} size="lg"/><div><span>YOUR CITY</span><strong>{city.name}</strong><small>{remaining?fmt(remaining)+' Goals needed to reach the target':'Qualification target reached'}</small></div></div>
       <div className="joinedShareReason"><Share2 size={18}/><div><b>{rivalry?.relation==='LEADING'?`Protect the lead. Make Goal #${fmt(nextNumber)} happen.`:rivalry?.relation==='BEHIND'?`Close the gap. Make Goal #${fmt(nextNumber)} happen.`:rivalry?.relation==='TIED'?`Take the lead. Make Goal #${fmt(nextNumber)} happen.`:`Help ${city.name} score Goal #${fmt(nextNumber)}.`}</b><span>Bring one person through your link. If they join, you get the Assist and they score the next Goal.</span></div></div>
       <button className="joinedPrimary" disabled={sharing} onClick={share}>{sharing?'CREATING POSTER…':`SHARE ${city.name.toUpperCase()}`} <Share2 size={17}/></button>
+      {shareMsg&&<div className="momentShareResult">{shareMsg}</div>}
       <button className="joinedSecondary" onClick={onDone}>Go to my supporter pass</button>
     </section>
   </div>
