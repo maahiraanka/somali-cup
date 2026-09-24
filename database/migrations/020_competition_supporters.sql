@@ -52,7 +52,7 @@ WHERE NOT EXISTS (SELECT 1 FROM competitions WHERE slug='best-city-somalia');
 
 INSERT INTO competition_choices(competition_id,name,short_name,code,choice_type,legacy_city_id,status,target,sort_order,metadata_json)
 SELECT cp.id,c.name,c.name,c.code,'CITY',c.id,'ACTIVE',1000,
-  ROW_NUMBER() OVER (ORDER BY c.name),
+  c.id,
   JSON_OBJECT('country',c.country,'tier',c.tier)
 FROM competitions cp
 JOIN cities c ON c.is_active=1
