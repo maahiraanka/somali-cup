@@ -105,3 +105,37 @@ radial-gradient(circle at 20% 20%,rgba(30,151,255,.12),transparent 30%),
   .broadcastTicker{grid-template-columns:1fr}.broadcastTicker>div{border-right:0;border-bottom:1px solid rgba(74,160,225,.12)}.broadcastTicker>div:last-child{border-bottom:0}
   .rivalrySpotlight{grid-template-columns:1fr}.rivalryCities{border-left:0;border-right:0;border-top:1px solid rgba(75,164,224,.1);border-bottom:1px solid rgba(75,164,224,.1)}
 }
+
+
+/* v0.5 world-class event layer */
+.roadToCup{border:1px solid rgba(77,183,255,.2);border-radius:20px;background:
+radial-gradient(circle at 82% 10%,rgba(255,207,74,.07),transparent 22%),
+linear-gradient(180deg,#071522,#030b14);padding:22px 24px;overflow:hidden;position:relative}
+.roadToCup:before{content:"2027";position:absolute;right:24px;top:-20px;font-size:120px;font-weight:1000;letter-spacing:-.08em;color:rgba(255,255,255,.018);pointer-events:none}
+.roadHead{display:flex;justify-content:space-between;align-items:end;position:relative;z-index:2}.roadHead small{color:#50d2ff;font-size:9px;font-weight:1000;letter-spacing:.18em}.roadHead h3{font-size:24px;margin:4px 0 0}.roadHead>span{font-size:10px;color:#ffcf4a;font-weight:1000;letter-spacing:.12em}
+.roadTrack{display:grid;grid-template-columns:auto 1fr auto 1fr auto 1fr auto 1fr auto;align-items:center;gap:12px;margin-top:22px;position:relative;z-index:2}
+.roadStage{display:flex;align-items:center;gap:10px;min-width:150px;color:#6e87a0}.roadStage i{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#0b1a2a;border:1px solid rgba(72,159,221,.16);font-style:normal;font-size:9px;font-weight:1000}.roadStage b,.roadStage span{display:block}.roadStage b{font-size:12px;color:#98aec3}.roadStage span{font-size:9px;margin-top:2px}.roadStage em{margin-left:auto;font-style:normal;background:#e9324c;color:white;padding:4px 6px;border-radius:999px;font-size:7px;font-weight:1000;letter-spacing:.1em}.roadStage.active i{background:linear-gradient(180deg,#31ccff,#128ddf);color:#00131e;box-shadow:0 0 20px rgba(32,182,255,.2)}.roadStage.active b{color:#e8f7ff}.roadStage.final i{border-color:rgba(255,207,74,.3);color:#ffcf4a}.roadStage.final svg{color:#ffcf4a}.roadLine{height:2px;background:linear-gradient(90deg,#18314b,#0f2235);border-radius:999px;min-width:40px}.roadLine.active{background:linear-gradient(90deg,#21bfff,#50dcff);box-shadow:0 0 12px rgba(33,191,255,.2)}
+
+.cityPulseSection{padding-top:2px}.cityPulseGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.pulseCard{border:1px solid rgba(75,175,240,.18);border-radius:18px;background:linear-gradient(180deg,#071523,#03101a);overflow:hidden;text-align:left;color:#fff;padding:0;cursor:pointer;box-shadow:0 16px 40px rgba(0,0,0,.2);transition:transform .2s ease,border-color .2s ease,box-shadow .2s ease}.pulseCard:hover{transform:translateY(-3px);border-color:#2ac7ff;box-shadow:0 20px 45px rgba(0,116,195,.18)}.pulseImage{height:160px;background-size:cover;background-position:center;position:relative}.pulseImage:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(28,167,255,.02),rgba(2,7,15,.28))}.pulseRank{position:absolute;right:12px;top:12px;z-index:2;background:#ffcf4a;color:#06101a;border-radius:999px;padding:5px 7px;font-size:8px;font-weight:1000}.pulseCity{position:absolute;left:14px;bottom:14px;z-index:2;display:flex;align-items:center;gap:9px}.pulseCity>span{font-size:20px}.pulseCity h4{font-size:24px;margin:0;letter-spacing:-.035em}.pulseCity small{color:#a9c0d4;font-size:8px;letter-spacing:.08em}.pulseBody{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:14px}.pulseBody>div{padding:10px;border-radius:11px;background:#081827;border:1px solid rgba(67,151,211,.09)}.pulseBody span,.pulseBody b{display:block}.pulseBody span{font-size:8px;color:#718ca7;text-transform:uppercase;letter-spacing:.1em}.pulseBody b{font-size:16px;margin-top:3px}.pulseCard>.progressTrack{margin:0 14px}.pulseCall{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;color:#61d6ff;font-size:9px;letter-spacing:.04em}
+.pulseCard.p1{box-shadow:0 18px 45px rgba(28,142,255,.12)}.pulseCard.p1 .pulseImage{min-height:175px}
+
+.impactBand{min-height:150px;border-radius:20px;border:1px solid rgba(255,205,70,.16);background:
+radial-gradient(circle at 12% 50%,rgba(255,197,48,.1),transparent 21%),
+radial-gradient(circle at 90% 50%,rgba(35,182,255,.09),transparent 24%),
+linear-gradient(100deg,#09121c,#07111d 50%,#030912);display:grid;grid-template-columns:1fr 1.2fr 1fr;align-items:center;gap:24px;padding:26px 30px;position:relative;overflow:hidden}
+.impactBand:after{content:"SOMALI CUP";position:absolute;right:2%;bottom:-22px;font-size:70px;font-weight:1000;letter-spacing:-.06em;color:rgba(255,255,255,.025);pointer-events:none}.impactBrand{display:flex;align-items:center;gap:14px}.impactStar{width:62px;height:72px;clip-path:polygon(50% 0,92% 16%,84% 67%,50% 100%,16% 67%,8% 16%);background:linear-gradient(180deg,#ffe27b,#d38c0c);color:#06101a;display:grid;place-items:center;font-size:23px;filter:drop-shadow(0 0 20px rgba(255,202,66,.2))}.impactBrand small{color:#ffcf4a;font-size:8px;font-weight:1000;letter-spacing:.15em}.impactBrand h3{margin:5px 0 0;font-size:22px}.impactBand>p{color:#91a7bc;line-height:1.6;margin:0;font-size:12px}.impactMetrics{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.impactMetrics div{padding:13px 10px;border-radius:12px;background:rgba(5,16,27,.72);border:1px solid rgba(80,167,226,.11);text-align:center}.impactMetrics strong,.impactMetrics span{display:block}.impactMetrics strong{font-size:21px}.impactMetrics span{font-size:8px;color:#718ca7;text-transform:uppercase;letter-spacing:.08em}
+
+.mobileDock{display:none}
+
+@media(max-width:1100px){
+  .roadTrack{grid-template-columns:1fr;gap:7px}.roadLine{width:2px;height:18px;margin-left:16px}.roadStage{width:100%}
+  .cityPulseGrid{grid-template-columns:1fr 1fr}.cityPulseGrid .pulseCard:nth-child(3){grid-column:1/-1}
+  .impactBand{grid-template-columns:1fr 1fr}.impactBand>p{grid-column:1/-1;grid-row:2}.impactMetrics{grid-column:2}
+}
+@media(max-width:700px){
+  body{padding-bottom:72px}.mobileDock{position:fixed;left:8px;right:8px;bottom:8px;height:60px;z-index:110;display:grid;grid-template-columns:repeat(5,1fr);background:rgba(3,11,20,.94);backdrop-filter:blur(20px);border:1px solid rgba(76,175,239,.2);border-radius:16px;box-shadow:0 16px 50px rgba(0,0,0,.45);padding:5px}
+  .mobileDock button{border:0;background:none;color:#6f88a2;border-radius:11px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font-size:8px;font-weight:900}.mobileDock button.active{color:#64d8ff;background:rgba(20,126,203,.14)}.mobileDock button:last-child{color:#ffcf4a}
+  .cityPulseGrid{grid-template-columns:1fr}.cityPulseGrid .pulseCard:nth-child(3){grid-column:auto}.pulseImage{height:150px}
+  .impactBand{grid-template-columns:1fr;padding:22px}.impactBand>p,.impactMetrics{grid-column:auto;grid-row:auto}.impactMetrics{grid-template-columns:repeat(3,1fr)}
+  .roadToCup{padding:18px}.roadHead{align-items:flex-start}.roadHead>span{display:none}
+}
