@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pool } from './db/pool.js';
 import { config } from './config.js';
+import { recordLaunchEvidence } from './launchEvidence.js';
 
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const migrationsDir=path.resolve(__dirname,'../../../database/migrations');
@@ -180,5 +181,12 @@ await check('device_binding_coverage',async()=>{
 },{warning:true});
 
 console.log('\nPRELAUNCH SUMMARY',JSON.stringify({failures,warnings}));
+await recordLaunchEvidence({
+  runType:'PREFLIGHT',
+  status:failures>0?'FAIL':'PASS',
+  failures,warnings,
+  origin:config.appOrigin,
+  evidence:{node:process.versions.node,environment:config.env}
+});
 await pool.end();
 if(failures>0)process.exit(1);
