@@ -88,19 +88,28 @@ async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer
     image.src=svgUrl;
   });
   const file=new File([pngBlob],'somali-cup-status.png',{type:'image/png'});
+  const fromParam=fromName?`&from=${encodeURIComponent(fromName)}`:'';
+  const refParam=refPublicId?`&ref=${encodeURIComponent(refPublicId)}`:'';
+  const viralUrl=`${window.location.origin}/?city=${encodeURIComponent(city?.code||'')}&src=status${fromParam}${refParam}`;
+  const lead=fromName?`${fromName} is backing ${city?.name}.\n`:'';
+  const shareText=`${lead}${subtitle}\nJoin ${city?.name||'your city'}: ${viralUrl}`;
   if(navigator.share&&navigator.canShare?.({files:[file]})){
     try{
-      const fromParam=fromName?`&from=${encodeURIComponent(fromName)}`:'';
-      const refParam=refPublicId?`&ref=${encodeURIComponent(refPublicId)}`:'';
-      const lead=fromName?`${fromName} is backing ${city?.name}.\n`:'';
-      await navigator.share({title:'Somali Cup',text:`${lead}${subtitle}\nJoin ${city?.name||'your city'}: ${window.location.origin}/?city=${city?.code||''}&src=status${fromParam}${refParam}`,files:[file]});
+      await navigator.share({title:'Somali Cup',text:shareText,files:[file]});
       return 'shared'
     }catch(e){if(e?.name==='AbortError')return 'cancelled'}
   }
+  let linkCopied=false;
+  try{
+    if(navigator.clipboard?.writeText){
+      await navigator.clipboard.writeText(viralUrl);
+      linkCopied=true;
+    }
+  }catch{}
   const url=URL.createObjectURL(pngBlob);
   const a=document.createElement('a');a.href=url;a.download='somali-cup-status.png';document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1200);
-  return 'downloaded';
+  return linkCopied?'downloaded_link_copied':'downloaded';
 }
 
 function Logo(){return <div className="logoLock"><div className="cupMark">🏆</div><div><strong>SOMALI CUP</strong><small>Different cities. One people.</small></div></div>}
@@ -475,6 +484,7 @@ function SupporterProfile({me,city,season,onJoin,onCity,onMatches}){
   const [showStudio,setShowStudio]=useState(false);
   if(!me?.membership||!city)return <div className="pageWrap"><section className="pageHero compact"><div><small className="kicker">SUPPORTER IDENTITY</small><h1>Your Somali Cup <em>story starts here.</em></h1><p>Choose one city for the season and your supporter pass will live here.</p></div><button className="goldBtn" onClick={onJoin}>Choose Your City</button></section></div>;
   const name=me.user.nickname||me.user.displayName;
+  const goalNumber=Number(me.qualificationImpact?.goalNumber||me.membership?.goal_number||0);
   const remaining=Math.max(0,Number(city.qualification_target||0)-Number(city.verified_supporters||0));
   const create=(kind)=>{
     const presets={
@@ -489,14 +499,14 @@ function SupporterProfile({me,city,season,onJoin,onCity,onMatches}){
       <div className="supporterPass">
         <div className="passTop"><Logo/><span>SEASON PASS · {season?.name||'2027'}</span></div>
         <div className="passIdentity"><div className="passAvatar">{name?.[0]||'S'}</div><div><small>VERIFIED SUPPORTER</small><h1>{name}</h1><p>{city.name} · {city.code}</p></div></div>
-        <div className="passCity"><CityThumb city={city} size="lg"/><div><span>YOUR CITY</span><strong>{city.name}</strong><small>Rank #{city.rank} · {city.tier}</small></div></div>
+        <div className="passCity"><CityThumb city={city} size="lg"/><div><span>YOUR CITY</span><strong>{city.name}</strong><small>{goalNumber?`Goal #${fmt(goalNumber)} · `:''}Rank #{city.rank}</small></div></div>
         <div className="passFooter"><span>SC-{String(me.user.publicId||'SUPPORTER').slice(-8).toUpperCase()}</span><b>ONE CITY · ONE SEASON</b></div>
       </div>
       <div className="supporterHeroCopy"><small>YOUR SOMALI CUP IDENTITY</small><h2>You don’t just watch.<br/><em>You represent.</em></h2><p>Your pass shows the Goal you scored for your city and the Assists you create next.</p><div className="supporterHeroBtns"><button className="goldBtn" onClick={()=>create('qualification')}><Share2 size={16}/> SHARE {city.name.toUpperCase()}</button><button className="heroTextLink light" onClick={onMatches}><Radio size={15}/> Go to Match Centre</button></div></div>
     </section>
 
     <section className="supporterDashboard">
-      <div className="supporterStat highlight"><span>Your Goal</span><strong>1</strong><small>You joined {city.name}</small></div>
+      <div className="supporterStat highlight"><span>Your Goal</span><strong>{goalNumber?`#${fmt(goalNumber)}`:'1'}</strong><small>{goalNumber?'Your permanent city Goal number':`You joined ${city.name}`}</small></div>
       <div className="supporterStat"><span>Your Assists</span><strong>{fmt(me.qualificationImpact?.assists||0)}</strong><small>People who joined through you</small></div>
       <div className="supporterStat"><span>Your Branch</span><strong>{fmt(me.qualificationImpact?.branch||0)}</strong><small>Your full chain</small></div>
       <div className="supporterStat"><span>City rank</span><strong>#{city.rank}</strong><small>{fmt(city.verified_supporters)} Goals</small></div>
@@ -700,9 +710,10 @@ function AssistMoment({moment,city,onDone}){
 function JoinedMoment({payload,city,onDone}){
   const [sharing,setSharing]=useState(false);
   const supporters=Number(city.supporterNumber||city.verified_supporters||0);
+  const goalNumber=Number(city.goalNumber||payload.city?.goalNumber||supporters);
   const target=Number(city.qualification_target||500);
   const remaining=Math.max(0,target-supporters);
-  const nextNumber=supporters+1;
+  const nextNumber=goalNumber+1;
   const supporterName=payload.user?.nickname||payload.user?.displayName||'';
   const rivalry=payload.rivalry;
   const rivalryLine=!rivalry?'':rivalry.relation==='LEADING'
@@ -717,8 +728,8 @@ function JoinedMoment({payload,city,onDone}){
         city,
         eyebrow:'I’M IN · SOMALI CUP 2027',
         title:`I REPRESENT ${city.name.toUpperCase()}`,
-        subtitle:`${supporters?'Goal #'+fmt(supporters)+' for '+city.name:'My Goal now counts'}`,
-        footer:rivalryLine||(remaining?`I scored Goal #${fmt(supporters)} — help ${city.name} score Goal #${fmt(nextNumber)}`:`${city.name} reached its target`),
+        subtitle:`${goalNumber?'Goal #'+fmt(goalNumber)+' for '+city.name:'My Goal now counts'}`,
+        footer:rivalryLine||(remaining?`I scored Goal #${fmt(goalNumber)} — help ${city.name} score Goal #${fmt(nextNumber)}`:`${city.name} reached its target`),
         fromName:supporterName,
         refPublicId:payload.user?.publicId||''
       });
@@ -729,9 +740,9 @@ function JoinedMoment({payload,city,onDone}){
       <div className="joinedBurst">★</div>
       <small>YOU’RE IN</small>
       <h2>You represent<br/><em>{city.name}.</em></h2>
-      <div className="joinedNumber"><span>YOU SCORED</span><strong>GOAL #{fmt(supporters)}</strong><small>for {city.name}</small></div>
+      <div className="joinedNumber"><span>YOU SCORED</span><strong>GOAL #{fmt(goalNumber)}</strong><small>for {city.name} · permanently yours</small></div>
       <p>You scored 1 Goal for {city.name}. {rivalryLine||'Now go for the Assist.'}</p>
-      <div className="joinedCityStrip"><CityThumb city={city} size="lg"/><div><span>YOUR CITY</span><strong>{city.name}</strong><small>{remaining?fmt(remaining)+' more needed to reach the target':'Qualification target reached'}</small></div></div>
+      <div className="joinedCityStrip"><CityThumb city={city} size="lg"/><div><span>YOUR CITY</span><strong>{city.name}</strong><small>{remaining?fmt(remaining)+' Goals needed to reach the target':'Qualification target reached'}</small></div></div>
       <div className="joinedShareReason"><Share2 size={18}/><div><b>{rivalry?.relation==='LEADING'?`Protect the lead. Make Goal #${fmt(nextNumber)} happen.`:rivalry?.relation==='BEHIND'?`Close the gap. Make Goal #${fmt(nextNumber)} happen.`:rivalry?.relation==='TIED'?`Take the lead. Make Goal #${fmt(nextNumber)} happen.`:`Help ${city.name} score Goal #${fmt(nextNumber)}.`}</b><span>Bring one person through your link. If they join, you get the Assist and they score the next Goal.</span></div></div>
       <button className="joinedPrimary" disabled={sharing} onClick={share}>{sharing?'CREATING POSTER…':`SHARE ${city.name.toUpperCase()}`} <Share2 size={17}/></button>
       <button className="joinedSecondary" onClick={onDone}>Go to my supporter pass</button>
