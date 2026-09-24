@@ -22,6 +22,47 @@ router.post('/join', async (req,res,next)=>{
     await conn.beginTransaction();
     const season=await activeSeason(conn);
     if(!season) throw Object.assign(new Error('qualification_not_open'),{status:409});
+
+    // A valid existing device session is already a supporter identity.
+    // Never create a second user/membership for the same active season.
+    const auth=req.get('authorization')||'';
+    const existingToken=auth.startsWith('Bearer ')?auth.slice(7):'';
+    if(existingToken){
+      const tokenHash=hashSessionToken(existingToken);
+      const [[existingIdentity]]=await conn.query(`
+        SELECT s.user_id,u.public_id,u.display_name,u.nickname,u.email,u.role
+        FROM identity_sessions s
+        JOIN users u ON u.id=s.user_id
+        WHERE s.token_hash=? AND s.revoked_at IS NULL
+          AND s.expires_at>UTC_TIMESTAMP() AND u.status='ACTIVE'
+        LIMIT 1`,[tokenHash]);
+
+      if(!existingIdentity){
+        throw Object.assign(new Error('invalid_session'),{status:401});
+      }
+
+      const [[existingMembership]]=await conn.query(`
+        SELECT cm.city_id,c.code,c.name,c.country
+        FROM city_memberships cm
+        JOIN cities c ON c.id=cm.city_id
+        WHERE cm.user_id=? AND cm.season_id=? AND cm.status='ACTIVE'
+        LIMIT 1`,[existingIdentity.user_id,season.id]);
+
+      if(existingMembership){
+        const err=Object.assign(new Error('already_representing_city'),{status:409});
+        err.payload={
+          error:'already_representing_city',
+          city:{
+            id:existingMembership.city_id,
+            code:existingMembership.code,
+            name:existingMembership.name,
+            country:existingMembership.country
+          }
+        };
+        throw err;
+      }
+    }
+
     const [[city]]=await conn.query(`SELECT c.id,c.name,c.country,c.code,sc.is_open,sc.status
       FROM cities c JOIN season_cities sc ON sc.city_id=c.id AND sc.season_id=?
       WHERE c.code=? AND c.is_active=1 LIMIT 1`,[season.id,cityCode]);
@@ -45,7 +86,11 @@ router.post('/join', async (req,res,next)=>{
       season:{id:season.id,name:season.name,status:season.status},
       city:{id:city.id,code:city.code,name:city.name,country:city.country}
     });
-  }catch(e){await conn.rollback(); if(e.status) return res.status(e.status).json({error:e.message}); next(e)}finally{conn.release()}
+  }catch(e){
+    await conn.rollback();
+    if(e.status) return res.status(e.status).json(e.payload||{error:e.message});
+    next(e);
+  }finally{conn.release()}
 });
 
 router.get('/me',requireSession,async(req,res,next)=>{
