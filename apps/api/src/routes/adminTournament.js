@@ -227,13 +227,13 @@ router.post('/advancement-rules',async(req,res,next)=>{
       const sourceType=clean(raw.sourceType,16).toUpperCase();
       const targetStartsAt=raw.targetStartsAt?new Date(raw.targetStartsAt):null;
       const targetLobbyOpensAt=raw.targetLobbyOpensAt?new Date(raw.targetLobbyOpensAt):null;
-      if(!targetStageCode||!Number.isInteger(targetMatchNo)||targetMatchNo<1||!['HOME','AWAY'].includes(targetSlot)||!['GROUP_RANK','MATCH_WINNER'].includes(sourceType)){
+      if(!targetStageCode||!Number.isInteger(targetMatchNo)||targetMatchNo<1||!['HOME','AWAY'].includes(targetSlot)||!['GROUP_RANK','MATCH_WINNER','STAGE_MATCH_WINNER'].includes(sourceType)){
         throw Object.assign(new Error('invalid_advancement_rule'),{status:400});
       }
       const targetStage=await stageByCode(conn,season.id,targetStageCode,true);
       if(!targetStage) throw Object.assign(new Error('target_stage_not_found'),{status:404});
 
-      let sourceGroupId=null,sourceRank=null,sourceMatchId=null;
+      let sourceGroupId=null,sourceRank=null,sourceMatchId=null,sourceStageId=null,sourceMatchNo=null;
       if(sourceType==='GROUP_RANK'){
         const sourceGroupCode=clean(raw.sourceGroupCode,12).toUpperCase();
         sourceRank=Number(raw.sourceRank);
@@ -244,23 +244,33 @@ router.post('/advancement-rules',async(req,res,next)=>{
         `,[season.id,sourceGroupCode]);
         if(!group||!Number.isInteger(sourceRank)||sourceRank<1) throw Object.assign(new Error('invalid_group_rank_source'),{status:400});
         sourceGroupId=group.id;
-      }else{
+      }else if(sourceType==='MATCH_WINNER'){
         const sourceMatchPublicId=clean(raw.sourceMatchPublicId,40);
         const [[match]]=await conn.query('SELECT id FROM matches WHERE season_id=? AND public_id=? LIMIT 1',[season.id,sourceMatchPublicId]);
         if(!match) throw Object.assign(new Error('source_match_not_found'),{status:404});
         sourceMatchId=match.id;
+      }else{
+        const sourceStageCode=clean(raw.sourceStageCode,24).toUpperCase();
+        sourceMatchNo=Number(raw.sourceMatchNo);
+        const sourceStage=await stageByCode(conn,season.id,sourceStageCode,false);
+        if(!sourceStage||!Number.isInteger(sourceMatchNo)||sourceMatchNo<1){
+          throw Object.assign(new Error('invalid_stage_match_source'),{status:400});
+        }
+        sourceStageId=sourceStage.id;
       }
 
       await conn.query(`
         INSERT INTO tournament_advancement_slots(
           target_stage_id,target_match_no,target_slot,target_starts_at,target_lobby_opens_at,
-          source_type,source_group_id,source_rank,source_match_id
-        ) VALUES (?,?,?,?,?,?,?,?,?)
+          source_type,source_group_id,source_stage_id,source_match_no,source_rank,source_match_id
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?)
         ON DUPLICATE KEY UPDATE
           target_starts_at=VALUES(target_starts_at),
           target_lobby_opens_at=VALUES(target_lobby_opens_at),
           source_type=VALUES(source_type),
           source_group_id=VALUES(source_group_id),
+          source_stage_id=VALUES(source_stage_id),
+          source_match_no=VALUES(source_match_no),
           source_rank=VALUES(source_rank),
           source_match_id=VALUES(source_match_id),
           resolved_city_id=NULL,resolved_at=NULL
@@ -268,7 +278,7 @@ router.post('/advancement-rules',async(req,res,next)=>{
         targetStage.id,targetMatchNo,targetSlot,
         targetStartsAt&&!Number.isNaN(targetStartsAt.getTime())?targetStartsAt:null,
         targetLobbyOpensAt&&!Number.isNaN(targetLobbyOpensAt.getTime())?targetLobbyOpensAt:null,
-        sourceType,sourceGroupId,sourceRank,sourceMatchId
+        sourceType,sourceGroupId,sourceStageId,sourceMatchNo,sourceRank,sourceMatchId
       ]);
     }
 
@@ -304,6 +314,57 @@ async function rankGroup(conn,groupId){
   return {complete:true,rows:ranked};
 }
 
+router.post('/stages/:stageCode/open',async(req,res,next)=>{
+  const stageCode=clean(req.params.stageCode,24).toUpperCase();
+  const conn=await pool.getConnection();
+  try{
+    await conn.beginTransaction();
+    const season=await activeSeason(conn);
+    if(!season) throw Object.assign(new Error('active_season_required'),{status:409});
+    const stage=await stageByCode(conn,season.id,stageCode,true);
+    if(!stage) throw Object.assign(new Error('stage_not_found'),{status:404});
+    if(stage.status==='COMPLETE') throw Object.assign(new Error('stage_already_complete'),{status:409});
+
+    if(stage.stage_type==='GROUP'){
+      const [groups]=await conn.query('SELECT id FROM tournament_groups WHERE stage_id=?',[stage.id]);
+      if(!groups.length) throw Object.assign(new Error('groups_required'),{status:409});
+      for(const group of groups){
+        const [[members]]=await conn.query('SELECT COUNT(*) total FROM tournament_group_cities WHERE group_id=?',[group.id]);
+        if(Number(members.total)<2) throw Object.assign(new Error('every_group_needs_two_cities'),{status:409});
+      }
+      await conn.query("UPDATE season_cities SET status='ELIMINATED',is_open=0 WHERE season_id=?",[season.id]);
+      await conn.query(`
+        UPDATE season_cities sc
+        JOIN tournament_group_cities tgc ON tgc.city_id=sc.city_id
+        JOIN tournament_groups tg ON tg.id=tgc.group_id
+        SET sc.status='QUALIFIED'
+        WHERE sc.season_id=? AND tg.stage_id=?
+      `,[season.id,stage.id]);
+      await conn.query("UPDATE seasons SET status='GROUP' WHERE id=?",[season.id]);
+    }else if(stage.stage_type==='FINAL'){
+      await conn.query("UPDATE seasons SET status='FINAL' WHERE id=?",[season.id]);
+    }else{
+      await conn.query("UPDATE seasons SET status='KNOCKOUT' WHERE id=?",[season.id]);
+    }
+
+    await conn.query("UPDATE tournament_stages SET status='OPEN' WHERE id=?",[stage.id]);
+    await conn.query(`
+      INSERT INTO tournament_events(season_id,stage_id,event_type,metadata_json)
+      VALUES (?,?,'STAGE_OPENED',JSON_OBJECT('code',?))
+    `,[season.id,stage.id,stage.code]);
+    await conn.query(`
+      INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json)
+      VALUES (NULL,'TOURNAMENT_STAGE_OPENED','TOURNAMENT_STAGE',?,JSON_OBJECT('code',?))
+    `,[String(stage.id),stage.code]);
+    await conn.commit();
+    res.json({ok:true,stageCode:stage.code,status:'OPEN'});
+  }catch(e){
+    await conn.rollback();
+    if(e.status)return res.status(e.status).json({error:e.message});
+    next(e);
+  }finally{conn.release()}
+});
+
 router.post('/progress',async(_req,res,next)=>{
   const conn=await pool.getConnection();
   try{
@@ -326,6 +387,9 @@ router.post('/progress',async(_req,res,next)=>{
       let cityId=null;
       if(slot.source_type==='MATCH_WINNER'){
         const [[source]]=await conn.query('SELECT status,winner_city_id FROM matches WHERE id=? LIMIT 1',[slot.source_match_id]);
+        if(source?.status==='FINAL'&&source.winner_city_id)cityId=source.winner_city_id;
+      }else if(slot.source_type==='STAGE_MATCH_WINNER'){
+        const [[source]]=await conn.query('SELECT status,winner_city_id FROM matches WHERE stage_id=? AND match_no=? LIMIT 1',[slot.source_stage_id,slot.source_match_no]);
         if(source?.status==='FINAL'&&source.winner_city_id)cityId=source.winner_city_id;
       }else{
         const ranking=await rankGroup(conn,slot.source_group_id);
@@ -354,7 +418,8 @@ router.post('/progress',async(_req,res,next)=>{
       const [[existing]]=await conn.query('SELECT id FROM matches WHERE stage_id=? AND match_no=? LIMIT 1',[target.target_stage_id,target.target_match_no]);
       if(existing)continue;
       const [[stage]]=await conn.query('SELECT code,stage_type FROM tournament_stages WHERE id=? LIMIT 1',[target.target_stage_id]);
-      const startsAt=target.target_starts_at||new Date(Date.now()+24*60*60*1000);
+      if(!target.target_starts_at)continue;
+      const startsAt=target.target_starts_at;
       const publicId=crypto.randomBytes(13).toString('hex');
       await conn.query(`
         INSERT INTO matches(public_id,season_id,stage_id,round_code,match_no,home_city_id,away_city_id,starts_at,lobby_opens_at,status)
