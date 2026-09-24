@@ -1,7 +1,7 @@
 import React,{useEffect,useMemo,useState} from 'react';
 import {
   Activity,AlertTriangle,BarChart3,CheckCircle2,ChevronRight,ClipboardList,DoorOpen,
-  Ban,CalendarClock,Flag,KeyRound,LayoutDashboard,LockKeyhole,Medal,Menu,Pencil,Plus,Radio,RefreshCw,Rocket,Save,
+  Ban,CalendarClock,Flag,KeyRound,LayoutDashboard,LockKeyhole,Medal,Menu,Pencil,Plus,Power,Radio,RefreshCw,Rocket,Save,
   Search,ShieldCheck,Trophy,UserPlus,Users,X
 } from 'lucide-react';
 
@@ -90,6 +90,7 @@ function AdminAuth({onReady}){
 const nav=[
   ['overview','Overview',LayoutDashboard],
   ['launch','Launch Readiness',Rocket],
+  ['operations','Operations',Power],
   ['cities','Cities & Qualification',Flag],
   ['matches','Matches',Radio],
   ['tournament','Tournament',Trophy],
@@ -123,6 +124,7 @@ export default function AdminApp(){
   const endpoint=useMemo(()=>({
     overview:'/api/admin/overview',
     launch:'/api/admin/launch-readiness',
+    operations:'/api/admin/operations',
     cities:'/api/admin/qualification',
     matches:'/api/admin/matches',
     tournament:'/api/tournament',
@@ -186,6 +188,7 @@ export default function AdminApp(){
         {loading&&!data[view]?<div className="adminLoading"><RefreshCw className="spin"/><span>Loading verified competition data…</span></div>:
           view==='overview'?<Overview d={data.overview}/>:
           view==='launch'?<LaunchReadiness d={data.launch} act={act}/>:
+          view==='operations'?<OperationsAdmin d={data.operations} act={act}/>:
           view==='cities'?<CitiesAdmin d={data.cities} act={act}/>:
           view==='matches'?<MatchesAdmin d={data.matches} act={act}/>:
           view==='tournament'?<TournamentAdmin d={data.tournament} act={act}/>:
@@ -329,6 +332,46 @@ function Overview({d}){
     <section className="adminPanel"><PanelHead eyebrow="AUDIT" title="Recent control activity"/><AuditRows rows={d.recentAudit||[]}/></section>
   </>
 }
+
+function OperationsAdmin({d,act}){
+  const [reason,setReason]=useState('');
+  const change=(area,mode,label)=>{
+    if(reason.trim().length<5)return;
+    const action=mode==='FROZEN'?'freeze':'reopen';
+    if(!window.confirm(action.charAt(0).toUpperCase()+action.slice(1)+' '+label+'? The reason will be written to the audit trail.'))return;
+    act(()=>adminApi('/api/admin/operations',{method:'PATCH',body:JSON.stringify({
+      area,mode,reason,confirmation:'CONFIRM OPERATIONS CHANGE'
+    })}),label+' '+(mode==='FROZEN'?'frozen':'reopened'));
+  };
+  return <>
+    <section className="opsCommandHero">
+      <div><small>COMPETITION COMMAND</small><h2>Emergency operations</h2><p>Stop risky actions without taking verified standings or public competition history offline.</p></div>
+      <Power size={34}/>
+    </section>
+    <section className="adminPanel">
+      <PanelHead eyebrow="REQUIRED FOR CHANGES" title="Operational reason"/>
+      <label className="opsReason"><span>Why are you changing competition availability?</span><input value={reason} onChange={e=>setReason(e.target.value)} placeholder="Example: investigating duplicate participation spike"/></label>
+    </section>
+    <div className="opsSwitchGrid">
+      <section className={'opsSwitchCard '+String(d?.joins||'OPEN').toLowerCase()}>
+        <div className="opsSwitchTop"><div><small>SUPPORTER INTAKE</small><h3>New supporter joins</h3></div><span className={'status '+String(d?.joins||'OPEN').toLowerCase()}>{d?.joins||'OPEN'}</span></div>
+        <p>{d?.joins==='FROZEN'?'New city joins are blocked. Existing verified supporters and public standings remain available.':'People can currently choose a city and score their qualification Goal.'}</p>
+        {d?.joins==='FROZEN'
+          ?<button className="adminPrimary" disabled={reason.trim().length<5} onClick={()=>change('JOINS','OPEN','supporter joins')}><ShieldCheck size={14}/> REOPEN JOINS</button>
+          :<button className="opsDanger" disabled={reason.trim().length<5} onClick={()=>change('JOINS','FROZEN','supporter joins')}><Ban size={14}/> FREEZE JOINS</button>}
+      </section>
+      <section className={'opsSwitchCard '+String(d?.matches||'OPEN').toLowerCase()}>
+        <div className="opsSwitchTop"><div><small>MATCH PARTICIPATION</small><h3>Reservations & scoring</h3></div><span className={'status '+String(d?.matches||'OPEN').toLowerCase()}>{d?.matches||'OPEN'}</span></div>
+        <p>{d?.matches==='FROZEN'?'Supporters cannot reserve or activate match Goals. Match pages and verified scores remain visible.':'Match reservations and verified Goal activation are operating normally.'}</p>
+        {d?.matches==='FROZEN'
+          ?<button className="adminPrimary" disabled={reason.trim().length<5} onClick={()=>change('MATCHES','OPEN','match participation')}><ShieldCheck size={14}/> REOPEN MATCHES</button>
+          :<button className="opsDanger" disabled={reason.trim().length<5} onClick={()=>change('MATCHES','FROZEN','match participation')}><Ban size={14}/> FREEZE MATCHES</button>}
+      </section>
+    </div>
+    <section className="opsSafetyNote"><LockKeyhole size={16}/><div><b>These controls do not delete or rewrite competition history.</b><p>They only stop new action while you investigate or recover an incident.</p></div></section>
+  </>
+}
+
 
 function CitiesAdmin({d,act}){
   const [editing,setEditing]=useState(null);
