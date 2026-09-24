@@ -1,4 +1,6 @@
 import { config } from './config.js';
+import { pool } from './db/pool.js';
+import { recordLaunchEvidence } from './launchEvidence.js';
 
 const origin=String(process.env.ACCEPTANCE_ORIGIN||config.appOrigin||'').replace(/\/$/,'');
 let failures=0;
@@ -181,4 +183,11 @@ await check('response_time_budget',()=>{
 
 console.log('\nSAFE ACCEPTANCE SUMMARY',JSON.stringify({failures,warnings,requests:timings.length}));
 if(timings.length)console.log('TIMINGS',JSON.stringify(timings));
+await recordLaunchEvidence({
+  runType:'SAFE_ACCEPTANCE',
+  status:failures>0?'FAIL':'PASS',
+  failures,warnings,origin,
+  evidence:{requests:timings.length,timings}
+});
+await pool.end();
 if(failures>0)process.exit(1);
