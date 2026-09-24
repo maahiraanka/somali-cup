@@ -17,6 +17,7 @@ router.post('/join', async (req,res,next)=>{
   const cityCode=clean(req.body?.cityCode,12).toUpperCase();
   const source=clean(req.body?.source,24)||'direct';
   const referredBy=clean(req.body?.referredBy,80)||null;
+  const refPublicId=clean(req.body?.refPublicId,64)||null;
   if(displayName.length<2) return res.status(400).json({error:'display_name_required'});
   if(!/^[A-Z0-9_-]{2,12}$/.test(cityCode)) return res.status(400).json({error:'city_required'});
   const conn=await pool.getConnection();
@@ -69,6 +70,19 @@ router.post('/join', async (req,res,next)=>{
       FROM cities c JOIN season_cities sc ON sc.city_id=c.id AND sc.season_id=?
       WHERE c.code=? AND c.is_active=1 LIMIT 1`,[season.id,cityCode]);
     if(!city || !city.is_open || city.status==='ELIMINATED') throw Object.assign(new Error('city_not_open'),{status:409});
+    let referrer=null;
+    if(refPublicId){
+      const [[candidate]]=await conn.query(`
+        SELECT u.id,u.public_id,u.display_name,u.nickname,cm.city_id
+        FROM users u
+        JOIN city_memberships cm ON cm.user_id=u.id
+        WHERE u.public_id=? AND u.status='ACTIVE'
+          AND cm.season_id=? AND cm.status='ACTIVE'
+          AND cm.verification_status='VERIFIED'
+        LIMIT 1
+      `,[refPublicId,season.id]);
+      if(candidate && Number(candidate.city_id)===Number(city.id)) referrer=candidate;
+    }
     if(email){
       const [[existing]]=await conn.query('SELECT id FROM users WHERE email=? LIMIT 1',[email]);
       if(existing) throw Object.assign(new Error('email_already_registered'),{status:409});
@@ -78,8 +92,12 @@ router.post('/join', async (req,res,next)=>{
       VALUES (?,?,?,?,?,'PLAYER','ACTIVE',UTC_TIMESTAMP())`,[publicId,displayName,nickname,email,city.id]);
     await conn.query(`INSERT INTO city_memberships(user_id,season_id,city_id,status,verification_status,verification_method,verified_at)
       VALUES (?,?,?,'ACTIVE','VERIFIED','DEVICE_SESSION',UTC_TIMESTAMP())`,[u.insertId,season.id,city.id]);
+    if(referrer && Number(referrer.id)!==Number(u.insertId)){
+      await conn.query(`INSERT IGNORE INTO qualification_referrals(season_id,city_id,referrer_user_id,referred_user_id,source)
+        VALUES (?,?,?,?,?)`,[season.id,city.id,referrer.id,u.insertId,source]);
+    }
     await conn.query(`INSERT INTO qualification_events(season_id,city_id,user_id,type,delta,metadata_json)
-      VALUES (?,?,?,'SUPPORTER_VERIFIED',1,JSON_OBJECT('method','DEVICE_SESSION','source',?,'referredBy',?))`,[season.id,city.id,u.insertId,source,referredBy]);
+      VALUES (?,?,?,'SUPPORTER_VERIFIED',1,JSON_OBJECT('method','DEVICE_SESSION','source',?,'referredBy',?,'refPublicId',?))`,[season.id,city.id,u.insertId,source,referredBy,referrer?.public_id||null]);
     const [[cityStats]]=await conn.query(`
       SELECT sc.qualification_target,
              COUNT(cm.id) verified_supporters
@@ -112,6 +130,22 @@ router.post('/join', async (req,res,next)=>{
       relation:currentGoals>rivalGoals?'LEADING':currentGoals<rivalGoals?'BEHIND':'TIED',
       gap:Math.abs(currentGoals-rivalGoals)
     };
+    const [[impact]]=await conn.query(`
+      WITH RECURSIVE tree AS (
+        SELECT referred_user_id,1 depth
+        FROM qualification_referrals
+        WHERE season_id=? AND referrer_user_id=?
+        UNION ALL
+        SELECT qr.referred_user_id,t.depth+1
+        FROM qualification_referrals qr
+        JOIN tree t ON qr.referrer_user_id=t.referred_user_id
+        WHERE qr.season_id=? AND t.depth<12
+      )
+      SELECT
+        (SELECT COUNT(*) FROM qualification_referrals WHERE season_id=? AND referrer_user_id=?) assists,
+        COUNT(*) branch
+      FROM tree
+    `,[season.id,u.insertId,season.id,season.id,u.insertId]);
     await conn.commit();
     const session=await createSession(u.insertId,req.get('user-agent')||'');
     const supporterNumber=Number(cityStats?.verified_supporters||0);
@@ -127,7 +161,8 @@ router.post('/join', async (req,res,next)=>{
         qualification_target:qualificationTarget,
         progress_pct:qualificationTarget?Math.min(100,Number((supporterNumber*100/qualificationTarget).toFixed(1))):0
       },
-      rivalry
+      rivalry,
+      impact:{goal:1,assists:Number(impact?.assists||0),branch:Number(impact?.branch||0)}
     });
   }catch(e){
     await conn.rollback();
@@ -141,7 +176,27 @@ router.get('/me',requireSession,async(req,res,next)=>{
     const [[membership]]=await pool.query(`SELECT cm.season_id,cm.city_id,cm.status,cm.verification_status,cm.joined_at,c.code,c.name,c.country,s.name season_name,s.status season_status
       FROM city_memberships cm JOIN cities c ON c.id=cm.city_id JOIN seasons s ON s.id=cm.season_id
       WHERE cm.user_id=? ORDER BY cm.joined_at DESC LIMIT 1`,[req.identity.user_id]);
-    res.json({user:{publicId:req.identity.public_id,displayName:req.identity.display_name,nickname:req.identity.nickname,email:req.identity.email,role:req.identity.role},membership});
+    let qualificationImpact={goal:membership?.verification_status==='VERIFIED'?1:0,assists:0,branch:0};
+    if(membership?.season_id){
+      const [[impact]]=await pool.query(`
+        WITH RECURSIVE tree AS (
+          SELECT referred_user_id,1 depth
+          FROM qualification_referrals
+          WHERE season_id=? AND referrer_user_id=?
+          UNION ALL
+          SELECT qr.referred_user_id,t.depth+1
+          FROM qualification_referrals qr
+          JOIN tree t ON qr.referrer_user_id=t.referred_user_id
+          WHERE qr.season_id=? AND t.depth<12
+        )
+        SELECT
+          (SELECT COUNT(*) FROM qualification_referrals WHERE season_id=? AND referrer_user_id=?) assists,
+          COUNT(*) branch
+        FROM tree
+      `,[membership.season_id,req.identity.user_id,membership.season_id,membership.season_id,req.identity.user_id]);
+      qualificationImpact={...qualificationImpact,assists:Number(impact?.assists||0),branch:Number(impact?.branch||0)};
+    }
+    res.json({user:{publicId:req.identity.public_id,displayName:req.identity.display_name,nickname:req.identity.nickname,email:req.identity.email,role:req.identity.role},membership,qualificationImpact});
   }catch(e){next(e)}
 });
 
