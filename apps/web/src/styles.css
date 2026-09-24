@@ -640,3 +640,14 @@ radial-gradient(circle at 50% 50%,#0c3f64,#071d34 57%,#04101b 76%);border:1px so
 .launchRepairCard>div{min-width:0;flex:1}.launchRepairCard small{font-size:7px;font-weight:1000;letter-spacing:.13em;color:#ffd06c}.launchRepairCard h3{font-size:17px;margin:4px 0 3px}.launchRepairCard p{font-size:8px;color:#a88f66;line-height:1.5;margin:0;max-width:760px}
 .launchRepairCard .adminPrimary{flex:none}
 @media(max-width:720px){.launchRepairCard{align-items:stretch;flex-direction:column}.launchRepairCard .adminPrimary{width:100%}}
+
+
+/* v0.30 in-app production proof runner */
+.launchRunnerHint{font-size:7px;color:#6b8498;letter-spacing:.06em}
+.launchRunnerGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.launchRunnerGrid>button{display:flex;align-items:center;gap:10px;text-align:left;padding:12px;border-radius:12px;border:1px solid rgba(77,163,213,.1);background:#04101a;color:#dbe9f4;cursor:pointer}
+.launchRunnerGrid>button:hover:not(:disabled){border-color:rgba(91,216,255,.22);background:#071825}
+.launchRunnerGrid>button:disabled{opacity:.5;cursor:wait}
+.launchRunnerGrid>button>svg{flex:none;color:#62d9ff}.launchRunnerGrid b,.launchRunnerGrid small{display:block}.launchRunnerGrid b{font-size:8px}.launchRunnerGrid small{font-size:7px;color:#617b90;margin-top:3px;line-height:1.35}
+.launchCheckOutput{max-height:300px;overflow:auto;margin:10px 0 0;padding:12px;border-radius:10px;background:#020811;border:1px solid rgba(79,156,204,.08);color:#8fb3c8;font:7px/1.55 ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;white-space:pre-wrap;word-break:break-word}
+@media(max-width:900px){.launchRunnerGrid{grid-template-columns:1fr}}
