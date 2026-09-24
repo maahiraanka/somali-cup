@@ -51,5 +51,10 @@ await check('tournament_stage_rules',()=>pool.query("SELECT tie_policy,match_dur
 await check('admin_credentials_table',()=>pool.query("SELECT user_id,password_updated_at FROM admin_credentials LIMIT 1"));
 await check('admin_sessions_table',()=>pool.query("SELECT user_id,expires_at FROM admin_sessions LIMIT 1"));
 await check('competition_awards_table',()=>pool.query("SELECT season_id,award_type,status FROM competition_awards LIMIT 1"));
+await check('launch_acceptance_runs_table',()=>pool.query("SELECT run_type,status,created_at FROM launch_acceptance_runs LIMIT 1"));
+await check('public_launch_mode_setting',async()=>{
+  const [[r]]=await pool.query("SELECT setting_value FROM platform_settings WHERE setting_key='PUBLIC_LAUNCH_MODE' LIMIT 1");
+  if(!r||!['COMING_SOON','LIVE'].includes(r.setting_value))throw new Error('PUBLIC_LAUNCH_MODE missing or invalid');
+});
 await pool.end();
 if(!ok) process.exit(1);
