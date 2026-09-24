@@ -31,6 +31,9 @@ const emailB='acceptance.'+stamp+'.b@somalicup.invalid';
 let userA=null,userB=null,matchPublicId=null,seasonId=null,cityId=null;
 let goalA=null,goalB=null;
 let failures=0;
+let currentStep='initialising';
+let failureMessage=null;
+const completedSteps=[];
 
 const pass=(name,detail='')=>console.log('PASS',name,detail);
 const fail=(name,detail='')=>{failures++;console.error('FAIL',name,detail)};
@@ -51,8 +54,17 @@ async function api(path,{method='GET',body,token,admin=false}={}){
   }finally{clearTimeout(timer)}
 }
 async function check(name,fn){
-  try{const detail=await fn();pass(name,detail||'')}
-  catch(e){fail(name,e.message);throw e}
+  currentStep=name;
+  try{
+    const detail=await fn();
+    completedSteps.push({name,status:'PASS',detail:String(detail||'')});
+    pass(name,detail||'');
+  }catch(e){
+    failureMessage=String(e?.message||e||'unknown_error');
+    completedSteps.push({name,status:'FAIL',detail:failureMessage});
+    fail(name,failureMessage);
+    throw e;
+  }
 }
 
 async function cleanup(){
@@ -249,14 +261,24 @@ try{
 
   console.log('\nCONTROLLED ACCEPTANCE SUMMARY',JSON.stringify({failures,goalA,goalB,matchPublicId}));
 }catch(e){
-  if(failures===0)fail('controlled_acceptance',e.message);
+  failureMessage=failureMessage||String(e?.message||e||'unknown_error');
+  if(failures===0){
+    currentStep='controlled_acceptance';
+    completedSteps.push({name:'controlled_acceptance',status:'FAIL',detail:failureMessage});
+    fail('controlled_acceptance',failureMessage);
+  }
 }finally{
   await cleanup();
   await recordLaunchEvidence({
     runType:'CONTROLLED_ACCEPTANCE',
     status:failures>0?'FAIL':'PASS',
     failures,warnings:0,origin,
-    evidence:{goalA,goalB,matchPublicId,cleaned:true}
+    evidence:{
+      goalA,goalB,matchPublicId,cleaned:true,
+      currentStep,
+      failureMessage,
+      completedSteps
+    }
   });
   await pool.end();
 }
