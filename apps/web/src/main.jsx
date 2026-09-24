@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App';
 import AdminApp from './AdminApp';
 import ComingSoon from './ComingSoon';
+import LegalPage,{PublicFooter} from './Legal';
 import './styles.css';
 const path=window.location.pathname;
 function PublicRoot(){
@@ -18,9 +19,10 @@ function PublicRoot(){
       .finally(()=>clearTimeout(timer));
     return()=>{cancelled=true;controller.abort();clearTimeout(timer)}
   },[]);
-  return mode==='LIVE'?<App/>:<ComingSoon/>;
+  return mode==='LIVE'?<><App/><PublicFooter/></>:<ComingSoon/>;
 }
-const Root=path.startsWith('/admin')?AdminApp:path.startsWith('/preview')?App:PublicRoot;
+const legalPaths=new Set(['/terms','/privacy','/rules']);
+const Root=path.startsWith('/admin')?AdminApp:path.startsWith('/preview')?App:legalPaths.has(path)?()=> <LegalPage path={path}/>:PublicRoot;
 if(path.startsWith('/admin')||path.startsWith('/preview')){
   const robots=document.createElement('meta');
   robots.name='robots';
