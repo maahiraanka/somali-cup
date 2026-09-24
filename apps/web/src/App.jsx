@@ -550,8 +550,8 @@ function JoinedMoment({payload,city,onDone}){
         city,
         eyebrow:'I’M IN · SOMALI CUP 2027',
         title:`I REPRESENT ${city.name.toUpperCase()}`,
-        subtitle:`${supporters?fmt(supporters)+' verified supporters':'My support now counts'}`,
-        footer:remaining?`I’m #${fmt(supporters)} — help make #${fmt(nextNumber)} happen`:`${city.name} reached its target`,
+        subtitle:`${supporters?'Goal #'+fmt(supporters)+' for '+city.name:'My Goal now counts'}`,
+        footer:remaining?`I scored Goal #${fmt(supporters)} — help ${city.name} score Goal #${fmt(nextNumber)}`:`${city.name} reached its target`,
         fromName:supporterName
       });
     }finally{setSharing(false)}
@@ -561,10 +561,10 @@ function JoinedMoment({payload,city,onDone}){
       <div className="joinedBurst">★</div>
       <small>YOU’RE IN</small>
       <h2>You represent<br/><em>{city.name}.</em></h2>
-      <div className="joinedNumber"><span>YOU ARE SUPPORTER</span><strong>#{fmt(supporters)}</strong><small>for {city.name}</small></div>
-      <p>Your support changed the live city count. Now keep the chain moving.</p>
+      <div className="joinedNumber"><span>YOU SCORED</span><strong>GOAL #{fmt(supporters)}</strong><small>for {city.name}</small></div>
+      <p>Your verified join added one Goal to {city.name}. Now keep the chain moving.</p>
       <div className="joinedCityStrip"><CityThumb city={city} size="lg"/><div><span>YOUR CITY</span><strong>{city.name}</strong><small>{remaining?fmt(remaining)+' more needed to reach the target':'Qualification target reached'}</small></div></div>
-      <div className="joinedShareReason"><Share2 size={18}/><div><b>Make supporter #{fmt(nextNumber)} happen.</b><span>Share your ready-made Status poster and challenge one person from {city.name} to join you.</span></div></div>
+      <div className="joinedShareReason"><Share2 size={18}/><div><b>Help {city.name} score Goal #{fmt(nextNumber)}.</b><span>Bring one person through your link. If they join, that is your Assist and their join becomes the next Goal.</span></div></div>
       <button className="joinedPrimary" disabled={sharing} onClick={share}>{sharing?'CREATING POSTER…':`SHARE ${city.name.toUpperCase()}`} <Share2 size={17}/></button>
       <button className="joinedSecondary" onClick={onDone}>Go to my supporter pass</button>
     </section>
