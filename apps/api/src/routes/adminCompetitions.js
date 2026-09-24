@@ -198,6 +198,12 @@ router.delete('/:id/choices/:choiceId',async(req,res,next)=>{
     if(confirmation!==('DELETE '+choice.name))throw Object.assign(new Error('confirmation_required'),{status:400});
     if(choice.slug==='somali-cup')throw Object.assign(new Error('core_competition_choice_protected'),{status:409});
     await conn.query('DELETE FROM competition_referrals WHERE competition_id=? AND choice_id=?',[competitionId,choiceId]);
+    await conn.query(`
+      DELETE cdc FROM competition_device_claims cdc
+      JOIN competition_supporters cs
+        ON cs.competition_id=cdc.competition_id AND cs.user_id=cdc.user_id
+      WHERE cs.competition_id=? AND cs.choice_id=?
+    `,[competitionId,choiceId]);
     await conn.query('DELETE FROM competition_supporters WHERE competition_id=? AND choice_id=?',[competitionId,choiceId]);
     await conn.query('DELETE FROM competition_stage_choices WHERE choice_id=?',[choiceId]);
     await conn.query('DELETE FROM competition_choices WHERE id=? AND competition_id=?',[choiceId,competitionId]);
@@ -209,6 +215,7 @@ router.delete('/:id/choices/:choiceId',async(req,res,next)=>{
     res.json({ok:true});
   }catch(e){
     await conn.rollback();
+    if(e.status)return res.status(e.status).json({error:e.message});
     next(e);
   }finally{conn.release()}
 });
