@@ -273,3 +273,7 @@ linear-gradient(180deg,#091827,#030b14);border:1px solid rgba(75,190,250,.23);bo
   .viralLandingTop{top:16px;left:16px;right:16px}.viralLandingTop .logoLock small{display:none}.viralLandingTop>span{font-size:7px}
   .viralLandingContent{padding-top:120px}.viralLandingContent h1{font-size:62px}.viralLandingContent>p{font-size:14px}.viralLandingNumbers{grid-template-columns:repeat(3,1fr)}.viralLandingNumbers>div{padding:11px 8px}.viralLandingNumbers strong{font-size:20px}.viralLandingNumbers span{font-size:6px}
 }
+
+
+.viralJoinMicro{display:block;width:min(620px,100%);text-align:center;margin-top:8px;color:#718ca4;font-size:8px;font-weight:800;letter-spacing:.04em}
+.viralStage,.viralLanding,.viralLandingHero{min-height:100vh}
