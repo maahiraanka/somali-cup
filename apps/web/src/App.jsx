@@ -209,7 +209,7 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
     </section>
 
     <section className="chooseCityNow">
-      <div className="sectionTitle simple"><div><small>CHOOSE YOUR SIDE</small><h3>Which city do you represent?</h3></div><button onClick={()=>setTimeout(()=>{},0)} style={{visibility:'hidden'}}>.</button></div>
+      <div className="sectionTitle simple"><div><small>CHOOSE YOUR SIDE</small><h3>Which city do you represent?</h3></div></div>
       <div className="quickCityGrid">
         {standings.slice(0,6).map(c=>{
           const need=Math.max(0,Number(c.qualification_target||0)-Number(c.verified_supporters||0));
