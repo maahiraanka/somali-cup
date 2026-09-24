@@ -207,6 +207,39 @@ router.post('/launch-mode',async(req,res,next)=>{
   }catch(e){next(e)}
 });
 
+router.get('/operations',async(_req,res,next)=>{
+  try{
+    const [rows]=await pool.query("SELECT setting_key,setting_value,updated_at FROM platform_settings WHERE setting_key IN ('JOIN_OPERATIONS_MODE','MATCH_OPERATIONS_MODE')");
+    const settings=Object.fromEntries(rows.map(r=>[r.setting_key,{value:r.setting_value,updatedAt:r.updated_at}]));
+    res.json({
+      joins:settings.JOIN_OPERATIONS_MODE?.value||'OPEN',
+      matches:settings.MATCH_OPERATIONS_MODE?.value||'OPEN',
+      updated:{joins:settings.JOIN_OPERATIONS_MODE?.updatedAt||null,matches:settings.MATCH_OPERATIONS_MODE?.updatedAt||null}
+    });
+  }catch(e){next(e)}
+});
+
+router.patch('/operations',async(req,res,next)=>{
+  const area=String(req.body?.area||'').toUpperCase();
+  const mode=String(req.body?.mode||'').toUpperCase();
+  const reason=String(req.body?.reason||'').trim().slice(0,255);
+  const key=area==='JOINS'?'JOIN_OPERATIONS_MODE':area==='MATCHES'?'MATCH_OPERATIONS_MODE':null;
+  if(!key||!['OPEN','FROZEN'].includes(mode))return res.status(400).json({error:'invalid_operations_change'});
+  if(reason.length<5)return res.status(400).json({error:'reason_required'});
+  if(String(req.body?.confirmation||'')!=='CONFIRM OPERATIONS CHANGE')return res.status(400).json({error:'operations_confirmation_required'});
+  try{
+    await pool.query(
+      "INSERT INTO platform_settings(setting_key,setting_value,updated_by_user_id) VALUES (?,?,?) ON DUPLICATE KEY UPDATE setting_value=VALUES(setting_value),updated_by_user_id=VALUES(updated_by_user_id)",
+      [key,mode,req.admin?.user_id||null]
+    );
+    await pool.query(
+      'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,mode==='FROZEN'?'OPERATIONS_FROZEN':'OPERATIONS_REOPENED','PLATFORM_SETTING',key,JSON.stringify({area,mode,reason})]
+    );
+    res.json({ok:true,area,mode});
+  }catch(e){next(e)}
+});
+
 router.get('/overview',async(_req,res,next)=>{
   try{
     const [[season]]=await pool.query("SELECT id,name,status,starts_at,ends_at FROM seasons ORDER BY id DESC LIMIT 1");
