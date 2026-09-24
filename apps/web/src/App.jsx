@@ -32,6 +32,47 @@ const flag=(country)=>({Australia:'🇦🇺','United Kingdom':'🇬🇧',Canada:
 const fmt=n=>Number(n||0).toLocaleString();
 function api(path,opts={}){const token=localStorage.getItem('somalicup_session');const headers={'Content-Type':'application/json',...(opts.headers||{})};if(token)headers.Authorization=`Bearer ${token}`;return fetch(path,{...opts,headers}).then(async r=>{const body=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(body.error||'request_failed'),{status:r.status,body});return body})}
 const imgFor=c=>cityImages[c?.code]||heroImage;
+const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[m]));
+async function sharePoster({city,title,subtitle,eyebrow='SOMALI CUP 2027',footer='Different cities. One people.',accent='#ffcf4a'}){
+  const svg=`<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+    <defs>
+      <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#020914"/><stop offset=".55" stop-color="#071b30"/><stop offset="1" stop-color="#020914"/></linearGradient>
+      <radialGradient id="glow"><stop stop-color="${accent}" stop-opacity=".32"/><stop offset="1" stop-color="${accent}" stop-opacity="0"/></radialGradient>
+      <filter id="shadow"><feDropShadow dx="0" dy="18" stdDeviation="22" flood-color="#000" flood-opacity=".55"/></filter>
+    </defs>
+    <rect width="1080" height="1920" fill="url(#bg)"/>
+    <circle cx="825" cy="290" r="480" fill="url(#glow)"/>
+    <path d="M0 1420 C220 1320 410 1490 650 1380 S890 1260 1080 1320 L1080 1920 L0 1920Z" fill="#03101d"/>
+    <text x="72" y="110" fill="#8dcff0" font-family="Arial,sans-serif" font-size="28" font-weight="700" letter-spacing="7">${esc(eyebrow)}</text>
+    <text x="72" y="195" fill="#fff" font-family="Arial,sans-serif" font-size="66" font-weight="900">SOMALI</text>
+    <text x="72" y="262" fill="${accent}" font-family="Arial,sans-serif" font-size="66" font-weight="900">CUP</text>
+    <rect x="72" y="340" width="936" height="2" fill="#2aaee8" opacity=".35"/>
+    <text x="72" y="520" fill="#fff" font-family="Arial,sans-serif" font-size="82" font-weight="900" filter="url(#shadow)">${esc(title)}</text>
+    <text x="72" y="610" fill="#a9bfd2" font-family="Arial,sans-serif" font-size="38" font-weight="600">${esc(subtitle)}</text>
+    <g transform="translate(72 760)">
+      <rect width="936" height="420" rx="48" fill="#071827" stroke="#2fcaff" stroke-opacity=".28" stroke-width="3"/>
+      <circle cx="170" cy="165" r="102" fill="#0d2b45" stroke="${accent}" stroke-width="8"/>
+      <text x="170" y="185" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-size="68" font-weight="900">${esc(city?.code||'SC')}</text>
+      <text x="330" y="150" fill="#8dcff0" font-family="Arial,sans-serif" font-size="26" font-weight="700" letter-spacing="5">REPRESENTING</text>
+      <text x="330" y="225" fill="#fff" font-family="Arial,sans-serif" font-size="62" font-weight="900">${esc(city?.name||'Somali Cup')}</text>
+      <text x="330" y="280" fill="#93a9be" font-family="Arial,sans-serif" font-size="30">Somalia</text>
+      <rect x="70" y="340" width="796" height="2" fill="#274b66"/>
+      <text x="70" y="390" fill="${accent}" font-family="Arial,sans-serif" font-size="25" font-weight="800" letter-spacing="4">VERIFIED SUPPORTER</text>
+    </g>
+    <text x="72" y="1510" fill="#fff" font-family="Arial,sans-serif" font-size="46" font-weight="800">${esc(footer)}</text>
+    <text x="72" y="1580" fill="#6f8ea8" font-family="Arial,sans-serif" font-size="28">somalicup.com</text>
+    <text x="72" y="1805" fill="#31516d" font-family="Arial,sans-serif" font-size="28" font-weight="700" letter-spacing="5">ONE CITY • ONE SEASON • ONE CUP</text>
+  </svg>`;
+  const blob=new Blob([svg],{type:'image/svg+xml'});
+  const file=new File([blob],'somali-cup-poster.svg',{type:'image/svg+xml'});
+  if(navigator.share&&navigator.canShare?.({files:[file]})){
+    try{await navigator.share({title:'Somali Cup',text:subtitle,files:[file]});return 'shared'}catch(e){if(e?.name==='AbortError')return 'cancelled'}
+  }
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='somali-cup-poster.svg';document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1200);
+  return 'downloaded';
+}
 
 function Logo(){return <div className="logoLock"><div className="cupMark">🏆</div><div><strong>SOMALI CUP</strong><small>Different cities. One people.</small></div></div>}
 function Progress({value}){const v=Math.max(0,Math.min(100,Number(value)||0));return <div className="progressTrack"><span style={{width:`${v}%`}}/></div>}
@@ -71,7 +112,7 @@ export default function App(){
       <div className="topActions">
         <button className="iconBtn"><Search size={17}/></button>
         <div className="seasonPill">{season?.name||'Somali Cup'} <ChevronRight size={14}/></div>
-        {me?<div className="profilePill"><span>{(me.user.nickname||me.user.displayName||'?')[0]}</span><b>{me.user.nickname||me.user.displayName}</b></div>:<button className="miniCta" onClick={requestJoin}>Join</button>}
+        {me?<button className="profilePill" onClick={()=>setView('profile')}><span>{(me.user.nickname||me.user.displayName||'?')[0]}</span><b>{me.user.nickname||me.user.displayName}</b></button>:<button className="miniCta" onClick={requestJoin}>Join</button>}
         <button className="mobileMenu" onClick={()=>setMobileNav(!mobileNav)}><Menu/></button>
       </div>
     </header>
@@ -82,6 +123,7 @@ export default function App(){
       {view==='cities'&&<Cities standings={standings} openCity={openCity} onJoin={requestJoin}/>}
       {view==='city'&&selectedCity&&<CityPage city={standings.find(c=>c.code===selectedCity.code)||selectedCity} me={me} onBack={()=>setView('cities')} onJoin={requestJoin}/>}
       {view==='matches'&&<MatchCenter matches={matches} me={me} onNeedIdentity={requestJoin}/>}
+      {view==='profile'&&<SupporterProfile me={me} city={myCity} season={season} onJoin={requestJoin} onCity={()=>myCity&&openCity(myCity)} onMatches={()=>setView('matches')}/>}
     </main>
 
     <nav className="mobileDock">
@@ -89,7 +131,7 @@ export default function App(){
       <button className={view==='qualification'?'active':''} onClick={()=>setView('qualification')}><BarChart3 size={18}/><span>Table</span></button>
       <button className={view==='matches'?'active':''} onClick={()=>setView('matches')}><Radio size={18}/><span>Matches</span></button>
       <button className={view==='cities'?'active':''} onClick={()=>setView('cities')}><MapPin size={18}/><span>Cities</span></button>
-      <button onClick={requestJoin}><Users size={18}/><span>{me?.membership?'My City':'Join'}</span></button>
+      <button className={view==='profile'?'active':''} onClick={()=>me?.membership?setView('profile'):requestJoin()}><Users size={18}/><span>{me?.membership?'Me':'Join'}</span></button>
     </nav>
 
     {showJoin&&!me?.membership&&<JoinExperience standings={standings.filter(c=>c.is_open)} onClose={()=>setShowJoin(false)} onJoined={joined}/>}
@@ -234,6 +276,53 @@ function CityPage({city,me,onBack,onJoin}){
     <section className="cityFeature" style={{backgroundImage:`linear-gradient(90deg,rgba(2,8,18,.98),rgba(2,8,18,.52),rgba(2,8,18,.8)),url("${imgFor(city)}")`}}>
       <div><span className="rankChip">#{city.rank} · {city.tier}</span><h1>{city.name}</h1><p>{city.country} · {city.status}</p><div className="cityFeatureStats"><div><strong>{fmt(city.verified_supporters)}</strong><span>Verified supporters</span></div><div><strong>{fmt(city.qualification_target)}</strong><span>Qualification target</span></div><div><strong>{Number(city.progress_pct||0).toFixed(0)}%</strong><span>Progress</span></div></div>{mine?<div className="mineBadge"><Check/> You represent {city.name}</div>:<button className="goldBtn" onClick={onJoin}>Represent {city.name} <ArrowRight size={16}/></button>}</div>
     </section>
+    <section className="cityShareBand">
+      <div><small>SHARE THE RACE</small><h3>Put {city.name} on your WhatsApp Status.</h3><p>Turn your city’s qualification push into a premium Somali Cup poster.</p></div>
+      <button className="goldBtn" onClick={()=>sharePoster({city,title:`I REPRESENT ${city.name.toUpperCase()}`,subtitle:`${fmt(city.verified_supporters)} verified supporters · ${Number(city.progress_pct||0).toFixed(0)}% to target`,footer:`${city.name} is chasing a place in Somali Cup 2027`})}><Share2 size={16}/> Create City Poster</button>
+    </section>
+  </div>
+}
+
+function SupporterProfile({me,city,season,onJoin,onCity,onMatches}){
+  if(!me?.membership||!city)return <div className="pageWrap"><section className="pageHero compact"><div><small className="kicker">SUPPORTER IDENTITY</small><h1>Your Somali Cup <em>story starts here.</em></h1><p>Choose one city for the season and your supporter pass will live here.</p></div><button className="goldBtn" onClick={onJoin}>Choose Your City</button></section></div>;
+  const name=me.user.nickname||me.user.displayName;
+  const remaining=Math.max(0,Number(city.qualification_target||0)-Number(city.verified_supporters||0));
+  const create=(kind)=>{
+    const presets={
+      identity:{title:`I REPRESENT ${city.name.toUpperCase()}`,subtitle:`${name} · Verified Somali Cup supporter`,footer:'My city. My season. My Cup.'},
+      qualification:{title:`${city.name.toUpperCase()} NEEDS ${fmt(remaining)} MORE`,subtitle:`${fmt(city.verified_supporters)} verified supporters · ${Number(city.progress_pct||0).toFixed(0)}% complete`,footer:`Help ${city.name} reach Somali Cup 2027`},
+      callup:{title:'CALLING MY CITY',subtitle:`${city.name} supporters — join me in Somali Cup`,footer:'Represent your city at somalicup.com'}
+    };
+    return sharePoster({city,...presets[kind]});
+  };
+  return <div className="supporterPage">
+    <section className="supporterHero" style={{backgroundImage:`linear-gradient(90deg,rgba(2,8,18,.98),rgba(2,8,18,.58),rgba(2,8,18,.85)),url("${imgFor(city)}")`}}>
+      <div className="supporterPass">
+        <div className="passTop"><Logo/><span>SEASON PASS · {season?.name||'2027'}</span></div>
+        <div className="passIdentity"><div className="passAvatar">{name?.[0]||'S'}</div><div><small>VERIFIED SUPPORTER</small><h1>{name}</h1><p>{city.name} · {city.code}</p></div></div>
+        <div className="passCity"><CityThumb city={city} size="lg"/><div><span>YOUR CITY</span><strong>{city.name}</strong><small>Rank #{city.rank} · {city.tier}</small></div></div>
+        <div className="passFooter"><span>SC-{String(me.user.publicId||'SUPPORTER').slice(-8).toUpperCase()}</span><b>ONE CITY · ONE SEASON</b></div>
+      </div>
+      <div className="supporterHeroCopy"><small>YOUR SOMALI CUP IDENTITY</small><h2>You don’t just watch.<br/><em>You represent.</em></h2><p>Your supporter pass follows your city through qualification and into every match.</p><div className="supporterHeroBtns"><button className="goldBtn" onClick={()=>create('identity')}><Share2 size={16}/> Share My Pass</button><button className="glassBtn" onClick={onMatches}><Radio size={16}/> Match Centre</button></div></div>
+    </section>
+
+    <section className="supporterDashboard">
+      <div className="supporterStat"><span>City rank</span><strong>#{city.rank}</strong><small>{city.name}</small></div>
+      <div className="supporterStat"><span>Verified supporters</span><strong>{fmt(city.verified_supporters)}</strong><small>{fmt(remaining)} still needed</small></div>
+      <div className="supporterStat"><span>Qualification</span><strong>{Number(city.progress_pct||0).toFixed(0)}%</strong><Progress value={city.progress_pct}/></div>
+      <div className="supporterStat highlight"><span>Your status</span><strong>ACTIVE</strong><small>Verified city member</small></div>
+    </section>
+
+    <section className="shareStudio">
+      <div className="shareStudioHead"><div><small>SHARE STUDIO</small><h3>Make your city impossible to ignore.</h3><p>Built for WhatsApp Status, group chats and social sharing.</p></div><Share2 size={28}/></div>
+      <div className="shareCards">
+        <button onClick={()=>create('identity')}><div className="sharePreview identity"><span>SOMALI CUP</span><strong>I REPRESENT<br/>{city.name.toUpperCase()}</strong><small>{name}</small></div><b>Supporter Pass</b><small>Show your city identity</small></button>
+        <button onClick={()=>create('qualification')}><div className="sharePreview qualification"><span>QUALIFICATION</span><strong>{fmt(remaining)}<br/>MORE NEEDED</strong><small>{city.name}</small></div><b>Qualification Push</b><small>Call your city to action</small></button>
+        <button onClick={()=>create('callup')}><div className="sharePreview callup"><span>CALL-UP</span><strong>MY CITY<br/>NEEDS YOU</strong><small>{city.name} · 2027</small></div><b>City Call-Up</b><small>Bring people into the movement</small></button>
+      </div>
+    </section>
+
+    <section className="profileActions"><button className="glassBtn" onClick={onCity}><MapPin size={15}/> Open {city.name}</button><button className="goldBtn" onClick={()=>create('qualification')}><Share2 size={15}/> Share Qualification Poster</button></section>
   </div>
 }
 
