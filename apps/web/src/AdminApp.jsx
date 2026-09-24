@@ -163,7 +163,7 @@ export default function AdminApp(){
       <main className="adminContent">
         {loading&&!data[view]?<div className="adminLoading"><RefreshCw className="spin"/><span>Loading verified competition data…</span></div>:
           view==='overview'?<Overview d={data.overview}/>:
-          view==='launch'?<LaunchReadiness d={data.launch}/>:
+          view==='launch'?<LaunchReadiness d={data.launch} act={act}/>:
           view==='cities'?<CitiesAdmin d={data.cities} act={act}/>:
           view==='matches'?<MatchesAdmin d={data.matches} act={act}/>:
           view==='tournament'?<TournamentAdmin d={data.tournament} act={act}/>:
@@ -178,7 +178,7 @@ export default function AdminApp(){
   </div>
 }
 
-function LaunchReadiness({d}){
+function LaunchReadiness({d,act}){
   const status=d?.overall||'BLOCKED';
   const grouped=(d?.checks||[]).reduce((acc,c)=>{(acc[c.category]||=[]).push(c);return acc},{});
   const order=['ENVIRONMENT','SECURITY','DATABASE','COMPETITION','INTEGRITY','MATCHES','OPERATIONS','PROOF'];
@@ -194,6 +194,25 @@ function LaunchReadiness({d}){
         <strong>{fmt((d?.checks||[]).filter(c=>c.status==='PASS').length)}</strong>
         <span>PASS</span>
       </div>
+    </section>
+
+    <section className="launchModePanel">
+      <div>
+        <small>PUBLIC SITE</small>
+        <h3>{d?.launchMode==='LIVE'?'Somali Cup is LIVE':'Coming Soon shield is active'}</h3>
+        <p>{d?.launchMode==='LIVE'?'Visitors to somalicup.com are seeing the real competition app.':'Visitors to somalicup.com only see the Coming Soon page. /preview remains available for testing.'}</p>
+      </div>
+      {d?.launchMode==='LIVE'
+        ?<button className="launchRollback" onClick={()=>{
+          if(window.confirm('Return somalicup.com to the Coming Soon page? The admin and preview paths will remain available.')){
+            act(()=>adminApi('/api/admin/launch-mode',{method:'POST',body:JSON.stringify({mode:'COMING_SOON'})}),'Public site returned to Coming Soon');
+          }
+        }}><LockKeyhole size={15}/> RETURN TO COMING SOON</button>
+        :<button className="adminPrimary launchGoLive" disabled={Number(d?.blockers||0)>0} onClick={()=>{
+          if(window.confirm('GO LIVE with Somali Cup now? Public visitors will immediately see the real competition app.')){
+            act(()=>adminApi('/api/admin/launch-mode',{method:'POST',body:JSON.stringify({mode:'LIVE'})}),'Somali Cup is now LIVE');
+          }
+        }}><Rocket size={15}/> {Number(d?.blockers||0)>0?'CLEAR BLOCKERS FIRST':'GO LIVE'}</button>}
     </section>
 
     <div className="launchProofSummary">
