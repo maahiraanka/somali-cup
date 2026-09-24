@@ -55,12 +55,20 @@ export default function App(){
   const cityForMe=useMemo(()=>me?.membership?standings.find(c=>c.code===me.membership.code):null,[me,standings]);
   const openCity=(city)=>{setSelectedCity(city);setView('city');window.scrollTo({top:0,behavior:'smooth'})};
   const joined=(payload)=>{localStorage.setItem('somalicup_session',payload.token);setShowJoin(false);setNotice(`You're now representing ${payload.city.name}.`);refresh();setTimeout(()=>setNotice(''),2600)};
+  const requestJoin=()=>{
+    if(me?.membership){
+      setNotice(`You already represent ${me.membership.name} this season.`);
+      setTimeout(()=>setNotice(''),2600);
+      return;
+    }
+    setShowJoin(true);
+  };
 
   return <div className="app">
     <header className="topbar">
       <button className="brandBtn" onClick={()=>setView('home')}><div className="mark">SC</div><div><b>SOMALI CUP</b><small>Different cities. One people.</small></div></button>
       <nav className="nav"><button className={view==='home'?'active':''} onClick={()=>setView('home')}>Home</button><button className={view==='qualification'?'active':''} onClick={()=>setView('qualification')}>Qualification</button><button className={view==='matches'?'active':''} onClick={()=>setView('matches')}>Matches</button><button onClick={()=>setAdminOpen(true)}>Admin preview</button></nav>
-      <div className="identity">{me?<><div className="avatar">{(me.user.nickname||me.user.displayName||'?')[0]}</div><div><b>{me.user.nickname||me.user.displayName}</b><small>{me.membership?.name||'Supporter'}</small></div></>:<button className="joinTop" onClick={()=>setShowJoin(true)}>Represent your city</button>}</div>
+      <div className="identity">{me?<><div className="avatar">{(me.user.nickname||me.user.displayName||'?')[0]}</div><div><b>{me.user.nickname||me.user.displayName}</b><small>{me.membership?.name||'Supporter'}</small></div></>:<button className="joinTop" onClick={requestJoin}>Represent your city</button>}</div>
     </header>
 
     <main>
@@ -70,7 +78,7 @@ export default function App(){
             <div className="eyebrow"><Trophy size={15}/> QUALIFICATION IS OPEN</div>
             <h1>Earn your city's place in the <em>Somali Cup.</em></h1>
             <p>Choose the city you represent. Every verified supporter moves that city closer to qualification. Raw clicks don't count. Real people do.</p>
-            <div className="actions"><button onClick={()=>setShowJoin(true)}>Represent my city <ArrowRight size={17}/></button><button className="ghost" onClick={()=>setView('qualification')}>See qualification table</button></div>
+            <div className="actions"><button onClick={requestJoin}>Represent my city <ArrowRight size={17}/></button><button className="ghost" onClick={()=>setView('qualification')}>See qualification table</button></div>
             {cityForMe && <div className="myCityHero"><CheckCircle2 size={18}/><div><b>You represent {cityForMe.name}</b><span>{fmt(cityForMe.verified_supporters)} / {fmt(cityForMe.qualification_target)} verified supporters</span></div><button onClick={()=>openCity(cityForMe)}>Open city <ChevronRight size={16}/></button></div>}
             <div className="stats"><div className="stat"><span>Season</span><strong>{season?.name?.replace('Somali Cup ','')||'2027'}</strong></div><div className="stat"><span>Open Cities</span><strong>{standings.filter(c=>c.is_open).length}</strong></div><div className="stat"><span>Verified Supporters</span><strong>{fmt(standings.reduce((a,c)=>a+Number(c.verified_supporters||0),0))}</strong></div><div className="stat"><span>Leader</span><strong>{topCity?.code||'—'}</strong></div></div>
           </div>
@@ -85,12 +93,12 @@ export default function App(){
         <section className="cards"><article><ShieldCheck/><h3>Verified people count</h3><p>Qualification is based on active, verified city memberships — not page views, clicks or invite attempts.</p></article><article><MapPin/><h3>One city per season</h3><p>Your city membership becomes your tournament identity for the season and later follows you into live matches.</p></article><article><Trophy/><h3>Qualification has a finish</h3><p>Each city has a visible target and status. When the target is reached, Admin can lock qualification and move the city into the tournament.</p></article></section>
       </>}
 
-      {view==='qualification' && <Qualification standings={standings} season={season} openCity={openCity} onJoin={()=>setShowJoin(true)} />}
-      {view==='matches' && <MatchEngine matches={matches} me={me} onNeedIdentity={()=>setShowJoin(true)} />}
-      {view==='city' && selectedCity && <CityPage city={standings.find(c=>c.code===selectedCity.code)||selectedCity} onBack={()=>setView('qualification')} onJoin={()=>setShowJoin(true)} me={me}/>} 
+      {view==='qualification' && <Qualification standings={standings} season={season} openCity={openCity} onJoin={requestJoin} />}
+      {view==='matches' && <MatchEngine matches={matches} me={me} onNeedIdentity={requestJoin} />}
+      {view==='city' && selectedCity && <CityPage city={standings.find(c=>c.code===selectedCity.code)||selectedCity} onBack={()=>setView('qualification')} onJoin={requestJoin} me={me}/>} 
     </main>
 
-    {showJoin && <JoinModal standings={standings.filter(c=>c.is_open)} onClose={()=>setShowJoin(false)} onJoined={joined}/>} 
+    {showJoin && !me?.membership && <JoinModal standings={standings.filter(c=>c.is_open)} onClose={()=>setShowJoin(false)} onJoined={joined}/>} 
     {adminOpen && <AdminModal standings={standings} adminKey={adminKey} setAdminKey={setAdminKey} onClose={()=>setAdminOpen(false)} onUpdated={refresh}/>} 
     {notice && <div className="toast">{notice}</div>}
   </div>
