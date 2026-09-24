@@ -202,16 +202,16 @@ function ViralCityLanding({city,standings,fromName,onJoin,onOther}){
       <div className="viralLandingContent">
         <small>{fromName?`${fromName.toUpperCase()} FROM ${city.name.toUpperCase()} CHALLENGED YOU`:`SOMEONE FROM ${city.name.toUpperCase()} SENT YOU THIS`}</small>
         <h1>{city.name}<br/><em>needs you.</em></h1>
-        <p>{fromName?<><b>{fromName}</b> is backing {city.name}. Join the same city and move it one supporter closer to qualification.</>:<>Somalia’s cities are competing for Somali Cup 2027. Every verified supporter moves their city closer to qualification.</>}</p>
+        <p>{fromName?<><b>{fromName}</b> is backing {city.name}. Join the same city and score the next Goal.</>:<>Somalia’s cities are competing for Somali Cup 2027. Every verified person scores 1 Goal for their city.</>}</p>
         <div className="viralLandingNumbers">
           <div><span>CITY RANK</span><strong>#{city.rank}</strong></div>
-          <div><span>SUPPORTERS</span><strong>{fmt(city.verified_supporters)}</strong></div>
-          <div><span>STILL NEEDED</span><strong>{fmt(need)}</strong></div>
+          <div><span>GOALS SCORED</span><strong>{fmt(city.verified_supporters)}</strong></div>
+          <div><span>GOALS NEEDED</span><strong>{fmt(need)}</strong></div>
         </div>
         <div className="viralLandingProgress"><div><span>{fmt(city.verified_supporters)} / {fmt(city.qualification_target)}</span><b>{Number(city.progress_pct||0).toFixed(0)}%</b></div><Progress value={city.progress_pct}/></div>
-        {gap>0&&<div className="viralUrgency"><Zap size={16}/><span><b>{fmt(gap)} supporters</b> separate {city.name} from #{leader.rank} {leader.name}.</span></div>}
+        {gap>0&&<div className="viralUrgency"><Zap size={16}/><span><b>{fmt(gap)} Goals</b> separate {city.name} from #{leader.rank} {leader.name}.</span></div>}
         <button className="viralJoinButton" onClick={onJoin}>I REPRESENT {city.name.toUpperCase()} <ArrowRight size={18}/></button>
-        <span className="viralJoinMicro">Choose once · enter your name · you’re in</span>
+        <span className="viralJoinMicro">Join once · score 1 Goal · then bring one person for the Assist</span>
         <button className="viralOtherCity" onClick={onOther}>I represent another city</button>
         <div className="viralTrust"><ShieldCheck size={15}/><span>One person. One city. One season.</span></div>
       </div>
@@ -225,7 +225,7 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
   const shareMyCity=()=>myCity&&sharePoster({
     city:myCity,
     title:`I REPRESENT ${myCity.name.toUpperCase()}`,
-    subtitle:`${fmt(myCity.verified_supporters)} verified supporters · ${Number(myCity.progress_pct||0).toFixed(0)}% to qualification`,
+    subtitle:`${fmt(myCity.verified_supporters)} Goals scored · ${Number(myCity.progress_pct||0).toFixed(0)}% to qualification`,
     footer:`${remaining?fmt(remaining)+' more supporters needed':'Qualification target reached'}`
   });
 
@@ -234,7 +234,7 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
       <div className="viralHeroCopy">
         <div className="liveBadge"><span/> QUALIFICATION IS LIVE</div>
         <h1>YOUR CITY.<br/><em>YOUR CUP.</em></h1>
-        <p>Somalia’s cities are competing for a place in Somali Cup 2027. Choose one city. Every verified supporter counts.</p>
+        <p>Somalia’s cities are competing for Somali Cup 2027. Choose your city. Every verified person scores 1 Goal.</p>
 
         {!myCity?<>
           <button className="heroPrimary" onClick={onJoin}>REPRESENT YOUR CITY <ArrowRight size={18}/></button>
@@ -242,7 +242,7 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
         </>:<>
           <div className="returningCity">
             <div className="returningCityTop"><CityThumb city={myCity} size="md"/><div><small>YOU REPRESENT</small><strong>{myCity.name}</strong><span>#{myCity.rank} in qualification</span></div></div>
-            <div className="returningProgress"><div><span>{fmt(myCity.verified_supporters)} / {fmt(myCity.qualification_target)}</span><b>{remaining?fmt(remaining)+' more needed':'TARGET REACHED'}</b></div><Progress value={myCity.progress_pct}/></div>
+            <div className="returningProgress"><div><span>{fmt(myCity.verified_supporters)} / {fmt(myCity.qualification_target)}</span><b>{remaining?fmt(remaining)+' Goals needed':'TARGET REACHED'}</b></div><Progress value={myCity.progress_pct}/></div>
             <button className="heroPrimary" onClick={shareMyCity}><Share2 size={18}/> SHARE {myCity.name.toUpperCase()}</button>
           </div>
         </>}
@@ -253,19 +253,19 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
         {leaders.map(c=><button key={c.code} className="heroRaceRow" onClick={()=>openCity(c)}>
           <span className="heroRank">#{c.rank}</span>
           <CityThumb city={c} size="sm"/>
-          <div className="heroRaceName"><b>{c.name}</b><small>{fmt(c.verified_supporters)} supporters</small></div>
+          <div className="heroRaceName"><b>{c.name}</b><small>{fmt(c.verified_supporters)} Goals</small></div>
           <div className="heroRaceProgress"><strong>{Number(c.progress_pct||0).toFixed(0)}%</strong><Progress value={c.progress_pct}/></div>
         </button>)}
-        <div className="heroRaceFooter"><Users size={14}/><span>{fmt(total)} verified supporters across {standings.length} cities</span></div>
+        <div className="heroRaceFooter"><Users size={14}/><span>{fmt(total)} Goals scored across {standings.length} cities</span></div>
       </div>
     </section>
 
     <section className="firstVisitFlow">
-      <div className="flowIntro"><small>HOW IT WORKS</small><h2>Three steps. That’s it.</h2><p>No complicated signup. No points to learn. Pick your city, join it, then bring the next person.</p></div>
+      <div className="flowIntro"><small>HOW IT WORKS</small><h2>Three steps. That’s it.</h2><p>No points to learn. Pick your city, score 1 Goal, then bring one person for the Assist.</p></div>
       <div className="flowSteps">
         <div><span>01</span><div><b>Choose your city</b><p>Pick the city you want to represent for the season.</p></div></div>
-        <div><span>02</span><div><b>Join the race</b><p>Your verified membership adds one real supporter to that city.</p></div></div>
-        <div><span>03</span><div><b>Share your city</b><p>Get a ready-made Status poster and help your city bring in the next supporter.</p></div></div>
+        <div><span>02</span><div><b>Score your Goal</b><p>Your verified join scores exactly 1 Goal for your city.</p></div></div>
+        <div><span>03</span><div><b>Get the Assist</b><p>Share your city. If one person joins through you, that’s your Assist.</p></div></div>
       </div>
     </section>
 
@@ -277,7 +277,7 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
           return <button key={c.code} onClick={()=>onJoin(c)} className="quickCity">
             <div className="quickCityImage" style={{backgroundImage:`linear-gradient(180deg,rgba(2,8,18,.02),rgba(2,8,18,.92)),url("${imgFor(c)}")`}}>
               <span>#{c.rank}</span>
-              <div><b>{c.name}</b><small>{need?fmt(need)+' more needed':'Target reached'}</small></div>
+              <div><b>{c.name}</b><small>{need?fmt(need)+' Goals needed':'Target reached'}</small></div>
             </div>
             <div className="quickCityBottom"><Progress value={c.progress_pct}/><strong>{Number(c.progress_pct||0).toFixed(0)}%</strong></div>
           </button>
@@ -302,13 +302,13 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
 
 function Qualification({standings,season,onJoin,openCity}){
   return <div className="pageWrap">
-    <section className="pageHero compact"><div><div className="liveBadge"><span/> {season?.status}</div><h1>Qualification <em>Leaderboard</em></h1><p>Every verified supporter moves their city closer to the tournament. One real person. One city. One season.</p></div><button className="goldBtn" onClick={onJoin}>Represent Your City <ArrowRight size={17}/></button></section>
+    <section className="pageHero compact"><div><div className="liveBadge"><span/> {season?.status}</div><h1>Qualification <em>Leaderboard</em></h1><p>Every verified person scores exactly 1 Goal for their city. One person. One city. One season.</p></div><button className="goldBtn" onClick={onJoin}>Represent Your City <ArrowRight size={17}/></button></section>
     <div className="qualificationGrid">
       <section className="panel fullTable">
         <div className="leaderCols large"><span>#</span><span>City</span><span>Tier</span><span>Verified</span><span>Target</span><span>Progress</span><span>Status</span></div>
         {standings.map(c=><button className="leaderRow large" key={c.code} onClick={()=>openCity(c)}><b>{c.rank}</b><div className="cityInline"><span>{flag(c.country)}</span><div><strong>{c.name}</strong><small>{c.country}</small></div></div><span className="tierTag">{c.tier}</span><strong>{fmt(c.verified_supporters)}</strong><span>{fmt(c.qualification_target)}</span><div className="leaderProgress"><Progress value={c.progress_pct}/><small>{Number(c.progress_pct||0).toFixed(1)}%</small></div><span className="statusTag">{c.status}</span></button>)}
       </section>
-      <aside className="integrityCard"><div className="shieldBig">★</div><small>COMPETITION INTEGRITY</small><h3>One city per season.</h3><p>Your supporter identity is locked to one city for the active season. This protects the tournament and keeps every city’s numbers meaningful.</p><ul><li><Check/>Verified membership counts</li><li><Check/>Raw clicks do not count</li><li><Check/>Repeat joins are blocked</li><li><Check/>Admin changes are audited</li></ul></aside>
+      <aside className="integrityCard"><div className="shieldBig">★</div><small>COMPETITION INTEGRITY</small><h3>One city per season.</h3><p>Your supporter identity is locked to one city for the active season. This protects the tournament and keeps every city’s numbers meaningful.</p><ul><li><Check/>1 verified person = 1 Goal</li><li><Check/>Clicks do not score Goals</li><li><Check/>Repeat joins are blocked</li><li><Check/>Admin changes are audited</li></ul></aside>
     </div>
   </div>
 }
@@ -316,7 +316,7 @@ function Qualification({standings,season,onJoin,openCity}){
 function Cities({standings,openCity,onJoin}){
   return <div className="pageWrap">
     <section className="pageHero compact"><div><small className="kicker">SOMALIA CITY NETWORK</small><h1>Choose the city that <em>feels like home.</em></h1><p>From Mogadishu to Kismayo, Garowe to Baidoa, every city enters with its own identity, supporters and road to the Cup.</p></div><button className="goldBtn" onClick={onJoin}>Join Your City</button></section>
-    <div className="citiesGrid">{standings.map(c=><button className="cityPoster" key={c.code} onClick={()=>openCity(c)} style={{backgroundImage:`linear-gradient(180deg,rgba(2,8,18,.03),rgba(2,8,18,.96)),url("${imgFor(c)}")`}}><span className="rankChip">#{c.rank}</span><div><small>{flag(c.country)} {c.country}</small><h3>{c.name}</h3><p>{fmt(c.verified_supporters)} verified supporters</p><Progress value={c.progress_pct}/><b>{Number(c.progress_pct||0).toFixed(0)}% to target</b></div></button>)}</div>
+    <div className="citiesGrid">{standings.map(c=><button className="cityPoster" key={c.code} onClick={()=>openCity(c)} style={{backgroundImage:`linear-gradient(180deg,rgba(2,8,18,.03),rgba(2,8,18,.96)),url("${imgFor(c)}")`}}><span className="rankChip">#{c.rank}</span><div><small>{flag(c.country)} {c.country}</small><h3>{c.name}</h3><p>{fmt(c.verified_supporters)} Goals scored</p><Progress value={c.progress_pct}/><b>{Number(c.progress_pct||0).toFixed(0)}% to target</b></div></button>)}</div>
   </div>
 }
 
@@ -325,11 +325,11 @@ function CityPage({city,me,onBack,onJoin}){
   return <div className="pageWrap">
     <button className="backBtn" onClick={onBack}><ArrowLeft size={15}/> All Cities</button>
     <section className="cityFeature" style={{backgroundImage:`linear-gradient(90deg,rgba(2,8,18,.98),rgba(2,8,18,.52),rgba(2,8,18,.8)),url("${imgFor(city)}")`}}>
-      <div><span className="rankChip">#{city.rank} · {city.tier}</span><h1>{city.name}</h1><p>{city.country} · {city.status}</p><div className="cityFeatureStats"><div><strong>{fmt(city.verified_supporters)}</strong><span>Verified supporters</span></div><div><strong>{fmt(city.qualification_target)}</strong><span>Qualification target</span></div><div><strong>{Number(city.progress_pct||0).toFixed(0)}%</strong><span>Progress</span></div></div>{mine?<div className="mineBadge"><Check/> You represent {city.name}</div>:<button className="goldBtn" onClick={()=>onJoin(city)}>Represent {city.name} <ArrowRight size={16}/></button>}</div>
+      <div><span className="rankChip">#{city.rank} · {city.tier}</span><h1>{city.name}</h1><p>{city.country} · {city.status}</p><div className="cityFeatureStats"><div><strong>{fmt(city.verified_supporters)}</strong><span>Goals scored</span></div><div><strong>{fmt(city.qualification_target)}</strong><span>Qualification target</span></div><div><strong>{Number(city.progress_pct||0).toFixed(0)}%</strong><span>Progress</span></div></div>{mine?<div className="mineBadge"><Check/> You represent {city.name}</div>:<button className="goldBtn" onClick={()=>onJoin(city)}>Represent {city.name} <ArrowRight size={16}/></button>}</div>
     </section>
     <section className="cityShareBand">
       <div><small>SHARE THE RACE</small><h3>Put {city.name} on your WhatsApp Status.</h3><p>Turn your city’s qualification push into a premium Somali Cup poster.</p></div>
-      <button className="goldBtn" onClick={()=>sharePoster({city,title:`I REPRESENT ${city.name.toUpperCase()}`,subtitle:`${fmt(city.verified_supporters)} verified supporters · ${Number(city.progress_pct||0).toFixed(0)}% to target`,footer:`${city.name} is chasing a place in Somali Cup 2027`})}><Share2 size={16}/> Create City Poster</button>
+      <button className="goldBtn" onClick={()=>sharePoster({city,title:`I REPRESENT ${city.name.toUpperCase()}`,subtitle:`${fmt(city.verified_supporters)} Goals scored · ${Number(city.progress_pct||0).toFixed(0)}% to target`,footer:`${city.name} is chasing a place in Somali Cup 2027`})}><Share2 size={16}/> Create City Poster</button>
     </section>
   </div>
 }
@@ -342,7 +342,7 @@ function SupporterProfile({me,city,season,onJoin,onCity,onMatches}){
   const create=(kind)=>{
     const presets={
       identity:{title:`I REPRESENT ${city.name.toUpperCase()}`,subtitle:`${name} · Verified Somali Cup supporter`,footer:'My city. My season. My Cup.'},
-      qualification:{title:`${city.name.toUpperCase()} NEEDS ${fmt(remaining)} MORE`,subtitle:`${fmt(city.verified_supporters)} verified supporters · ${Number(city.progress_pct||0).toFixed(0)}% complete`,footer:`Help ${city.name} reach Somali Cup 2027`},
+      qualification:{title:`${city.name.toUpperCase()} NEEDS ${fmt(remaining)} MORE`,subtitle:`${fmt(city.verified_supporters)} Goals scored · ${Number(city.progress_pct||0).toFixed(0)}% complete`,footer:`Help ${city.name} reach Somali Cup 2027`},
       callup:{title:'CALLING MY CITY',subtitle:`${city.name} supporters — join me in Somali Cup`,footer:'Represent your city at somalicup.com'}
     };
     return sharePoster({city,...presets[kind],fromName:name});
@@ -355,12 +355,12 @@ function SupporterProfile({me,city,season,onJoin,onCity,onMatches}){
         <div className="passCity"><CityThumb city={city} size="lg"/><div><span>YOUR CITY</span><strong>{city.name}</strong><small>Rank #{city.rank} · {city.tier}</small></div></div>
         <div className="passFooter"><span>SC-{String(me.user.publicId||'SUPPORTER').slice(-8).toUpperCase()}</span><b>ONE CITY · ONE SEASON</b></div>
       </div>
-      <div className="supporterHeroCopy"><small>YOUR SOMALI CUP IDENTITY</small><h2>You don’t just watch.<br/><em>You represent.</em></h2><p>Your supporter pass follows your city through qualification and into every match.</p><div className="supporterHeroBtns"><button className="goldBtn" onClick={()=>create('qualification')}><Share2 size={16}/> SHARE {city.name.toUpperCase()}</button><button className="heroTextLink light" onClick={onMatches}><Radio size={15}/> Go to Match Centre</button></div></div>
+      <div className="supporterHeroCopy"><small>YOUR SOMALI CUP IDENTITY</small><h2>You don’t just watch.<br/><em>You represent.</em></h2><p>Your pass shows the Goal you scored for your city and the Assists you create next.</p><div className="supporterHeroBtns"><button className="goldBtn" onClick={()=>create('qualification')}><Share2 size={16}/> SHARE {city.name.toUpperCase()}</button><button className="heroTextLink light" onClick={onMatches}><Radio size={15}/> Go to Match Centre</button></div></div>
     </section>
 
     <section className="supporterDashboard">
       <div className="supporterStat"><span>City rank</span><strong>#{city.rank}</strong><small>{city.name}</small></div>
-      <div className="supporterStat"><span>Verified supporters</span><strong>{fmt(city.verified_supporters)}</strong><small>{fmt(remaining)} still needed</small></div>
+      <div className="supporterStat"><span>Goals scored</span><strong>{fmt(city.verified_supporters)}</strong><small>{fmt(remaining)} still needed</small></div>
       <div className="supporterStat"><span>Qualification</span><strong>{Number(city.progress_pct||0).toFixed(0)}%</strong><Progress value={city.progress_pct}/></div>
       <div className="supporterStat highlight"><span>Your status</span><strong>ACTIVE</strong><small>Verified city member</small></div>
     </section>
@@ -431,11 +431,11 @@ function MatchCenter({matches,me,onNeedIdentity}){
         <small>YOUR NEXT MOVE</small>
         {!me?<><h3>Choose your city first.</h3><p>Your city identity decides which side you can represent in Somali Cup.</p></>:
         !myMatchCity?<><h3>Watch this rivalry.</h3><p>Your city is not playing in this fixture, so there is nothing you need to do here.</p></>:
-        !mine?<><h3>Join {myMatchCity.name} in this match.</h3><p>Reserve your place. When the match goes live, one verified entry adds one goal.</p></>:
+        !mine?<><h3>Join {myMatchCity.name} in this match.</h3><p>Reserve your place. When it goes live, your verified entry scores 1 Goal.</p></>:
         mine.status==='REGISTERED'&&match.status==='LIVE'?<><h3>Enter now. Score once.</h3><p>Your verified entry will add exactly one goal for {myMatchCity.name}.</p></>:
         mine.status==='REGISTERED'?<><h3>Your place is reserved.</h3><p>Use your personal link to bring your city into the lobby before kickoff.</p></>:
         match.status==='FINAL'?<><h3>Full time. Share the result.</h3><p>Turn the finish into the next Somali Cup moment.</p></>:
-        <><h3>Your goal is counted. Call the bench.</h3><p>Bring up to three verified supporters from {myMatchCity.name}. Each person scores only for themselves.</p></>}
+        <><h3>Your Goal is in. Go for the Assist.</h3><p>Bring up to three Goals scored from {myMatchCity.name}. Each person scores only for themselves.</p></>}
       </div>
       <div className="nextActionButton">
         {!me?<button className="goldBtn" onClick={onNeedIdentity}>CHOOSE MY CITY <ArrowRight size={16}/></button>:
@@ -465,7 +465,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
       <div className="nextMoment">
         <small>NEXT MOMENT</small>
         <strong>{leader?`${trailing.name} comeback window`:'First breakthrough'}</strong>
-        <span>Call the bench · share · score</span>
+        <span>Goal · Assist · Branch</span>
       </div>
     </section>
 
@@ -486,7 +486,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
     <section className="benchAndCommentary">
       <div className="callBenchCard">
         <div className="benchHead"><div><small>CALL THE BENCH</small><h3>Bring 3 people into your squad.</h3></div><UserPlus size={22}/></div>
-        <p>Your personal match link is your bench. When verified supporters from your city enter through it, your assists grow — the city score still counts each person only once.</p>
+        <p>Share your match link. If someone joins through you, that is your Assist. If they bring others, your Branch grows. Every person still scores only their own Goal.</p>
         <div className="benchSlots">
           {[0,1,2].map(i=><div key={i} className={i<benchFilled?'filled':''}>{i<benchFilled?<><Check size={17}/><span>IN</span></>:<><UserPlus size={17}/><span>OPEN</span></>}</div>)}
         </div>
@@ -518,7 +518,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
         <section className="matchActionGrid">
       <div className="actionPanel"><small>SUPPORT YOUR CITY</small><h3>Every supporter moves the match.</h3>{!me?<button className="blueBtn" onClick={onNeedIdentity}>Create supporter identity</button>:!mine?<button className="blueBtn" disabled={busy} onClick={join}>Join this match</button>:mine.status==='REGISTERED'&&match.status==='LIVE'?<button className="goldBtn" disabled={busy} onClick={activate}><Play size={16}/> Enter Live & Score</button>:<div className="activeState"><Check/> You're active in this match</div>}</div>
       <div className="actionPanel"><small>YOUR MATCH LINK</small><h3>Bring your people into the stadium.</h3><div className="shareFake">{mine?'somalicup.com/your-match-link':'Join the match to unlock your link'}<Link2 size={15}/></div>{mine&&<button className="glassBtn" onClick={copyLink}><Share2 size={15}/> Copy Personal Link</button>}</div>
-      <div className="actionPanel impactPoints"><small>CONTRIBUTE TO IMPACT</small><div><span>⚽</span><b>Goal</b><strong>+500</strong></div><div><span>🟢</span><b>Assist</b><strong>+250</strong></div><div><span>🤝</span><b>Branch</b><strong>+100</strong></div></div>
+      <div className="actionPanel impactPoints"><small>CONTRIBUTE TO IMPACT</small><div><span>⚽</span><b>Goal</b><strong>You join</strong></div><div><span>🟢</span><b>Assist</b><strong>They join</strong></div><div><span>🤝</span><b>Branch</b><strong>They bring more</strong></div></div>
       <div className="actionPanel shareMoments"><small>SHARE THE MOMENT</small><h3>Turn your match into a Status.</h3><div className="momentButtons"><button onClick={()=>shareMoment('callup')}><Share2 size={14}/> Call-Up</button>{mine?.status==='ACTIVE'&&<button onClick={()=>shareMoment('goal')}>⚽ Goal</button>}{Number(mine?.assists??mine?.direct_joins??0)>0&&<button onClick={()=>shareMoment('assist')}>🟢 Assist</button>}<button onClick={()=>shareMoment('motm')}><Trophy size={14}/> Impact</button></div></div>
     </section>
     </>}
@@ -564,7 +564,7 @@ function JoinedMoment({payload,city,onDone}){
       <div className="joinedNumber"><span>YOU SCORED</span><strong>GOAL #{fmt(supporters)}</strong><small>for {city.name}</small></div>
       <p>Your verified join added one Goal to {city.name}. Now keep the chain moving.</p>
       <div className="joinedCityStrip"><CityThumb city={city} size="lg"/><div><span>YOUR CITY</span><strong>{city.name}</strong><small>{remaining?fmt(remaining)+' more needed to reach the target':'Qualification target reached'}</small></div></div>
-      <div className="joinedShareReason"><Share2 size={18}/><div><b>Help {city.name} score Goal #{fmt(nextNumber)}.</b><span>Bring one person through your link. If they join, that is your Assist and their join becomes the next Goal.</span></div></div>
+      <div className="joinedShareReason"><Share2 size={18}/><div><b>Help {city.name} score Goal #{fmt(nextNumber)}.</b><span>Bring one person through your link. If they join, you get the Assist and they score the next Goal.</span></div></div>
       <button className="joinedPrimary" disabled={sharing} onClick={share}>{sharing?'CREATING POSTER…':`SHARE ${city.name.toUpperCase()}`} <Share2 size={17}/></button>
       <button className="joinedSecondary" onClick={onDone}>Go to my supporter pass</button>
     </section>
@@ -599,11 +599,11 @@ function JoinExperience({standings,initialCity,onClose,onJoined}){
       <div className="simpleJoinProgress"><span className={step>=1?'active':''}>1</span><i/><span className={step>=2?'active':''}>2</span><b>{step===1?'Choose your city':'Join your city'}</b></div>
 
       {step===1&&<>
-        <div className="joinTitle"><small>STEP 1 OF 2</small><h2>Which city is yours?</h2><p>Choose once for the season. Every verified supporter counts.</p></div>
+        <div className="joinTitle"><small>STEP 1 OF 2</small><h2>Which city is yours?</h2><p>Choose once for the season. Your verified join scores 1 Goal.</p></div>
         <div className="simpleCityPicker">
           {standings.map(c=><button key={c.code} className={city?.code===c.code?'selected':''} onClick={()=>setCity(c)}>
             <CityThumb city={c} size="sm"/>
-            <div><b>{c.name}</b><small>{fmt(c.verified_supporters)} supporters</small></div>
+            <div><b>{c.name}</b><small>{fmt(c.verified_supporters)} Goals</small></div>
             <strong>{Number(c.progress_pct||0).toFixed(0)}%</strong>
             {city?.code===c.code&&<i><Check size={13}/></i>}
           </button>)}
@@ -612,13 +612,13 @@ function JoinExperience({standings,initialCity,onClose,onJoined}){
       </>}
 
       {step===2&&<>
-        <div className="joinTitle"><small>STEP 2 OF 2</small><h2>Join {city.name}.</h2><p>Add the name people should recognise. Then you’re in.</p></div>
+        <div className="joinTitle"><small>STEP 2 OF 2</small><h2>Join {city.name}.</h2><p>Add your name. Then your city gets your Goal.</p></div>
         <div className="joinSelectedCity"><CityThumb city={city} size="lg"/><div><small>YOU ARE JOINING</small><h3>{city.name}</h3><span>{fmt(Math.max(0,Number(city.qualification_target||0)-Number(city.verified_supporters||0)))} more supporters needed</span></div></div>
         <label className="singleNameField">Your name<input value={displayName} onChange={e=>setDisplayName(e.target.value)} autoFocus placeholder="Your name"/></label>
-        <div className="joinPromise"><ShieldCheck/><span>One city. One season. Your membership counts once.</span></div>
+        <div className="joinPromise"><ShieldCheck/><span>One city. One season. One Goal from you.</span></div>
         {error&&<div className="errorBox">{error}</div>}
         <div className="joinFooterBtns"><button className="glassBtn" onClick={()=>setStep(1)}>Back</button><button className="goldBtn" disabled={busy||displayName.trim().length<2} onClick={submit}>{busy?'Joining…':`JOIN ${city.name.toUpperCase()}`} <ArrowRight size={16}/></button></div>
-        <small className="postJoinPromise">Next: get your supporter pass and share your city.</small>
+        <small className="postJoinPromise">Next: celebrate your Goal and go for the Assist.</small>
       </>}
     </section>
   </div>
