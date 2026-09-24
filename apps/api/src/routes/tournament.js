@@ -16,7 +16,7 @@ async function activeSeason(){
 function tableForGroup(cities,matches){
   const table=new Map(cities.map(c=>[Number(c.id),{
     city:{id:Number(c.id),code:c.code,name:c.name,country:c.country},
-    seed:Number(c.seed_no||100),played:0,wins:0,losses:0,goalsFor:0,goalsAgainst:0,goalDiff:0,points:0
+    seed:Number(c.seed_no||100),played:0,wins:0,draws:0,losses:0,goalsFor:0,goalsAgainst:0,goalDiff:0,points:0
   }]));
   for(const m of matches){
     if(m.status!=='FINAL')continue;
@@ -29,6 +29,7 @@ function tableForGroup(cities,matches){
     a.goalsFor+=as;a.goalsAgainst+=hs;
     if(hs>as){h.wins++;a.losses++;h.points+=3}
     else if(as>hs){a.wins++;h.losses++;a.points+=3}
+    else {h.draws++;a.draws++;h.points+=1;a.points+=1}
   }
   const rows=[...table.values()];
   for(const r of rows)r.goalDiff=r.goalsFor-r.goalsAgainst;
@@ -41,7 +42,7 @@ router.get('/',async(_req,res,next)=>{
     const season=await activeSeason();
     if(!season)return res.json({season:null,stages:[]});
     const [stages]=await pool.query(`
-      SELECT id,code,name,stage_type,sequence_no,status,advance_count
+      SELECT id,code,name,stage_type,sequence_no,status,advance_count,tie_policy,match_duration_minutes
       FROM tournament_stages
       WHERE season_id=?
       ORDER BY sequence_no
@@ -52,6 +53,7 @@ router.get('/',async(_req,res,next)=>{
         id:Number(stage.id),code:stage.code,name:stage.name,type:stage.stage_type,
         sequence:Number(stage.sequence_no),status:stage.status,
         advanceCount:stage.advance_count===null?null:Number(stage.advance_count),
+        tiePolicy:stage.tie_policy,matchDurationMinutes:Number(stage.match_duration_minutes||60),
         groups:[],matches:[]
       };
       if(stage.stage_type==='GROUP'){
