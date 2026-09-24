@@ -16,6 +16,16 @@ const launchFailureText=e=>{
   if(b.signal)parts.push('SIGNAL: '+b.signal);
   if(b.stdout)parts.push('STDOUT:\n'+b.stdout);
   if(b.stderr)parts.push('STDERR:\n'+b.stderr);
+  if(b.structuredEvidence?.evidence){
+    const ev=typeof b.structuredEvidence.evidence==='string'
+      ?(()=>{try{return JSON.parse(b.structuredEvidence.evidence)}catch{return {raw:b.structuredEvidence.evidence}}})()
+      :b.structuredEvidence.evidence;
+    if(ev?.currentStep)parts.push('FAILED STEP: '+ev.currentStep);
+    if(ev?.failureMessage)parts.push('FAILURE: '+ev.failureMessage);
+    if(Array.isArray(ev?.completedSteps)&&ev.completedSteps.length){
+      parts.push('STEPS:\n'+ev.completedSteps.map(x=>(x.status==='PASS'?'PASS ':'FAIL ')+x.name+(x.detail?' — '+x.detail:'')).join('\n'));
+    }
+  }
   if(b.command)parts.push('COMMAND:\n'+b.command);
   return parts.join('\n\n')||humanErrorAdmin(e);
 };
