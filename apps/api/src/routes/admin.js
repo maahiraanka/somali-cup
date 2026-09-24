@@ -125,9 +125,20 @@ router.patch('/matches/:publicId/state',async(req,res,next)=>{
     if(!transitions[match.status]?.includes(target)) throw Object.assign(new Error('invalid_match_transition'),{status:409});
     let winner=null;
     if(target==='FINAL'){
-      if(Number(match.home_score)===Number(match.away_score)) throw Object.assign(new Error('tied_match_cannot_finalize'),{status:409});
-      winner=Number(match.home_score)>Number(match.away_score)?match.home_city_id:match.away_city_id;
-      await conn.query("UPDATE matches SET status='FINAL',winner_city_id=?,finalised_at=UTC_TIMESTAMP(),ends_at=COALESCE(ends_at,UTC_TIMESTAMP()) WHERE id=?",[winner,match.id]);
+      const tied=Number(match.home_score)===Number(match.away_score);
+      let tiePolicy=String(match.round_code||'').toUpperCase()==='GROUP'?'DRAW_ALLOWED':'SUDDEN_DEATH';
+      if(match.stage_id){
+        const [[stage]]=await conn.query('SELECT tie_policy FROM tournament_stages WHERE id=? LIMIT 1',[match.stage_id]);
+        if(stage?.tie_policy)tiePolicy=stage.tie_policy;
+      }
+      if(tied&&tiePolicy==='SUDDEN_DEATH'){
+        await conn.query("UPDATE matches SET tiebreak_mode='SUDDEN_DEATH',tiebreak_started_at=COALESCE(tiebreak_started_at,UTC_TIMESTAMP()) WHERE id=?",[match.id]);
+        await conn.query("INSERT INTO match_state_events(match_id,from_status,to_status,metadata_json) VALUES (?,'LIVE','LIVE',JSON_OBJECT('via','ADMIN','mode','SUDDEN_DEATH'))",[match.id]);
+        await conn.commit();
+        return res.status(409).json({error:'sudden_death_required',status:'LIVE',tiebreakMode:'SUDDEN_DEATH'});
+      }
+      winner=tied?null:(Number(match.home_score)>Number(match.away_score)?match.home_city_id:match.away_city_id);
+      await conn.query("UPDATE matches SET status='FINAL',winner_city_id=?,finalised_at=UTC_TIMESTAMP(),ends_at=COALESCE(ends_at,UTC_TIMESTAMP()),tiebreak_mode='NONE' WHERE id=?",[winner,match.id]);
     }else{
       await conn.query('UPDATE matches SET status=? WHERE id=?',[target,match.id]);
     }
