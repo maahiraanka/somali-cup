@@ -320,7 +320,7 @@ export default function App(){
     <AmbientMotion/>
     <main className={(viralCity&&!me?.membership)||viralMatch?'mainStage viralStage':'mainStage'}>
       {viralMatch?<ViralMatchLanding data={viralMatch} me={me} matches={matches} busy={inviteBusy} onIdentity={()=>requestJoin()} onEnter={enterInvitedMatch} onLeave={leaveMatchInvite}/>:viralCity&&!me?.membership?<ViralCityLanding city={viralCity} standings={standings} fromName={viralFrom} onJoin={()=>requestJoin(viralCity)} onOther={leaveViralLanding}/>:initialLoading?<LiveDataState loading onRetry={refresh}/>:<>
-        {view==='home'&&(qualificationUnavailable?<LiveDataState title="Live city race unavailable" body="We couldn’t load the verified city standings. No demo numbers are being shown." onRetry={refresh}/>:<Home standings={standings} top={top} total={total} season={season} myCity={myCity} onJoin={requestJoin} openCity={openCity} goQualification={()=>setView('qualification')} goMatches={()=>setView('matches')}/>)}
+        {view==='home'&&(qualificationUnavailable?<LiveDataState title="Live city race unavailable" body="We couldn’t load the verified city standings. No demo numbers are being shown." onRetry={refresh}/>:<Home standings={standings} top={top} total={total} season={season} myCity={myCity} me={me} matches={matches} onJoin={requestJoin} openCity={openCity} goQualification={()=>setView('qualification')} goMatches={()=>setView('matches')}/>)}
         {view==='qualification'&&(qualificationUnavailable?<LiveDataState title="Live table unavailable" body="The verified qualification table could not be loaded." onRetry={refresh}/>:<Qualification standings={standings} season={season} onJoin={requestJoin} openCity={openCity}/>)}
         {view==='cities'&&(qualificationUnavailable?<LiveDataState title="City data unavailable" body="We couldn’t load the verified city list." onRetry={refresh}/>:<Cities standings={standings} openCity={openCity} onJoin={requestJoin}/>)}
         {view==='city'&&(qualificationUnavailable?<LiveDataState title="City data unavailable" body="We couldn’t load the verified city data." onRetry={refresh}/>:selectedCity&&<CityPage city={standings.find(c=>c.code===selectedCity.code)||selectedCity} me={me} onBack={()=>setView('cities')} onJoin={requestJoin}/>)}
@@ -428,36 +428,47 @@ function ViralCityLanding({city,standings,fromName,onJoin,onOther}){
   </div>
 }
 
-function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification,goMatches}){
+function Home({standings,top,total,season,myCity,me,matches,onJoin,openCity,goQualification,goMatches}){
   const leaders=standings.slice(0,5);
   const remaining=myCity?Math.max(0,Number(myCity.qualification_target||0)-Number(myCity.verified_supporters||0)):0;
   const myIndex=myCity?standings.findIndex(c=>c.code===myCity.code):-1;
   const myRival=myIndex===0?standings[1]:myIndex>0?standings[myIndex-1]:null;
   const myGap=myRival?Math.abs(Number(myCity.verified_supporters||0)-Number(myRival.verified_supporters||0)):0;
   const myRelation=!myRival?'NONE':Number(myCity.verified_supporters||0)>Number(myRival.verified_supporters||0)?'LEADING':Number(myCity.verified_supporters||0)<Number(myRival.verified_supporters||0)?'BEHIND':'TIED';
+  const myFixture=myCity?(matches||[]).find(m=>m.home?.code===myCity.code||m.away?.code===myCity.code):null;
+  const opponent=myFixture?(myFixture.home?.code===myCity.code?myFixture.away:myFixture.home):null;
+  const goalNumber=Number(me?.qualificationImpact?.goalNumber||me?.membership?.goal_number||0);
+  const assists=Number(me?.qualificationImpact?.assists||0);
+  const branch=Number(me?.qualificationImpact?.branch||0);
+  const fixtureCta=!myFixture?'SHARE MY CITY':myFixture.status==='LIVE'?'ENTER MY CITY MATCH':myFixture.status==='LOBBY'?'OPEN MY CITY MATCH':'VIEW MY NEXT MATCH';
   const shareMyCity=()=>myCity&&sharePoster({
     city:myCity,
-    title:`I REPRESENT ${myCity.name.toUpperCase()}`,
-    subtitle:`${fmt(myCity.verified_supporters)} Goals scored · ${Number(myCity.progress_pct||0).toFixed(0)}% to qualification`,
-    footer:`${remaining?fmt(remaining)+' Goals needed':'Qualification target reached'}`
+    title:'I REPRESENT '+myCity.name.toUpperCase(),
+    subtitle:fmt(myCity.verified_supporters)+' Goals scored · '+Number(myCity.progress_pct||0).toFixed(0)+'% to qualification',
+    footer:remaining?fmt(remaining)+' Goals needed':'Qualification target reached'
   });
 
   return <div className="simpleHome">
-    <section className="viralHero" style={{backgroundImage:`linear-gradient(90deg,rgba(1,7,17,.98) 0%,rgba(1,8,18,.78) 44%,rgba(1,8,18,.28) 72%,rgba(1,8,18,.72) 100%),url("${heroImage}")`}}>
+    <section className="viralHero" style={{backgroundImage:'linear-gradient(90deg,rgba(1,7,17,.98) 0%,rgba(1,8,18,.78) 44%,rgba(1,8,18,.28) 72%,rgba(1,8,18,.72) 100%),url("'+heroImage+'")'}}>
       <div className="viralHeroCopy">
-        <div className="liveBadge"><span/> QUALIFICATION IS LIVE</div>
-        <h1>YOUR CITY.<br/><em>YOUR CUP.</em></h1>
-        <p>Somalia’s cities are competing for Somali Cup 2027. Choose your city. Every verified person scores 1 Goal.</p>
+        <div className="liveBadge"><span/> {myCity?'MY CITY TODAY':'QUALIFICATION IS LIVE'}</div>
+        <h1>{myCity?<>{myCity.name.toUpperCase()}<br/><em>NEEDS YOU.</em></>:<>YOUR CITY.<br/><em>YOUR CUP.</em></>}</h1>
+        <p>{myCity?'You already scored your Goal. Now protect your city’s position, grow your Branch and show up for the next fixture.':'Somalia’s cities are competing for Somali Cup 2027. Choose your city. Every verified person scores 1 Goal.'}</p>
 
         {!myCity?<>
           <button className="heroPrimary" onClick={onJoin}>REPRESENT YOUR CITY <ArrowRight size={18}/></button>
           <button className="heroTextLink" onClick={goQualification}>See the live city race <ChevronRight size={15}/></button>
         </>:<>
-          <div className="returningCity">
-            <div className="returningCityTop"><CityThumb city={myCity} size="md"/><div><small>YOU REPRESENT</small><strong>{myCity.name}</strong><span>#{myCity.rank} in qualification</span></div></div>
+          <div className="returningCity returningMission">
+            <div className="returningCityTop"><CityThumb city={myCity} size="md"/><div><small>YOU REPRESENT</small><strong>{myCity.name}</strong><span>{goalNumber?'Goal #'+fmt(goalNumber)+' · ':''}#{myCity.rank} in qualification</span></div></div>
             <div className="returningProgress"><div><span><MotionNumber value={myCity.verified_supporters}/> / {fmt(myCity.qualification_target)}</span><b>{remaining?fmt(remaining)+' Goals needed':'TARGET REACHED'}</b></div><Progress value={myCity.progress_pct}/></div>
-            {myRival&&<div className={"returningRival "+myRelation.toLowerCase()}>{myRelation==='LEADING'?<><b>Lead {myRival.name} by {fmt(myGap)}.</b> Protect it.</>:myRelation==='BEHIND'?<><b>{fmt(myGap)} behind {myRival.name}.</b> Close the gap.</>:<><b>Level with {myRival.name}.</b> Next Goal leads.</>}</div>}
-            <button className="heroPrimary" onClick={shareMyCity}><Share2 size={18}/> {myRelation==='LEADING'?'PROTECT THE LEAD':myRelation==='BEHIND'?'CLOSE THE GAP':myRelation==='TIED'?'TAKE THE LEAD':'SHARE '+myCity.name.toUpperCase()}</button>
+            {myRival&&<div className={'returningRival '+myRelation.toLowerCase()}>{myRelation==='LEADING'?<><b>Lead {myRival.name} by {fmt(myGap)}.</b> Protect it.</>:myRelation==='BEHIND'?<><b>{fmt(myGap)} behind {myRival.name}.</b> Close the gap.</>:<><b>Level with {myRival.name}.</b> Next Goal leads.</>}</div>}
+            {myFixture&&opponent&&<div className={'homeFixtureStrip '+String(myFixture.status||'').toLowerCase()}>
+              <div><small>{myFixture.status==='LIVE'?'LIVE NOW':'YOUR CURRENT FIXTURE'}</small><strong>{myCity.code} <em>vs</em> {opponent.code}</strong><span>{myCity.name} vs {opponent.name}</span></div>
+              <b>{myFixture.status}</b>
+            </div>}
+            <button className="heroPrimary" onClick={myFixture?goMatches:shareMyCity}>{myFixture?<Radio size={18}/>:<Share2 size={18}/>} {fixtureCta}</button>
+            <button className="heroTextLink" onClick={goQualification}>See the live city race <ChevronRight size={15}/></button>
           </div>
         </>}
       </div>
@@ -474,6 +485,28 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
       </div>
     </section>
 
+    {myCity&&<section className="returningMissionBoard">
+      <div className="missionBoardHead">
+        <div><small>YOUR SOMALI CUP IMPACT</small><h2>One Goal. Keep the movement going.</h2></div>
+        <button className="glassBtn" onClick={()=>openCity(myCity)}>Open {myCity.name} <ChevronRight size={15}/></button>
+      </div>
+      <div className="missionImpactGrid">
+        <div className="missionImpact primary"><span>YOUR GOAL</span><strong>{goalNumber?'#'+fmt(goalNumber):'1'}</strong><small>Permanently yours</small></div>
+        <div className="missionImpact"><span>ASSISTS</span><strong><MotionNumber value={assists}/></strong><small>People you brought directly</small></div>
+        <div className="missionImpact"><span>BRANCH</span><strong><MotionNumber value={branch}/></strong><small>Your full supporter chain</small></div>
+        <div className="missionImpact"><span>CITY POSITION</span><strong>#{myCity.rank}</strong><small>{myRelation==='LEADING'&&myRival?'+'+fmt(myGap)+' vs '+myRival.code:myRelation==='BEHIND'&&myRival?'-'+fmt(myGap)+' vs '+myRival.code:myRelation==='TIED'&&myRival?'Level with '+myRival.code:'Qualification race'}</small></div>
+      </div>
+      <div className="missionAction">
+        <div>
+          <small>NEXT MOVE</small>
+          <h3>{myFixture?myFixture.status==='LIVE'?'Your city is playing now.':myFixture.status==='LOBBY'?'Your city’s lobby is open.':'Your city already has its next fixture.':'Bring the next Goal into '+myCity.name+'.'}</h3>
+          <p>{myFixture&&opponent?myCity.name+' vs '+opponent.name+'. '+(myFixture.status==='LIVE'?'Enter the match and make your verified Goal count.':'Open the fixture, reserve your place and call your city.'):'Share your city. If one person joins through your link, you get the Assist and they score their own Goal.'}</p>
+        </div>
+        <button className="goldBtn" onClick={myFixture?goMatches:shareMyCity}>{myFixture?<Radio size={16}/>:<Share2 size={16}/>} {fixtureCta}</button>
+      </div>
+    </section>}
+
+    {!myCity&&<>
     <section className="firstVisitFlow">
       <div className="flowIntro"><small>HOW IT WORKS</small><h2>Three steps. That’s it.</h2><p>No points to learn. Pick your city, score 1 Goal, then bring one person for the Assist.</p></div>
       <div className="flowSteps">
@@ -489,7 +522,7 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
         {standings.slice(0,6).map(c=>{
           const need=Math.max(0,Number(c.qualification_target||0)-Number(c.verified_supporters||0));
           return <button key={c.code} onClick={()=>onJoin(c)} className="quickCity">
-            <div className="quickCityImage" style={{backgroundImage:`linear-gradient(180deg,rgba(2,8,18,.02),rgba(2,8,18,.92)),url("${imgFor(c)}")`}}>
+            <div className="quickCityImage" style={{backgroundImage:'linear-gradient(180deg,rgba(2,8,18,.02),rgba(2,8,18,.92)),url("'+imgFor(c)+'")'}}>
               <span>#{c.rank}</span>
               <div><b>{c.name}</b><small>{need?fmt(need)+' Goals needed':'Target reached'}</small></div>
             </div>
@@ -497,7 +530,7 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
           </button>
         })}
       </div>
-      {!myCity&&<button className="cityJoinPrimary" onClick={onJoin}>CHOOSE MY CITY <ArrowRight size={18}/></button>}
+      <button className="cityJoinPrimary" onClick={onJoin}>CHOOSE MY CITY <ArrowRight size={18}/></button>
     </section>
 
     <section className="viralProof">
@@ -511,9 +544,9 @@ function Home({standings,top,total,season,myCity,onJoin,openCity,goQualification
       <div><small>WHEN MATCH DAY ARRIVES</small><h3>The simple join becomes a live city battle.</h3><p>Score once for your city, call your bench and help move the match.</p></div>
       <button className="glassBtn" onClick={goMatches}><Radio size={16}/> See Match Centre</button>
     </section>
+    </>}
   </div>
 }
-
 function Qualification({standings,season,onJoin,openCity}){
   return <div className="pageWrap">
     <section className="pageHero compact"><div><div className="liveBadge"><span/> {season?.status}</div><h1>Qualification <em>Leaderboard</em></h1><p>Every verified person scores exactly 1 Goal for their city. One person. One city. One season.</p></div><button className="goldBtn" onClick={onJoin}>Represent Your City <ArrowRight size={17}/></button></section>
