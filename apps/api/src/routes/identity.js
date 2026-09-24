@@ -90,6 +90,28 @@ router.post('/join', async (req,res,next)=>{
       WHERE sc.season_id=? AND sc.city_id=?
       GROUP BY sc.qualification_target
     `,[season.id,city.id]);
+    const [raceRows]=await conn.query(`
+      SELECT c.id,c.code,c.name,
+             COUNT(cm.id) verified_supporters
+      FROM season_cities sc
+      JOIN cities c ON c.id=sc.city_id AND c.is_active=1
+      LEFT JOIN city_memberships cm
+        ON cm.season_id=sc.season_id AND cm.city_id=sc.city_id
+       AND cm.status='ACTIVE' AND cm.verification_status='VERIFIED'
+      WHERE sc.season_id=?
+      GROUP BY c.id,c.code,c.name,sc.sort_order
+      ORDER BY verified_supporters DESC,sc.sort_order ASC,c.name ASC
+    `,[season.id]);
+    const cityIndex=raceRows.findIndex(r=>Number(r.id)===Number(city.id));
+    const rivalRow=cityIndex===0?raceRows[1]:raceRows[Math.max(0,cityIndex-1)];
+    const currentGoals=Number(cityStats?.verified_supporters||0);
+    const rivalGoals=Number(rivalRow?.verified_supporters||0);
+    const rivalry=!rivalRow?null:{
+      cityRank:cityIndex>=0?cityIndex+1:null,
+      rival:{code:rivalRow.code,name:rivalRow.name,goals:rivalGoals},
+      relation:currentGoals>rivalGoals?'LEADING':currentGoals<rivalGoals?'BEHIND':'TIED',
+      gap:Math.abs(currentGoals-rivalGoals)
+    };
     await conn.commit();
     const session=await createSession(u.insertId,req.get('user-agent')||'');
     const supporterNumber=Number(cityStats?.verified_supporters||0);
@@ -104,7 +126,8 @@ router.post('/join', async (req,res,next)=>{
         verified_supporters:supporterNumber,
         qualification_target:qualificationTarget,
         progress_pct:qualificationTarget?Math.min(100,Number((supporterNumber*100/qualificationTarget).toFixed(1))):0
-      }
+      },
+      rivalry
     });
   }catch(e){
     await conn.rollback();
