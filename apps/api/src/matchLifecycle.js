@@ -1,4 +1,5 @@
 import { pool } from './db/pool.js';
+import { progressTournament } from './tournamentProgress.js';
 
 const nowSql='UTC_TIMESTAMP()';
 
@@ -74,6 +75,9 @@ export async function syncMatchLifecycle(targetPublicId=null){
     }
 
     await conn.commit();
+    if(changed.some(c=>c.to==='FINAL')){
+      await progressTournament().catch(e=>console.error('[tournament] auto progression failed',e));
+    }
     return changed;
   }catch(e){
     await conn.rollback();
