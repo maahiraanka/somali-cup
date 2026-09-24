@@ -1,18 +1,22 @@
 {
   "name": "somali-cup",
   "private": true,
-  "version": "0.3.0-match-engine",
+  "version": "0.3.1-hostinger-runtime",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "workspaces": [
     "apps/web",
     "apps/api"
   ],
   "scripts": {
-    "dev": "concurrently -n WEB,API -c auto \"npm run dev -w apps/web\" \"npm run dev -w apps/api\"",
-    "build": "npm run build -w apps/web && npm run build -w apps/api",
-    "start": "npm run start -w apps/api",
-    "db:migrate": "npm run db:migrate -w apps/api",
-    "db:seed": "npm run db:seed -w apps/api",
-    "verify": "npm run build && npm run verify -w apps/api"
+    "dev": "concurrently -n WEB,API -c auto \"npm --prefix apps/web run dev\" \"node --watch apps/api/src/server.js\"",
+    "build": "npm --prefix apps/web run build && node scripts/build-api.mjs",
+    "start": "node apps/api/src/server.js",
+    "db:migrate": "node apps/api/src/db/migrate.js",
+    "db:seed": "node apps/api/src/db/seed.js",
+    "verify": "npm run build && node apps/api/src/verify.js"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"
