@@ -1,7 +1,7 @@
 {
   "name": "somali-cup",
   "private": true,
-  "version": "0.5.2-startup-503-hotfix",
+  "version": "0.5.3-startup-ready-hotfix",
   "type": "module",
   "engines": {
     "node": ">=22"
