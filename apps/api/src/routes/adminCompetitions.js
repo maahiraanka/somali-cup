@@ -125,9 +125,9 @@ router.delete('/:id',async(req,res,next)=>{
   try{
     await conn.beginTransaction();
     const [[competition]]=await conn.query('SELECT id,slug,name FROM competitions WHERE id=? LIMIT 1 FOR UPDATE',[id]);
-    if(!competition)return res.status(404).json({error:'competition_not_found'});
-    if(confirmation!==('DELETE '+competition.name))return res.status(400).json({error:'confirmation_required'});
-    if(competition.slug==='somali-cup')return res.status(409).json({error:'core_competition_protected'});
+    if(!competition)throw Object.assign(new Error('competition_not_found'),{status:404});
+    if(confirmation!==('DELETE '+competition.name))throw Object.assign(new Error('confirmation_required'),{status:400});
+    if(competition.slug==='somali-cup')throw Object.assign(new Error('core_competition_protected'),{status:409});
 
     const [choiceRows]=await conn.query('SELECT id FROM competition_choices WHERE competition_id=?',[id]);
     const choiceIds=choiceRows.map(x=>Number(x.id));
@@ -148,6 +148,7 @@ router.delete('/:id',async(req,res,next)=>{
     res.json({ok:true});
   }catch(e){
     await conn.rollback();
+    if(e.status)return res.status(e.status).json({error:e.message});
     next(e);
   }finally{conn.release()}
 });
@@ -193,9 +194,9 @@ router.delete('/:id/choices/:choiceId',async(req,res,next)=>{
       'SELECT cc.id,cc.name,cp.slug FROM competition_choices cc JOIN competitions cp ON cp.id=cc.competition_id WHERE cc.id=? AND cc.competition_id=? LIMIT 1 FOR UPDATE',
       [choiceId,competitionId]
     );
-    if(!choice)return res.status(404).json({error:'choice_not_found'});
-    if(confirmation!==('DELETE '+choice.name))return res.status(400).json({error:'confirmation_required'});
-    if(choice.slug==='somali-cup')return res.status(409).json({error:'core_competition_choice_protected'});
+    if(!choice)throw Object.assign(new Error('choice_not_found'),{status:404});
+    if(confirmation!==('DELETE '+choice.name))throw Object.assign(new Error('confirmation_required'),{status:400});
+    if(choice.slug==='somali-cup')throw Object.assign(new Error('core_competition_choice_protected'),{status:409});
     await conn.query('DELETE FROM competition_referrals WHERE competition_id=? AND choice_id=?',[competitionId,choiceId]);
     await conn.query('DELETE FROM competition_supporters WHERE competition_id=? AND choice_id=?',[competitionId,choiceId]);
     await conn.query('DELETE FROM competition_stage_choices WHERE choice_id=?',[choiceId]);
@@ -365,6 +366,22 @@ router.patch('/:id',async(req,res,next)=>{
       })]
     );
     res.json({ok:true});
+  }catch(e){next(e)}
+});
+
+
+router.get('/:id/choices',async(req,res,next)=>{
+  try{
+    const competitionId=Number(req.params.id);
+    if(!Number.isInteger(competitionId)||competitionId<1)return res.status(400).json({error:'invalid_competition'});
+    const [rows]=await pool.query(`
+      SELECT cc.id,cc.name,cc.short_name,cc.code,cc.choice_type,cc.status,cc.target,cc.sort_order,
+        (SELECT COUNT(*) FROM competition_supporters cs WHERE cs.competition_id=cc.competition_id AND cs.choice_id=cc.id AND cs.status='ACTIVE') supporter_count
+      FROM competition_choices cc
+      WHERE cc.competition_id=?
+      ORDER BY cc.sort_order,cc.name
+    `,[competitionId]);
+    res.json({choices:rows.map(x=>({...x,id:Number(x.id),target:x.target===null?null:Number(x.target),supporter_count:Number(x.supporter_count||0)}))});
   }catch(e){next(e)}
 });
 
