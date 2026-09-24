@@ -167,13 +167,19 @@ router.post('/:slug/join',async(req,res,next)=>{
     );
     if(!competition)throw Object.assign(new Error('competition_not_found'),{status:404});
     if(!['OPEN','LIVE'].includes(competition.status))throw Object.assign(new Error('competition_not_open'),{status:409});
+    const [[currentStage]]=await conn.query(
+      "SELECT id,target FROM competition_stages WHERE competition_id=? AND status='OPEN' ORDER BY sequence_no LIMIT 1 FOR UPDATE",
+      [competition.id]
+    );
+    if(!currentStage)throw Object.assign(new Error('competition_round_not_open'),{status:409});
     const [[choice]]=await conn.query(`
-      SELECT id,name,code,target,next_supporter_no
-      FROM competition_choices
-      WHERE competition_id=? AND code=? AND status='ACTIVE'
+      SELECT cc.id,cc.name,cc.code,cc.target,cc.next_supporter_no
+      FROM competition_choices cc
+      JOIN competition_stage_choices csc ON csc.choice_id=cc.id AND csc.stage_id=? AND csc.result_status='ACTIVE'
+      WHERE cc.competition_id=? AND cc.code=? AND cc.status='ACTIVE'
       LIMIT 1 FOR UPDATE
-    `,[competition.id,choiceCode]);
-    if(!choice)throw Object.assign(new Error('choice_not_found'),{status:404});
+    `,[currentStage.id,competition.id,choiceCode]);
+    if(!choice)throw Object.assign(new Error('choice_not_in_current_round'),{status:409});
 
     const [[claimed]]=await conn.query(`
       SELECT cdc.user_id,cc.code,cc.name
@@ -260,7 +266,7 @@ router.post('/:slug/join',async(req,res,next)=>{
         id:Number(choice.id),code:choice.code,name:choice.name,
         supporterNo,
         supporterCount:Number(stats?.supporter_count||0),
-        target:choice.target===null?null:Number(choice.target)
+        target:currentStage.target===null?null:Number(currentStage.target)
       },
       friendAdded:Boolean(referrer)
     });
