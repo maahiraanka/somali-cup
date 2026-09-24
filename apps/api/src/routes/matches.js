@@ -68,6 +68,30 @@ router.get('/:publicId/live',async(req,res,next)=>{
   }catch(e){next(e)}
 });
 
+router.get('/:publicId/invite/:token',async(req,res,next)=>{
+  try{
+    const match=await getMatch(pool,req.params.publicId,false);
+    if(!match) return res.status(404).json({error:'match_not_found'});
+    const token=String(req.params.token||'').trim().slice(0,32);
+    const [[invite]]=await pool.query(`
+      SELECT mp.share_token,mp.status,c.code city_code,c.name city_name,u.display_name,u.nickname
+      FROM match_participations mp
+      JOIN cities c ON c.id=mp.city_id
+      JOIN users u ON u.id=mp.user_id
+      WHERE mp.match_id=? AND mp.share_token=? AND mp.status<>'REVOKED'
+      LIMIT 1
+    `,[match.id,token]);
+    if(!invite) return res.status(404).json({error:'invite_not_found'});
+    res.json({
+      match:publicMatch(match),
+      invite:{
+        city:{code:invite.city_code,name:invite.city_name},
+        from:invite.nickname||invite.display_name||'A supporter'
+      }
+    });
+  }catch(e){next(e)}
+});
+
 router.get('/:publicId',async(req,res,next)=>{
   try{
     const match=await getMatch(pool,req.params.publicId,false);
