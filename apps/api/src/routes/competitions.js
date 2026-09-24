@@ -70,6 +70,50 @@ router.get('/:slug',async(req,res,next)=>{
       GROUP BY cc.id,cc.name,cc.short_name,cc.code,cc.choice_type,cc.status,cc.target,cc.sort_order,cc.metadata_json
       ORDER BY supporter_count DESC,cc.sort_order,cc.name
     `,[competition.id]);
+    const [stages]=await pool.query(`
+      SELECT id,code,name,stage_type,sequence_no,status,rule_type,target,advance_count,group_size,starts_at,ends_at
+      FROM competition_stages
+      WHERE competition_id=?
+      ORDER BY sequence_no
+    `,[competition.id]);
+
+    const stageOutput=[];
+    for(const stage of stages){
+      const [members]=await pool.query(`
+        SELECT csc.choice_id,csc.group_code,csc.seed_no,csc.entry_supporter_count,csc.final_supporter_count,csc.result_status,
+          cc.code,cc.name,
+          (SELECT COUNT(*) FROM competition_supporters cs
+            WHERE cs.competition_id=? AND cs.choice_id=cc.id AND cs.status='ACTIVE') supporter_count
+        FROM competition_stage_choices csc
+        JOIN competition_choices cc ON cc.id=csc.choice_id
+        WHERE csc.stage_id=?
+        ORDER BY COALESCE(csc.group_code,''),csc.seed_no,cc.name
+      `,[competition.id,stage.id]);
+
+      const ranked=[...members].sort((a,b)=>
+        String(a.group_code||'').localeCompare(String(b.group_code||''))||
+        Number(b.supporter_count||0)-Number(a.supporter_count||0)||
+        Number(a.seed_no||100)-Number(b.seed_no||100)||
+        String(a.name).localeCompare(String(b.name))
+      );
+
+      stageOutput.push({
+        id:Number(stage.id),code:stage.code,name:stage.name,type:stage.stage_type,
+        sequence:Number(stage.sequence_no),status:stage.status,ruleType:stage.rule_type,
+        target:stage.target===null?null:Number(stage.target),
+        advanceCount:stage.advance_count===null?null:Number(stage.advance_count),
+        groupSize:stage.group_size===null?null:Number(stage.group_size),
+        startsAt:stage.starts_at,endsAt:stage.ends_at,
+        choices:ranked.map(x=>({
+          choiceId:Number(x.choice_id),code:x.code,name:x.name,groupCode:x.group_code,
+          seed:Number(x.seed_no||100),supporterCount:Number(x.supporter_count||0),
+          entrySupporterCount:Number(x.entry_supporter_count||0),
+          finalSupporterCount:x.final_supporter_count===null?null:Number(x.final_supporter_count),
+          resultStatus:x.result_status
+        }))
+      });
+    }
+
     res.json({
       competition:shapeCompetition(competition),
       choices:choices.map((c,i)=>({
@@ -79,7 +123,9 @@ router.get('/:slug',async(req,res,next)=>{
         supporterCount:Number(c.supporter_count||0),
         progressPct:Number(c.progress_pct||0),
         rank:i+1
-      }))
+      })),
+      stages:stageOutput,
+      currentStage:stageOutput.find(s=>s.status==='OPEN')||stageOutput.find(s=>s.status==='DRAFT')||stageOutput.at(-1)||null
     });
   }catch(e){next(e)}
 });
