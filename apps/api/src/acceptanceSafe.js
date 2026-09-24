@@ -41,6 +41,13 @@ await check('acceptance_origin',()=>{
 });
 
 let rootHtml='';
+let launchMode='COMING_SOON';
+await check('public_launch_mode',async()=>{
+  const {response,body}=await request('/api/public/runtime',{expectJson:true});
+  if(response.status!==200||!['COMING_SOON','LIVE'].includes(body?.launchMode))throw new Error('invalid launch mode response');
+  launchMode=body.launchMode;
+  return launchMode;
+});
 await check('public_root_200',async()=>{
   const {response,body}=await request('/');
   if(response.status!==200)throw new Error('status '+response.status);
@@ -49,9 +56,10 @@ await check('public_root_200',async()=>{
   return '200 HTML';
 });
 
-await check('public_bundle_contains_coming_soon',async()=>{
+await check('public_bundle_matches_launch_mode',async()=>{
   const scripts=[...rootHtml.matchAll(/<script[^>]+src=["']([^"']+)["']/g)].map(m=>m[1]);
   if(!scripts.length)throw new Error('no production JavaScript bundle found');
+  if(launchMode==='LIVE')return 'LIVE mode configured';
   let found=false;
   for(const src of scripts){
     const path=src.startsWith('http')?src:new URL(src,origin).href;
@@ -64,7 +72,7 @@ await check('public_bundle_contains_coming_soon',async()=>{
     }finally{clearTimeout(timer)}
   }
   if(!found)throw new Error('Coming Soon copy not found in deployed bundle');
-  return 'Coming Soon bundle present';
+  return 'COMING_SOON mode verified';
 });
 
 await check('preview_route_hidden_from_search',async()=>{
