@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { Router } from 'express';
 import { pool } from '../db/pool.js';
 import { requireSession } from '../auth.js';
+import { syncMatchLifecycle } from '../matchLifecycle.js';
 
 const router=Router();
 const shareToken=()=>crypto.randomBytes(16).toString('hex');
@@ -25,8 +26,8 @@ function publicMatch(m){
   if(!m) return null;
   return {
     publicId:m.public_id,seasonId:m.season_id,seasonName:m.season_name,roundCode:m.round_code,
-    status:m.status,startsAt:m.starts_at,lobbyOpensAt:m.lobby_opens_at,endsAt:m.ends_at,finalisedAt:m.finalised_at,
-    scoreVersion:m.score_version,
+    status:m.status,startsAt:m.starts_at,lobbyOpensAt:m.lobby_opens_at,regulationEndsAt:m.regulation_ends_at,endsAt:m.ends_at,finalisedAt:m.finalised_at,
+    scoreVersion:m.score_version,tiebreakMode:m.tiebreak_mode||'NONE',tiebreakStartedAt:m.tiebreak_started_at||null,
     home:{id:m.home_city_id,code:m.home_code,name:m.home_name,country:m.home_country,score:m.home_score},
     away:{id:m.away_city_id,code:m.away_code,name:m.away_name,country:m.away_country,score:m.away_score},
     winner:m.winner_city_id?{id:m.winner_city_id,code:m.winner_code,name:m.winner_name}:null
@@ -35,6 +36,7 @@ function publicMatch(m){
 
 router.get('/',async(_req,res,next)=>{
   try{
+    await syncMatchLifecycle();
     const [rows]=await pool.query(`
       SELECT m.*,s.name season_name,hc.code home_code,hc.name home_name,hc.country home_country,
         ac.code away_code,ac.name away_name,ac.country away_country,wc.code winner_code,wc.name winner_name
@@ -48,6 +50,7 @@ router.get('/',async(_req,res,next)=>{
 
 router.get('/:publicId/live',async(req,res,next)=>{
   try{
+    await syncMatchLifecycle(req.params.publicId);
     const match=await getMatch(pool,req.params.publicId,false);
     if(!match) return res.status(404).json({error:'match_not_found'});
     const [[counts]]=await pool.query(`
@@ -70,6 +73,7 @@ router.get('/:publicId/live',async(req,res,next)=>{
 
 router.get('/:publicId/invite/:token',async(req,res,next)=>{
   try{
+    await syncMatchLifecycle(req.params.publicId);
     const match=await getMatch(pool,req.params.publicId,false);
     if(!match) return res.status(404).json({error:'match_not_found'});
     const token=String(req.params.token||'').trim().slice(0,32);
@@ -94,6 +98,7 @@ router.get('/:publicId/invite/:token',async(req,res,next)=>{
 
 router.get('/:publicId',async(req,res,next)=>{
   try{
+    await syncMatchLifecycle(req.params.publicId);
     const match=await getMatch(pool,req.params.publicId,false);
     if(!match) return res.status(404).json({error:'match_not_found'});
     res.json({match:publicMatch(match)});
@@ -101,6 +106,7 @@ router.get('/:publicId',async(req,res,next)=>{
 });
 
 router.post('/:publicId/join',requireSession,async(req,res,next)=>{
+  await syncMatchLifecycle(req.params.publicId).catch(()=>{});
   const inviteToken=typeof req.body?.inviteToken==='string'?req.body.inviteToken.trim().slice(0,32):'';
   const conn=await pool.getConnection();
   try{
@@ -139,6 +145,7 @@ router.post('/:publicId/join',requireSession,async(req,res,next)=>{
 });
 
 router.post('/:publicId/activate',requireSession,async(req,res,next)=>{
+  await syncMatchLifecycle(req.params.publicId).catch(()=>{});
   const conn=await pool.getConnection();
   try{
     await conn.beginTransaction();
@@ -166,6 +173,22 @@ router.post('/:publicId/activate',requireSession,async(req,res,next)=>{
 
     if(p.city_id===match.home_city_id) await conn.query('UPDATE matches SET home_score=home_score+1,score_version=score_version+1 WHERE id=?',[match.id]);
     else await conn.query('UPDATE matches SET away_score=away_score+1,score_version=score_version+1 WHERE id=?',[match.id]);
+
+    if(match.tiebreak_mode==='SUDDEN_DEATH'){
+      const [[sd]]=await conn.query('SELECT home_score,away_score FROM matches WHERE id=? FOR UPDATE',[match.id]);
+      if(Number(sd.home_score)!==Number(sd.away_score)){
+        const winner=Number(sd.home_score)>Number(sd.away_score)?match.home_city_id:match.away_city_id;
+        await conn.query(`
+          UPDATE matches
+          SET status='FINAL',winner_city_id=?,finalised_at=UTC_TIMESTAMP(),ends_at=UTC_TIMESTAMP(),tiebreak_mode='NONE'
+          WHERE id=?
+        `,[winner,match.id]);
+        await conn.query(`
+          INSERT INTO match_state_events(match_id,from_status,to_status,metadata_json)
+          VALUES (?,'LIVE','FINAL',JSON_OBJECT('via','SUDDEN_DEATH_GOAL','winnerCityId',?))
+        `,[match.id,winner]);
+      }
+    }
 
     if(p.parent_participation_id){
       const [[parent]]=await conn.query('SELECT id,parent_participation_id,city_id,status FROM match_participations WHERE id=? FOR UPDATE',[p.parent_participation_id]);
