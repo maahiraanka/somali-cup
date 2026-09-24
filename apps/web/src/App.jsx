@@ -110,6 +110,7 @@ export default function App(){
   const [showJoin,setShowJoin]=useState(false);
   const [joinCity,setJoinCity]=useState(null);
   const [viralCity,setViralCity]=useState(null);
+  const [viralMatch,setViralMatch]=useState(null);
   const [joinedMoment,setJoinedMoment]=useState(null);
   const [assistMoment,setAssistMoment]=useState(null);
   const [notice,setNotice]=useState('');
@@ -169,6 +170,17 @@ export default function App(){
     const city=standings.find(c=>c.code===code&&c.is_open);
     if(city)setViralCity(city);
   },[standings,me,identityChecked]);
+  useEffect(()=>{
+    const params=new URLSearchParams(window.location.search);
+    const matchId=(params.get('match')||'').trim();
+    const invite=(params.get('invite')||'').trim();
+    if(!matchId||!invite){setViralMatch(null);return}
+    let cancelled=false;
+    api(`/api/matches/${encodeURIComponent(matchId)}/invite/${encodeURIComponent(invite)}`)
+      .then(d=>{if(!cancelled)setViralMatch(d)})
+      .catch(()=>{if(!cancelled)setViralMatch(null)});
+    return()=>{cancelled=true}
+  },[]);
   const top=standings[0];
   const myCity=useMemo(()=>me?.membership?standings.find(c=>c.code===me.membership.code):null,[me,standings]);
   const total=standings.reduce((a,c)=>a+Number(c.verified_supporters||0),0);
@@ -185,7 +197,9 @@ export default function App(){
     setShowJoin(false);
     setJoinCity(null);
     setViralCity(null);
-    window.history.replaceState({},'',window.location.pathname);
+    setViralMatch(null);
+    const params=new URLSearchParams(window.location.search);
+    if(!params.get('match'))window.history.replaceState({},'',window.location.pathname);
     setJoinedMoment(payload);
     setNotice(`You're in. You represent ${payload.city.name}.`);
     refresh();
@@ -193,9 +207,11 @@ export default function App(){
   };
   const openCity=(c)=>{setSelectedCity(c);setView('city');window.scrollTo({top:0,behavior:'smooth'})};
   const leaveViralLanding=()=>{setViralCity(null);window.history.replaceState({},'',window.location.pathname);setView('home')};
+  const enterInvitedMatch=()=>{setViralMatch(null);setView('matches');window.scrollTo({top:0,behavior:'smooth'})};
+  const leaveMatchInvite=()=>{setViralMatch(null);window.history.replaceState({},'',window.location.pathname);setView('home')};
 
   return <div className="appShell">
-    {!viralCity&&<>    <header className="topbar">
+    {!viralCity&&!viralMatch&&<>    <header className="topbar">
       <button className="brandButton" onClick={()=>setView('home')}><Logo/></button>
       <nav className={mobileNav?'nav open':'nav'}>
         {['home','cities','matches'].map(v=><button key={v} className={view===v?'active':''} onClick={()=>{setView(v);setMobileNav(false)}}>{v[0].toUpperCase()+v.slice(1)}</button>)}
@@ -208,8 +224,8 @@ export default function App(){
       </div>
     </header></>}
 
-    <main className={viralCity&&!me?.membership?'mainStage viralStage':'mainStage'}>
-      {viralCity&&!me?.membership?<ViralCityLanding city={viralCity} standings={standings} fromName={viralFrom} onJoin={()=>requestJoin(viralCity)} onOther={leaveViralLanding}/>:<>
+    <main className={(viralCity&&!me?.membership)||viralMatch?'mainStage viralStage':'mainStage'}>
+      {viralMatch?<ViralMatchLanding data={viralMatch} me={me} onIdentity={()=>requestJoin()} onEnter={enterInvitedMatch} onLeave={leaveMatchInvite}/>:viralCity&&!me?.membership?<ViralCityLanding city={viralCity} standings={standings} fromName={viralFrom} onJoin={()=>requestJoin(viralCity)} onOther={leaveViralLanding}/>:<>
         {view==='home'&&<Home standings={standings} top={top} total={total} season={season} myCity={myCity} onJoin={requestJoin} openCity={openCity} goQualification={()=>setView('qualification')} goMatches={()=>setView('matches')}/>}
         {view==='qualification'&&<Qualification standings={standings} season={season} onJoin={requestJoin} openCity={openCity}/>}
         {view==='cities'&&<Cities standings={standings} openCity={openCity} onJoin={requestJoin}/>}
@@ -219,7 +235,7 @@ export default function App(){
       </>}
     </main>
 
-    {!viralCity&&<nav className="mobileDock">
+    {!viralCity&&!viralMatch&&<nav className="mobileDock">
       <button className={view==='home'?'active':''} onClick={()=>setView('home')}><Trophy size={18}/><span>Home</span></button>
       <button className={view==='qualification'?'active':''} onClick={()=>setView('qualification')}><BarChart3 size={18}/><span>Table</span></button>
       <button className={view==='matches'?'active':''} onClick={()=>setView('matches')}><Radio size={18}/><span>Matches</span></button>
@@ -228,9 +244,46 @@ export default function App(){
     </nav>}
 
     {showJoin&&!me?.membership&&<JoinExperience standings={standings.filter(c=>c.is_open)} initialCity={joinCity} onClose={()=>{setShowJoin(false);setJoinCity(null)}} onJoined={joined}/>}
-    {joinedMoment&&<JoinedMoment payload={joinedMoment} city={{...(standings.find(c=>c.code===joinedMoment.city.code)||{}),...joinedMoment.city}} onDone={()=>{setJoinedMoment(null);setView('profile')}}/>}
+    {joinedMoment&&<JoinedMoment payload={joinedMoment} city={{...(standings.find(c=>c.code===joinedMoment.city.code)||{}),...joinedMoment.city}} onDone={()=>{setJoinedMoment(null);setView(new URLSearchParams(window.location.search).get('match')?'matches':'profile')}}/>}
     {assistMoment&&<AssistMoment moment={assistMoment} city={standings.find(c=>c.code===assistMoment.membership?.code)||assistMoment.membership} onDone={()=>setAssistMoment(null)}/>}
     {notice&&<div className="toast"><Check size={16}/>{notice}</div>}
+  </div>
+}
+
+function ViralMatchLanding({data,me,onIdentity,onEnter,onLeave}){
+  const match=data?.match;
+  const invite=data?.invite;
+  if(!match)return null;
+  const home=match.home,away=match.away;
+  const homeScore=Number(home?.score||0),awayScore=Number(away?.score||0);
+  const memberCode=me?.membership?.code;
+  const memberCity=memberCode===home?.code?home:memberCode===away?.code?away:null;
+  const inviterCity=invite?.city;
+  const leader=homeScore===awayScore?null:(homeScore>awayScore?home:away);
+  const gap=Math.abs(homeScore-awayScore);
+  const statusCopy=match.status==='LIVE'
+    ? leader?`${leader.name} lead by ${gap} ${gap===1?'Goal':'Goals'}.`:'The score is level. The next Goal takes the lead.'
+    : match.status==='LOBBY'?'The lobby is open. Cities are calling their people in.':'This fixture is coming up.';
+  return <div className="matchInviteLanding">
+    <section className="matchInviteHero">
+      <div className="matchInviteTop"><Logo/><span className={match.status==='LIVE'?'inviteLive live':'inviteLive'}><i/> {match.status}</span></div>
+      <div className="matchInviteCallout"><UserPlus size={16}/><span><b>{invite?.from||'A supporter'}</b> from {inviterCity?.name||'their city'} called you into this match.</span></div>
+      <div className="matchInviteVersus">
+        <div className="inviteCity" style={{backgroundImage:`linear-gradient(180deg,rgba(2,8,18,.18),rgba(2,8,18,.95)),url("${imgFor(home)}")`}}><CityThumb city={home} size="lg"/><small>{home.code}</small><h2>{home.name}</h2><strong>{fmt(homeScore)}</strong></div>
+        <div className="inviteVs"><small>{match.roundCode||'SOMALI CUP'}</small><b>VS</b><span>{match.status==='LIVE'?'LIVE SCORE':'FIXTURE'}</span></div>
+        <div className="inviteCity" style={{backgroundImage:`linear-gradient(180deg,rgba(2,8,18,.18),rgba(2,8,18,.95)),url("${imgFor(away)}")`}}><CityThumb city={away} size="lg"/><small>{away.code}</small><h2>{away.name}</h2><strong>{fmt(awayScore)}</strong></div>
+      </div>
+      <div className="matchInviteAction">
+        <small>THE MATCH IS CALLING</small>
+        <h1>{memberCity?`Your city is in this.`:!me?'Which city is yours?':'Watch the rivalry unfold.'}</h1>
+        <p>{statusCopy} {memberCity?`Enter for ${memberCity.name}. Your verified entry can score exactly 1 Goal.`:!me?'Choose your real city first. If your city is playing, you can enter its side.':'Your city is not playing in this fixture, but you can watch the verified score.'}</p>
+        {!me?<button className="matchInvitePrimary" onClick={onIdentity}>CHOOSE MY CITY <ArrowRight size={18}/></button>:
+          memberCity?<button className="matchInvitePrimary" onClick={onEnter}>ENTER FOR {memberCity.name.toUpperCase()} <ArrowRight size={18}/></button>:
+          <button className="matchInvitePrimary watch" onClick={onEnter}>WATCH THE MATCH <Radio size={17}/></button>}
+        <button className="viralOtherCity" onClick={onLeave}>Go to Somali Cup home</button>
+        <div className="viralTrust"><ShieldCheck size={15}/><span>1 verified person = 1 Goal. Invites never change your city.</span></div>
+      </div>
+    </section>
   </div>
 }
 
@@ -441,7 +494,12 @@ function MatchCenter({matches,me,onNeedIdentity}){
   const [benchPulse,setBenchPulse]=useState(0);
   const [showMatchDepth,setShowMatchDepth]=useState(false);
   const load=async(match=selected)=>{if(!match)return;try{setLive(await api(`/api/matches/${match.publicId}/live`))}catch{setLive({match,counts:{homeActive:0,awayActive:0,registered:0,total:0},activity:[]})}if(me){try{const d=await api(`/api/matches/${match.publicId}/me`);setMine(d.participation)}catch{setMine(null)}}else setMine(null)};
-  useEffect(()=>{if(!selected&&matches[0])setSelected(matches[0])},[matches,selected]);
+  useEffect(()=>{
+    const wanted=new URLSearchParams(window.location.search).get('match');
+    const deep=wanted?matches.find(m=>m.publicId===wanted):null;
+    if(deep && selected?.publicId!==deep.publicId)setSelected(deep);
+    else if(!selected&&matches[0])setSelected(matches[0]);
+  },[matches,selected]);
   useEffect(()=>{load()},[selected?.publicId,Boolean(me)]);
   const match=live?.match||selected;
   if(!match)return <div className="pageWrap"><section className="pageHero compact"><h1>No fixtures yet.</h1></section></div>;
@@ -463,7 +521,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
   const commentary=(live?.activity||[]).slice(0,5);
   const join=async()=>{if(!me){onNeedIdentity();return}setBusy(true);setMsg('');try{const inviteToken=new URLSearchParams(window.location.search).get('invite')||'';const d=await api(`/api/matches/${match.publicId}/join`,{method:'POST',body:JSON.stringify({inviteToken})});setMine(d.participation);setMsg(d.created?'Place reserved.':'You are already registered.');await load(match)}catch(e){setMsg(e.message.replaceAll('_',' '))}finally{setBusy(false)}};
   const activate=async()=>{setBusy(true);setMsg('');try{const d=await api(`/api/matches/${match.publicId}/activate`,{method:'POST',body:'{}'});setMsg(d.goalAdded?'GOAL — your verified entry moved the score.':'Your goal is already counted.');await load(match)}catch(e){setMsg(e.message.replaceAll('_',' '))}finally{setBusy(false)}};
-  const copyLink=async()=>{const token=mine?.share_token||mine?.shareToken;if(!token)return;const url=`${window.location.origin}/?match=${match.publicId}&invite=${token}`;try{await navigator.clipboard.writeText(url);setBenchPulse(v=>v+1);setMsg('Bench link copied — bring your people into the match.')}catch{setMsg(url)}};
+  const copyLink=async()=>{const token=mine?.share_token||mine?.shareToken;if(!token)return;const from=encodeURIComponent(me?.user?.nickname||me?.user?.displayName||'');const url=`${window.location.origin}/?match=${match.publicId}&invite=${token}${from?'&from='+from:''}`;try{await navigator.clipboard.writeText(url);setBenchPulse(v=>v+1);setMsg('Bench link copied — bring your people into the match.')}catch{setMsg(url)}};
   const myMatchCity=me?.membership?.code===home.code?home:me?.membership?.code===away.code?away:null;
   const shareMoment=async(type)=>{
     const city=myMatchCity||leader||home;
