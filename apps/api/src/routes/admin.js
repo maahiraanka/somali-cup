@@ -324,6 +324,124 @@ router.get('/audit',async(req,res,next)=>{
   }catch(e){next(e)}
 });
 
+router.get('/tournament-config',async(_req,res,next)=>{
+  try{
+    const [[season]]=await pool.query("SELECT id,name,status FROM seasons WHERE status IN ('QUALIFICATION','GROUP','KNOCKOUT','FINAL','COMPLETE') ORDER BY id DESC LIMIT 1");
+    if(!season)return res.json({season:null,stages:[],cities:[]});
+    const [cities]=await pool.query(`
+      SELECT c.id,c.code,c.name,sc.status
+      FROM season_cities sc JOIN cities c ON c.id=sc.city_id
+      WHERE sc.season_id=? AND c.is_active=1
+      ORDER BY c.name
+    `,[season.id]);
+    const [stages]=await pool.query(`
+      SELECT id,code,name,stage_type,sequence_no,status,advance_count,tie_policy,match_duration_minutes
+      FROM tournament_stages WHERE season_id=? ORDER BY sequence_no
+    `,[season.id]);
+    const output=[];
+    for(const stage of stages){
+      const item={...stage,id:Number(stage.id),sequence_no:Number(stage.sequence_no),match_duration_minutes:Number(stage.match_duration_minutes||60),groups:[]};
+      if(stage.stage_type==='GROUP'){
+        const [groups]=await pool.query('SELECT id,code,name FROM tournament_groups WHERE stage_id=? ORDER BY code',[stage.id]);
+        for(const g of groups){
+          const [members]=await pool.query(`
+            SELECT c.id,c.code,c.name,tgc.seed_no
+            FROM tournament_group_cities tgc JOIN cities c ON c.id=tgc.city_id
+            WHERE tgc.group_id=? ORDER BY tgc.seed_no,c.name
+          `,[g.id]);
+          item.groups.push({...g,id:Number(g.id),cities:members.map(x=>({...x,id:Number(x.id),seed_no:Number(x.seed_no)}))});
+        }
+      }
+      output.push(item);
+    }
+    res.json({season,cities,stages:output});
+  }catch(e){next(e)}
+});
+
+router.post('/tournament/stages',async(req,res,next)=>{
+  const code=String(req.body?.code||'').trim().toUpperCase().slice(0,24);
+  const name=String(req.body?.name||'').trim().slice(0,80);
+  const type=String(req.body?.stageType||'').toUpperCase();
+  const sequence=Number(req.body?.sequenceNo);
+  const tiePolicy=String(req.body?.tiePolicy||'SUDDEN_DEATH').toUpperCase();
+  const duration=Math.max(1,Math.min(1440,Number(req.body?.matchDurationMinutes)||60));
+  const advance=req.body?.advanceCount===null||req.body?.advanceCount===''?null:Number(req.body?.advanceCount);
+  if(!code||!name||!['GROUP','KNOCKOUT','FINAL'].includes(type)||!Number.isInteger(sequence)||sequence<1)return res.status(400).json({error:'invalid_tournament_stage'});
+  if(!['DRAW_ALLOWED','SUDDEN_DEATH'].includes(tiePolicy))return res.status(400).json({error:'invalid_tie_policy'});
+  try{
+    const [[season]]=await pool.query("SELECT id FROM seasons WHERE status IN ('QUALIFICATION','GROUP','KNOCKOUT','FINAL') ORDER BY id DESC LIMIT 1");
+    if(!season)return res.status(409).json({error:'active_season_required'});
+    const [result]=await pool.query(`
+      INSERT INTO tournament_stages(season_id,code,name,stage_type,sequence_no,status,advance_count,tie_policy,match_duration_minutes)
+      VALUES (?,?,?,?,?,'DRAFT',?,?,?)
+    `,[season.id,code,name,type,sequence,Number.isInteger(advance)?advance:null,tiePolicy,duration]);
+    await pool.query('INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'TOURNAMENT_STAGE_CREATED','TOURNAMENT_STAGE',String(result.insertId),JSON.stringify({code,name,type,sequence,tiePolicy,duration,advance})]);
+    res.status(201).json({ok:true,id:Number(result.insertId)});
+  }catch(e){if(e.code==='ER_DUP_ENTRY')return res.status(409).json({error:'stage_code_or_sequence_already_exists'});next(e)}
+});
+
+router.patch('/tournament/stages/:stageId',async(req,res,next)=>{
+  const stageId=Number(req.params.stageId);
+  const name=String(req.body?.name||'').trim().slice(0,80);
+  const status=String(req.body?.status||'').toUpperCase();
+  const tiePolicy=String(req.body?.tiePolicy||'').toUpperCase();
+  const duration=Number(req.body?.matchDurationMinutes);
+  if(!Number.isInteger(stageId)||stageId<1||!name||!['DRAFT','OPEN','COMPLETE'].includes(status)||!['DRAW_ALLOWED','SUDDEN_DEATH'].includes(tiePolicy)||!Number.isInteger(duration)||duration<1||duration>1440){
+    return res.status(400).json({error:'invalid_stage_update'});
+  }
+  try{
+    const [result]=await pool.query('UPDATE tournament_stages SET name=?,status=?,tie_policy=?,match_duration_minutes=? WHERE id=?',[name,status,tiePolicy,duration,stageId]);
+    if(!result.affectedRows)return res.status(404).json({error:'stage_not_found'});
+    await pool.query('INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'TOURNAMENT_STAGE_UPDATED','TOURNAMENT_STAGE',String(stageId),JSON.stringify({name,status,tiePolicy,duration})]);
+    res.json({ok:true});
+  }catch(e){next(e)}
+});
+
+router.post('/tournament/groups',async(req,res,next)=>{
+  const stageId=Number(req.body?.stageId);
+  const code=String(req.body?.code||'').trim().toUpperCase().slice(0,12);
+  const name=String(req.body?.name||'').trim().slice(0,60);
+  if(!Number.isInteger(stageId)||stageId<1||!code||!name)return res.status(400).json({error:'invalid_group'});
+  try{
+    const [[stage]]=await pool.query("SELECT id FROM tournament_stages WHERE id=? AND stage_type='GROUP' LIMIT 1",[stageId]);
+    if(!stage)return res.status(409).json({error:'group_stage_required'});
+    const [result]=await pool.query('INSERT INTO tournament_groups(stage_id,code,name) VALUES (?,?,?)',[stageId,code,name]);
+    await pool.query('INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'TOURNAMENT_GROUP_CREATED','TOURNAMENT_GROUP',String(result.insertId),JSON.stringify({stageId,code,name})]);
+    res.status(201).json({ok:true,id:Number(result.insertId)});
+  }catch(e){if(e.code==='ER_DUP_ENTRY')return res.status(409).json({error:'group_code_already_exists'});next(e)}
+});
+
+router.post('/tournament/groups/:groupId/cities',async(req,res,next)=>{
+  const groupId=Number(req.params.groupId);
+  const cityCode=String(req.body?.cityCode||'').trim().toUpperCase();
+  const seedNo=Math.max(1,Math.min(1000,Number(req.body?.seedNo)||100));
+  if(!Number.isInteger(groupId)||groupId<1||!cityCode)return res.status(400).json({error:'invalid_group_city'});
+  try{
+    const [[city]]=await pool.query('SELECT id,name FROM cities WHERE code=? AND is_active=1 LIMIT 1',[cityCode]);
+    if(!city)return res.status(404).json({error:'city_not_found'});
+    await pool.query('INSERT INTO tournament_group_cities(group_id,city_id,seed_no) VALUES (?,?,?) ON DUPLICATE KEY UPDATE seed_no=VALUES(seed_no)',[groupId,city.id,seedNo]);
+    await pool.query('INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'TOURNAMENT_GROUP_CITY_ASSIGNED','TOURNAMENT_GROUP',String(groupId),JSON.stringify({cityCode,cityId:city.id,seedNo})]);
+    res.json({ok:true});
+  }catch(e){next(e)}
+});
+
+router.delete('/tournament/groups/:groupId/cities/:cityCode',async(req,res,next)=>{
+  const groupId=Number(req.params.groupId);
+  const cityCode=String(req.params.cityCode||'').trim().toUpperCase();
+  try{
+    const [[city]]=await pool.query('SELECT id FROM cities WHERE code=? LIMIT 1',[cityCode]);
+    if(!city)return res.status(404).json({error:'city_not_found'});
+    await pool.query('DELETE FROM tournament_group_cities WHERE group_id=? AND city_id=?',[groupId,city.id]);
+    await pool.query('INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'TOURNAMENT_GROUP_CITY_REMOVED','TOURNAMENT_GROUP',String(groupId),JSON.stringify({cityCode,cityId:city.id})]);
+    res.json({ok:true});
+  }catch(e){next(e)}
+});
+
 router.get('/supporters',async(req,res,next)=>{
   try{
     const q=String(req.query.q||'').trim().slice(0,80);
