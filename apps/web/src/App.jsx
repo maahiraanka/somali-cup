@@ -1,4 +1,4 @@
-import React,{useEffect,useMemo,useState} from 'react';
+import React,{useEffect,useMemo,useRef,useState} from 'react';
 import {ArrowLeft,ArrowRight,BarChart3,Check,ChevronRight,Clock3,Globe2,Heart,Link2,LockKeyhole,MapPin,Menu,Play,Radio,Search,Share2,ShieldCheck,Sparkles,Trophy,UserPlus,Users,X,Zap} from 'lucide-react';
 
 const heroImage='https://images.unsplash.com/photo-1578662996442-48f60103fc96?auto=format&fit=crop&w=2200&q=90';
@@ -36,6 +36,7 @@ const demoMatches=[
 
 const flag=(country)=>({Australia:'🇦🇺','United Kingdom':'🇬🇧',Canada:'🇨🇦',Kenya:'🇰🇪','United States':'🇺🇸',Somalia:'🇸🇴',Sweden:'🇸🇪',Norway:'🇳🇴','United Arab Emirates':'🇦🇪'})[country]||'🌍';
 const fmt=n=>Number(n||0).toLocaleString();
+const matchStatusPollDelay=status=>status==='LIVE'?8000:status==='LOBBY'?15000:30000;
 function api(path,opts={}){const token=localStorage.getItem('somalicup_session');const headers={'Content-Type':'application/json',...(opts.headers||{})};if(token)headers.Authorization=`Bearer ${token}`;return fetch(path,{...opts,headers}).then(async r=>{const body=await r.json().catch(()=>({}));if(!r.ok)throw Object.assign(new Error(body.error||'request_failed'),{status:r.status,body});return body})}
 const imgFor=c=>cityImages[c?.code]||heroImage;
 const esc=v=>String(v??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[m]));
@@ -536,7 +537,42 @@ function MatchCenter({matches,me,onNeedIdentity}){
   const [msg,setMsg]=useState('');
   const [benchPulse,setBenchPulse]=useState(0);
   const [showMatchDepth,setShowMatchDepth]=useState(false);
-  const load=async(match=selected)=>{if(!match)return;try{setLive(await api(`/api/matches/${match.publicId}/live`))}catch{setLive({match,counts:{homeActive:0,awayActive:0,registered:0,total:0},activity:[]})}if(me){try{const d=await api(`/api/matches/${match.publicId}/me`);setMine(d.participation)}catch{setMine(null)}}else setMine(null)};
+  const [scoreMoment,setScoreMoment]=useState(null);
+  const liveRef=useRef(null);
+  const momentTimerRef=useRef(null);
+  const load=async(match=selected,{quiet=false}={})=>{
+    if(!match)return;
+    try{
+      const fresh=await api(`/api/matches/${match.publicId}/live`);
+      const prev=liveRef.current;
+      if(!quiet&&prev?.match?.publicId===fresh?.match?.publicId&&Number(fresh?.match?.scoreVersion||0)>Number(prev?.match?.scoreVersion||0)){
+        const latestGoal=(fresh.activity||[]).find(a=>a.type==='GOAL');
+        if(latestGoal){
+          const h=Number(fresh.match?.home?.score||0),a=Number(fresh.match?.away?.score||0);
+          const scoringCity=latestGoal.city_name||latestGoal.city_code||'A city';
+          const scoringCode=latestGoal.city_code||'';
+          const scoringLeads=(scoringCode===fresh.match?.home?.code&&h>a)||(scoringCode===fresh.match?.away?.code&&a>h);
+          const isLevel=h===a;
+          setScoreMoment({
+            city:scoringCity,
+            code:scoringCode,
+            supporter:latestGoal.nickname||latestGoal.display_name||'A supporter',
+            message:isLevel?'Level match.':scoringLeads?'They take the lead.':'The gap just changed.'
+          });
+          clearTimeout(momentTimerRef.current);
+          momentTimerRef.current=setTimeout(()=>setScoreMoment(null),5200);
+        }
+      }
+      liveRef.current=fresh;
+      setLive(fresh);
+    }catch{
+      if(!liveRef.current)setLive({match,counts:{homeActive:0,awayActive:0,registered:0,total:0},activity:[]});
+    }
+    if(me){
+      try{const d=await api(`/api/matches/${match.publicId}/me`);setMine(d.participation)}
+      catch{setMine(null)}
+    }else setMine(null)
+  };
   useEffect(()=>{
     const wanted=new URLSearchParams(window.location.search).get('match');
     const deep=wanted?matches.find(m=>m.publicId===wanted):null;
@@ -545,7 +581,23 @@ function MatchCenter({matches,me,onNeedIdentity}){
     const target=own||deep||matches[0]||null;
     if(target && selected?.publicId!==target.publicId)setSelected(target);
   },[matches,selected?.publicId,me?.membership?.code]);
-  useEffect(()=>{load()},[selected?.publicId,Boolean(me)]);
+  useEffect(()=>{
+    liveRef.current=null;
+    setScoreMoment(null);
+    load(selected,{quiet:true});
+  },[selected?.publicId,Boolean(me)]);
+
+  useEffect(()=>{
+    if(!selected)return;
+    let cancelled=false;
+    const tick=()=>{if(!cancelled&&document.visibilityState==='visible')load(selected)};
+    const interval=setInterval(tick,matchStatusPollDelay(liveRef.current?.match?.status||selected?.status));
+    const onFocus=()=>tick();
+    window.addEventListener('focus',onFocus);
+    return()=>{cancelled=true;clearInterval(interval);window.removeEventListener('focus',onFocus)}
+  },[selected?.publicId,Boolean(me)]);
+
+  useEffect(()=>()=>clearTimeout(momentTimerRef.current),[]);
   const match=live?.match||selected;
   if(!match)return <div className="pageWrap"><section className="pageHero compact"><h1>No fixtures yet.</h1></section></div>;
   const home=match.home||{code:match.home_code,name:match.home_name,country:'Somalia',score:match.home_score||0};
@@ -565,7 +617,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
   const benchFilled=Math.min(3,Number(mine?.assists??mine?.direct_joins??0));
   const commentary=(live?.activity||[]).slice(0,5);
   const join=async()=>{if(!me){onNeedIdentity();return}setBusy(true);setMsg('');try{const inviteToken=new URLSearchParams(window.location.search).get('invite')||'';const d=await api(`/api/matches/${match.publicId}/join`,{method:'POST',body:JSON.stringify({inviteToken})});setMine(d.participation);setMsg(d.created?'Place reserved.':'You are already registered.');await load(match)}catch(e){setMsg(e.message.replaceAll('_',' '))}finally{setBusy(false)}};
-  const activate=async()=>{setBusy(true);setMsg('');try{const d=await api(`/api/matches/${match.publicId}/activate`,{method:'POST',body:'{}'});setMsg(d.goalAdded?'GOAL — your verified entry moved the score.':'Your goal is already counted.');await load(match)}catch(e){setMsg(e.message.replaceAll('_',' '))}finally{setBusy(false)}};
+  const activate=async()=>{setBusy(true);setMsg('');try{const d=await api(`/api/matches/${match.publicId}/activate`,{method:'POST',body:'{}'});setMsg(d.goalAdded?'GOAL — your verified entry moved the score.':'Your Goal is already counted.');await load(match)}catch(e){setMsg(e.message.replaceAll('_',' '))}finally{setBusy(false)}};
   const copyLink=async()=>{const token=mine?.share_token||mine?.shareToken;if(!token)return;const from=encodeURIComponent(me?.user?.nickname||me?.user?.displayName||'');const url=`${window.location.origin}/?match=${match.publicId}&invite=${token}${from?'&from='+from:''}`;try{await navigator.clipboard.writeText(url);setBenchPulse(v=>v+1);setMsg('Bench link copied — bring your people into the match.')}catch{setMsg(url)}};
   const myMatchCity=me?.membership?.code===home.code?home:me?.membership?.code===away.code?away:null;
   const shareMoment=async(type)=>{
@@ -583,7 +635,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
   return <div className="matchExperience">
     <section className="broadcastHero">
       <div className="matchSide homeSide" style={{backgroundImage:`linear-gradient(90deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(home)}")`}}><CityThumb city={home} size="lg"/><h2>{home.name}</h2><small>{home.code}</small></div>
-      <div className="scoreBoard"><div className={"liveBadge "+(match.status==='LIVE'?'red':'')}><span/> {match.status}</div><small>{match.roundCode||match.round_code}</small><strong>{fmt(home.score)} <em>–</em> {fmt(away.score)}</strong><span className="matchClock">{match.status==='LIVE'?'VERIFIED SCORE':match.status==='LOBBY'?'LOBBY OPEN':match.status==='SCHEDULED'?'UPCOMING':match.status}</span></div>
+      <div className="scoreBoard"><div className={"liveBadge "+(match.status==='LIVE'?'red':'')}><span/> {match.status}</div><small>{match.roundCode||match.round_code}</small><strong>{fmt(home.score)} <em>–</em> {fmt(away.score)}</strong><span className="matchClock">{match.status==='LIVE'?'VERIFIED SCORE':match.status==='LOBBY'?'LOBBY OPEN':match.status==='SCHEDULED'?'UPCOMING':match.status}</span>{scoreMoment&&<div className="scoreMoment"><span>VERIFIED GOAL</span><b>{scoreMoment.city} scored.</b><small>{scoreMoment.message}</small></div>}</div>
       <div className="matchSide awaySide" style={{backgroundImage:`linear-gradient(270deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(away)}")`}}><CityThumb city={away} size="lg"/><h2>{away.name}</h2><small>{away.code}</small></div>
     </section>
     <section className="supportMeter"><div><b>{homeSupportPct}%</b><span>{fmt(homeActive)} active</span></div><div className="meterTrack"><i style={{width:`${homeSupportPct}%`}}/><em style={{width:`${awaySupportPct}%`}}/></div><div><b>{awaySupportPct}%</b><span>{fmt(awayActive)} active</span></div></section>
