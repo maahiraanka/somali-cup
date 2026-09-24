@@ -636,9 +636,9 @@ function TournamentView({tournament,myCityCode,goMatches}){
     {stage.type==='GROUP'?<div className="cupGroups">
       {(stage.groups||[]).map(group=><section className="cupGroup" key={group.code}>
         <div className="cupGroupHead"><div><small>{group.code}</small><h3>{group.name}</h3></div><span>{stage.advanceCount?stage.advanceCount+' advance':'GROUP STAGE'}</span></div>
-        <div className="cupTableHead"><span>#</span><span>City</span><span>P</span><span>W</span><span>GD</span><span>Pts</span></div>
+        <div className="cupTableHead"><span>#</span><span>City</span><span>P</span><span>W</span><span>D</span><span>GD</span><span>Pts</span></div>
         {(group.table||[]).map(row=><div key={row.city.code} className={'cupTableRow '+(row.city.code===myCityCode?'mine':'')}>
-          <b>{row.rank}</b><div><strong>{row.city.name}</strong><small>{row.city.code}</small></div><span>{row.played}</span><span>{row.wins}</span><span>{row.goalDiff>0?'+':''}{row.goalDiff}</span><strong>{row.points}</strong>
+          <b>{row.rank}</b><div><strong>{row.city.name}</strong><small>{row.city.code}</small></div><span>{row.played}</span><span>{row.wins}</span><span>{row.draws||0}</span><span>{row.goalDiff>0?'+':''}{row.goalDiff}</span><strong>{row.points}</strong>
         </div>)}
         <div className="cupGroupFixtures">
           {(group.matches||[]).slice(0,4).map(m=><div key={m.publicId}><span>{m.status}</span><b>{m.home.code} {m.home.score} — {m.away.score} {m.away.code}</b></div>)}
@@ -888,7 +888,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
   return <div className="matchExperience">
     <section className="broadcastHero">
       <div className={`matchSide homeSide ${scoreMoment?.code===home.code?'scoredNow':''}`} style={{backgroundImage:`linear-gradient(90deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(home)}")`}}><CityThumb city={home} size="lg"/><h2>{home.name}</h2><small>{home.code}</small></div>
-      <div className="scoreBoard"><div className={"liveBadge "+(match.status==='LIVE'?'red':'')}><span/> {match.status}</div><small>{match.roundCode||match.round_code}</small><strong><MotionNumber value={home.score}/> <em>–</em> <MotionNumber value={away.score}/></strong><span className="matchClock">{match.status==='LIVE'?'VERIFIED SCORE':match.status==='LOBBY'?'LOBBY OPEN':match.status==='SCHEDULED'?'UPCOMING':match.status}</span>{scoreMoment&&<div className="scoreMoment"><span>VERIFIED GOAL</span><b>{scoreMoment.city} scored.</b><small>{scoreMoment.message}</small></div>}</div>
+      <div className="scoreBoard"><div className={"liveBadge "+(match.status==='LIVE'?'red':'')}><span/> {match.tiebreakMode==='SUDDEN_DEATH'?'SUDDEN DEATH':match.status}</div><small>{match.roundCode||match.round_code}</small><strong><MotionNumber value={home.score}/> <em>–</em> <MotionNumber value={away.score}/></strong><span className="matchClock">{match.tiebreakMode==='SUDDEN_DEATH'?'NEXT VERIFIED GOAL WINS':match.status==='LIVE'?'VERIFIED SCORE':match.status==='LOBBY'?'LOBBY OPEN':match.status==='SCHEDULED'?'UPCOMING':match.status}</span>{scoreMoment&&<div className="scoreMoment"><span>VERIFIED GOAL</span><b>{scoreMoment.city} scored.</b><small>{scoreMoment.message}</small></div>}</div>
       <div className={`matchSide awaySide ${scoreMoment?.code===away.code?'scoredNow':''}`} style={{backgroundImage:`linear-gradient(270deg,rgba(0,15,30,.3),rgba(1,8,18,.92)),url("${imgFor(away)}")`}}><CityThumb city={away} size="lg"/><h2>{away.name}</h2><small>{away.code}</small></div>
     </section>
     <section className="supportMeter"><div><b>{homeSupportPct}%</b><span>{fmt(homeActive)} active</span></div><div className="meterTrack"><i style={{width:`${homeSupportPct}%`}}/><em style={{width:`${awaySupportPct}%`}}/></div><div><b>{awaySupportPct}%</b><span>{fmt(awayActive)} active</span></div></section>
@@ -899,19 +899,22 @@ function MatchCenter({matches,me,onNeedIdentity}){
         {!me?<><h3>Choose your city first.</h3><p>Your city identity decides which side you can represent in Somali Cup.</p></>:
         !myMatchCity?<><h3>Taking you to your city’s match.</h3><p>Every active city has a current Somali Cup fixture.</p></>:
         !mine?<><h3>Join {myMatchCity.name} in this match.</h3><p>Reserve your place. When it goes live, your verified entry scores 1 Goal.</p></>:
+        mine.status==='REGISTERED'&&match.tiebreakMode==='SUDDEN_DEATH'?<><h3>Enter now. Win it.</h3><p>The next verified Goal ends the match. Your one Goal can decide it for {myMatchCity.name}.</p></>:
         mine.status==='REGISTERED'&&match.status==='LIVE'?<><h3>Enter now. Score once.</h3><p>Your verified entry scores exactly 1 Goal for {myMatchCity.name}.</p></>:
         mine.status==='REGISTERED'?<><h3>Your place is reserved.</h3><p>Use your personal link to bring your city into the lobby before kickoff.</p></>:
         match.status==='FINAL'?<><h3>Full time. Share the result.</h3><p>Turn the finish into the next Somali Cup moment.</p></>:
+        match.tiebreakMode==='SUDDEN_DEATH'?<><h3>Your Goal is in. Call the winner.</h3><p>One unused supporter Goal can end this match. Bring your city in now.</p></>:
         <><h3>Your Goal is in. Go for the Assist.</h3><p>Bring one person through your link. If they join, you get the Assist and they score their own Goal.</p></>}
       </div>
       <div className="nextActionButton">
         {!me?<button className="goldBtn" onClick={onNeedIdentity}>CHOOSE MY CITY <ArrowRight size={16}/></button>:
         !myMatchCity?<button className="goldBtn" onClick={()=>{const own=matches.find(m=>m.home?.code===me?.membership?.code||m.away?.code===me?.membership?.code);if(own)setSelected(own)}}>OPEN MY CITY MATCH <ArrowRight size={16}/></button>:
         !mine?<button className="goldBtn" disabled={busy} onClick={join}>{busy?'Joining…':'JOIN THIS MATCH'} <ArrowRight size={16}/></button>:
+        mine.status==='REGISTERED'&&match.tiebreakMode==='SUDDEN_DEATH'?<button className="goldBtn suddenDeathCta" disabled={busy} onClick={activate}>{busy?'Entering…':'ENTER & WIN IT'} <Zap size={16}/></button>:
         mine.status==='REGISTERED'&&match.status==='LIVE'?<button className="goldBtn" disabled={busy} onClick={activate}>{busy?'Entering…':'ENTER & SCORE'} <Play size={16}/></button>:
         mine.status==='REGISTERED'?<button className="goldBtn" onClick={copyLink}><Share2 size={16}/> CALL MY CITY</button>:
         match.status==='FINAL'?<button className="goldBtn" onClick={()=>shareMoment('fulltime')}><Share2 size={16}/> SHARE RESULT</button>:
-        <button className="goldBtn" onClick={copyLink}><UserPlus size={16}/> CALL THE BENCH</button>}
+        <button className={"goldBtn "+(match.tiebreakMode==='SUDDEN_DEATH'?'suddenDeathCta':'')} onClick={copyLink}><UserPlus size={16}/> {match.tiebreakMode==='SUDDEN_DEATH'?'CALL THE WINNER':'CALL THE BENCH'}</button>}
       </div>
     </section>
 
@@ -921,8 +924,8 @@ function MatchCenter({matches,me,onNeedIdentity}){
       <div className="narrativeState">
         <span className="statePulse"/>
         <small>{leader?'MATCH STATE':'MATCH STATE'}</small>
-        <h3>{leader?`${leader.name} lead by ${leadMargin}`:'Level match — next goal changes everything'}</h3>
-        <p>{leader?`${trailing.name} need a response. The next verified Goal changes the match.`:'The score is level. The next verified Goal breaks the deadlock.'}</p>
+        <h3>{match.tiebreakMode==='SUDDEN_DEATH'?'Sudden death — next Goal wins':leader?`${leader.name} lead by ${leadMargin}`:'Level match — next goal changes everything'}</h3>
+        <p>{match.tiebreakMode==='SUDDEN_DEATH'?'Regulation ended level. The next unused verified supporter Goal ends the match.':leader?`${trailing.name} need a response. The next verified Goal changes the match.`:'The score is level. The next verified Goal breaks the deadlock.'}</p>
       </div>
       <div className="pressureBattle">
         <div className="pressureCity home"><span>{home.code}</span><b>{homeScore}</b><i style={{height:`${homeScorePct}%`}}/></div>
@@ -931,7 +934,7 @@ function MatchCenter({matches,me,onNeedIdentity}){
       </div>
       <div className="nextMoment">
         <small>NEXT MOMENT</small>
-        <strong>{leader?`${trailing.name} comeback window`:'First breakthrough'}</strong>
+        <strong>{match.tiebreakMode==='SUDDEN_DEATH'?'Match-winning Goal':leader?`${trailing.name} comeback window`:'First breakthrough'}</strong>
         <span>Goal · Assist · Branch</span>
       </div>
     </section>
