@@ -111,6 +111,7 @@ export default function App(){
   const [joinCity,setJoinCity]=useState(null);
   const [viralCity,setViralCity]=useState(null);
   const [joinedMoment,setJoinedMoment]=useState(null);
+  const [assistMoment,setAssistMoment]=useState(null);
   const [notice,setNotice]=useState('');
   const [matches,setMatches]=useState(demoMatches);
   const [selectedCity,setSelectedCity]=useState(null);
@@ -118,10 +119,49 @@ export default function App(){
 
   const refresh=async()=>{
     try{const d=await api('/api/qualification');if(d?.standings?.length){setStandings(d.standings);setSeason(d.season||season)}}catch{}
-    try{const d=await api('/api/identity/me');setMe(d)}catch{setMe(null)}finally{setIdentityChecked(true)}
+    try{
+      const d=await api('/api/identity/me');
+      const latest=d?.qualificationImpact?.latestAssist;
+      const publicId=d?.user?.publicId;
+      if(publicId){
+        const key=`somalicup_last_assist_${publicId}`;
+        const seen=Number(localStorage.getItem(key)||0);
+        if(latest?.id){
+          if(seen&&Number(latest.id)>seen)setAssistMoment({latest,impact:d.qualificationImpact,membership:d.membership,user:d.user});
+          localStorage.setItem(key,String(latest.id));
+        }
+      }
+      setMe(d)
+    }catch{setMe(null)}finally{setIdentityChecked(true)}
     try{const d=await api('/api/matches');if(d?.matches?.length)setMatches(d.matches)}catch{}
   };
   useEffect(()=>{refresh()},[]);
+  useEffect(()=>{
+    if(!me?.membership)return;
+    let cancelled=false;
+    const check=async()=>{
+      if(document.visibilityState!=='visible')return;
+      try{
+        const d=await api('/api/identity/me');
+        if(cancelled)return;
+        const latest=d?.qualificationImpact?.latestAssist;
+        const publicId=d?.user?.publicId;
+        if(publicId){
+          const key=`somalicup_last_assist_${publicId}`;
+          const seen=Number(localStorage.getItem(key)||0);
+          if(latest?.id){
+            if(seen&&Number(latest.id)>seen)setAssistMoment({latest,impact:d.qualificationImpact,membership:d.membership,user:d.user});
+            localStorage.setItem(key,String(latest.id));
+          }
+        }
+        setMe(d);
+      }catch{}
+    };
+    const id=setInterval(check,60000);
+    const onFocus=()=>check();
+    window.addEventListener('focus',onFocus);
+    return()=>{cancelled=true;clearInterval(id);window.removeEventListener('focus',onFocus)}
+  },[me?.membership?.season_id,me?.user?.publicId]);
   useEffect(()=>{
     if(!identityChecked||me?.membership)return;
     const code=new URLSearchParams(window.location.search).get('city')?.toUpperCase();
@@ -189,6 +229,7 @@ export default function App(){
 
     {showJoin&&!me?.membership&&<JoinExperience standings={standings.filter(c=>c.is_open)} initialCity={joinCity} onClose={()=>{setShowJoin(false);setJoinCity(null)}} onJoined={joined}/>}
     {joinedMoment&&<JoinedMoment payload={joinedMoment} city={{...(standings.find(c=>c.code===joinedMoment.city.code)||{}),...joinedMoment.city}} onDone={()=>{setJoinedMoment(null);setView('profile')}}/>}
+    {assistMoment&&<AssistMoment moment={assistMoment} city={standings.find(c=>c.code===assistMoment.membership?.code)||assistMoment.membership} onDone={()=>setAssistMoment(null)}/>}
     {notice&&<div className="toast"><Check size={16}/>{notice}</div>}
   </div>
 }
@@ -543,6 +584,44 @@ function MatchCenter({matches,me,onNeedIdentity}){
       <button className="goldBtn" onClick={()=>shareMoment('fulltime')}><Share2 size={16}/> Share Full-Time Result</button>
     </section>}
     {msg&&<div className="matchMsg">{msg}</div>}
+  </div>
+}
+
+function AssistMoment({moment,city,onDone}){
+  const [sharing,setSharing]=useState(false);
+  const assists=Number(moment?.impact?.assists||0);
+  const branch=Number(moment?.impact?.branch||0);
+  const name=moment?.latest?.name||'Someone';
+  const supporterName=moment?.user?.nickname||moment?.user?.displayName||'';
+  const share=async()=>{
+    setSharing(true);
+    try{
+      await sharePoster({
+        city,
+        eyebrow:'ASSIST · VERIFIED',
+        title:'I GOT THE ASSIST',
+        subtitle:`${name} scored the next Goal for ${city?.name||'my city'}`,
+        footer:`${assists} ${assists===1?'Assist':'Assists'} · ${branch} in my Branch — who’s next?`,
+        fromName:supporterName,
+        refPublicId:moment?.user?.publicId||''
+      });
+    }finally{setSharing(false)}
+  };
+  return <div className="assistMomentOverlay">
+    <section className="assistMomentCard">
+      <div className="assistIcon"><Check size={28}/></div>
+      <small>ASSIST · VERIFIED</small>
+      <h2>You got<br/><em>the Assist.</em></h2>
+      <p><b>{name}</b> joined through your link and scored a Goal for {city?.name}.</p>
+      <div className="assistImpact">
+        <div><span>YOUR GOAL</span><strong>1</strong></div>
+        <div><span>ASSISTS</span><strong>{fmt(assists)}</strong></div>
+        <div><span>BRANCH</span><strong>{fmt(branch)}</strong></div>
+      </div>
+      <div className="assistNext"><Zap size={18}/><div><b>Keep the chain moving.</b><span>One more person can become your next Assist and their own Goal.</span></div></div>
+      <button className="joinedPrimary" disabled={sharing} onClick={share}>{sharing?'CREATING POSTER…':'GO FOR ANOTHER ASSIST'} <Share2 size={17}/></button>
+      <button className="joinedSecondary" onClick={onDone}>Not now</button>
+    </section>
   </div>
 }
 
