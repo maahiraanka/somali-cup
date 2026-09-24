@@ -198,6 +198,14 @@ await check('somali_cup_competition_detail',async()=>{
   return body.choices.length+' choices';
 });
 
+await check('best_city_competition_detail',async()=>{
+  const {response,body}=await request('/api/competitions/best-city-somalia',{expectJson:true});
+  if(response.status!==200||body?.competition?.slug!=='best-city-somalia'||!Array.isArray(body?.choices))throw new Error('invalid Best City competition detail');
+  if(body?.competition?.language?.join!=='Support this city')throw new Error('Best City simple language missing');
+  if(body?.competition?.allowNominations!==true)throw new Error('Best City nominations should be open');
+  return body.choices.length+' cities · simple city language verified';
+});
+
 await check('identity_protected_without_session',async()=>{
   const {response,body}=await request('/api/identity/me',{expectJson:true});
   if(response.status!==401)throw new Error('expected 401; got '+response.status);
