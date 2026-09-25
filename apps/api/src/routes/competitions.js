@@ -253,10 +253,11 @@ router.post('/:slug/join',async(req,res,next)=>{
       FROM competition_supporters
       WHERE competition_id=? AND choice_id=? AND status='ACTIVE'
     `,[competition.id,choice.id]);
-    await conn.commit();
 
     let session=null;
-    if(createdUser)session=await createSession(userId,req.get('user-agent')||'');
+    if(createdUser)session=await createSession(userId,req.get('user-agent')||'',conn);
+
+    await conn.commit();
     res.status(201).json({
       token:session?.token||null,
       expiresAt:session?.expiresAt||null,
