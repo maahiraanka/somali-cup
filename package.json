@@ -1,7 +1,7 @@
 {
   "name": "somali-cup",
   "private": true,
-  "version": "0.8.3-generic-competition-runtime",
+  "version": "0.8.4-join-transaction-fix",
   "type": "module",
   "engines": {
     "node": ">=22"
