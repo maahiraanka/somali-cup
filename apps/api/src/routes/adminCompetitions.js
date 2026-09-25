@@ -164,9 +164,10 @@ router.patch('/:id/choices/:choiceId',async(req,res,next)=>{
   try{
     const [[current]]=await pool.query('SELECT * FROM competition_choices WHERE id=? AND competition_id=? LIMIT 1',[choiceId,competitionId]);
     if(!current)return res.status(404).json({error:'choice_not_found'});
+    const linkedMaster=Boolean(current.legacy_city_id||current.master_entry_id);
     const next={
-      name:name||current.name,
-      shortName:shortName||current.short_name,
+      name:linkedMaster?current.name:(name||current.name),
+      shortName:linkedMaster?current.short_name:(shortName||current.short_name),
       status:status||current.status,
       target:target===undefined?current.target:target
     };
