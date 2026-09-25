@@ -455,7 +455,7 @@ router.post('/:id/choices',async(req,res,next)=>{
     const [[competition]]=await pool.query('SELECT id,choice_type FROM competitions WHERE id=? LIMIT 1',[competitionId]);
     if(!competition)return res.status(404).json({error:'competition_not_found'});
 
-    let name,shortName,code,legacyCityId=null,metadata=null;
+    let name,shortName,code,legacyCityId=null,masterEntryId=null,metadata=null;
     if(competition.choice_type==='CITY'){
       const cityId=Number(req.body?.cityId);
       if(!Number.isInteger(cityId)||cityId<1)return res.status(400).json({error:'master_city_required'});
@@ -466,6 +466,18 @@ router.post('/:id/choices',async(req,res,next)=>{
       if(!city)return res.status(404).json({error:'master_city_not_found'});
       name=city.name;shortName=city.name;code=city.code;legacyCityId=Number(city.id);
       metadata=JSON.stringify({country:city.country,region:city.region,tier:city.tier,imageUrl:city.image_url});
+    }else if(['UNIVERSITY','CLUB'].includes(competition.choice_type)){
+      const entryId=Number(req.body?.masterEntryId);
+      if(!Number.isInteger(entryId)||entryId<1)return res.status(400).json({error:'master_directory_entry_required'});
+      const [[entry]]=await pool.query(
+        `SELECT id,name,short_name,code,country,region,category,image_url
+         FROM master_directory_entries
+         WHERE id=? AND entity_type=? AND is_active=1 LIMIT 1`,
+        [entryId,competition.choice_type]
+      );
+      if(!entry)return res.status(404).json({error:'master_directory_entry_not_found'});
+      name=entry.name;shortName=entry.short_name||entry.name;code=entry.code;masterEntryId=Number(entry.id);
+      metadata=JSON.stringify({country:entry.country,region:entry.region,category:entry.category,imageUrl:entry.image_url});
     }else{
       name=clean(req.body?.name,140);
       shortName=clean(req.body?.shortName||name,80)||null;
@@ -475,12 +487,12 @@ router.post('/:id/choices',async(req,res,next)=>{
 
     const [r]=await pool.query(`
       INSERT INTO competition_choices(
-        competition_id,name,short_name,code,choice_type,legacy_city_id,target,metadata_json
-      ) VALUES (?,?,?,?,?,?,?,?)
-    `,[competitionId,name,shortName,code,competition.choice_type,legacyCityId,target,metadata]);
+        competition_id,name,short_name,code,choice_type,legacy_city_id,master_entry_id,target,metadata_json
+      ) VALUES (?,?,?,?,?,?,?,?,?)
+    `,[competitionId,name,shortName,code,competition.choice_type,legacyCityId,masterEntryId,target,metadata]);
     await pool.query(
       'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
-      [req.admin?.user_id||null,'COMPETITION_CHOICE_ADDED','COMPETITION_CHOICE',String(r.insertId),JSON.stringify({competitionId,name,code,target,legacyCityId})]
+      [req.admin?.user_id||null,'COMPETITION_CHOICE_ADDED','COMPETITION_CHOICE',String(r.insertId),JSON.stringify({competitionId,name,code,target,legacyCityId,masterEntryId})]
     );
     res.status(201).json({ok:true,id:Number(r.insertId)});
   }catch(e){
