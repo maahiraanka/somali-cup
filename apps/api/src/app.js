@@ -31,7 +31,7 @@ if(config.env!=='production'){
 app.get('/api/health',(_req,res)=>res.json({
   ok:true,
   service:'somali-cup-api',
-  version:'0.6.3-factory-reset-self-fk'
+  version:'0.6.4-premium-confirmation-modal'
 }));
 
 app.get('/api/startup',(_req,res)=>{
