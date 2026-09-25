@@ -2,7 +2,7 @@ import React,{useEffect,useMemo,useState} from 'react';
 import {
   Activity,AlertTriangle,BarChart3,Check,CheckCircle2,ChevronRight,ClipboardList,DoorOpen,
   Ban,CalendarClock,Flag,KeyRound,LayoutDashboard,LockKeyhole,Medal,Menu,Pencil,Plus,Power,Radio,RefreshCw,Rocket,Save,
-  Search,ShieldCheck,Trophy,UserPlus,Users,X
+  Search,ShieldCheck,Trash2,Trophy,UserPlus,Users,X
 } from 'lucide-react';
 
 const fmt=n=>Number(n||0).toLocaleString();
