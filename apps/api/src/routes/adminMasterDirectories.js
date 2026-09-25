@@ -87,6 +87,32 @@ const typeOf=req=>{
   return allowedTypes.has(type)?type:null;
 };
 
+router.get('/',async(_req,res,next)=>{
+  try{
+    const [rows]=await pool.query(`
+      SELECT m.*,
+        (SELECT COUNT(*) FROM competition_choices cc WHERE cc.master_entry_id=m.id) competition_count
+      FROM master_directory_entries m
+      WHERE m.entity_type IN ('UNIVERSITY','CLUB')
+      ORDER BY m.entity_type,m.is_active DESC,m.name
+    `);
+    const normalize=x=>({
+      ...x,
+      id:Number(x.id),
+      is_active:Boolean(x.is_active),
+      aliases:Array.isArray(x.aliases_json)?x.aliases_json:[],
+      competition_count:Number(x.competition_count||0)
+    });
+    const universities=rows.filter(x=>x.entity_type==='UNIVERSITY').map(normalize);
+    const clubs=rows.filter(x=>x.entity_type==='CLUB').map(normalize);
+    res.json({
+      universities,
+      clubs,
+      counts:{universities:universities.length,clubs:clubs.length,total:rows.length}
+    });
+  }catch(e){next(e)}
+});
+
 router.get('/:type',async(req,res,next)=>{
   const type=typeOf(req);
   if(!type)return res.status(404).json({error:'directory_type_not_found'});
