@@ -1,7 +1,7 @@
 {
   "name": "somali-cup",
   "private": true,
-  "version": "0.8.0-master-directories",
+  "version": "0.8.1-top10-city-pack",
   "type": "module",
   "engines": {
     "node": ">=22"
