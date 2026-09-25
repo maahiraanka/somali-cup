@@ -18,6 +18,7 @@ router.get('/',async(_req,res,next)=>{
         (SELECT COUNT(*) FROM competition_choices cc WHERE cc.competition_id=cp.id) choice_count,
         (SELECT COUNT(*) FROM competition_nominations cn WHERE cn.competition_id=cp.id AND cn.status='PENDING') pending_nominations
       FROM competitions cp
+      WHERE cp.is_test=0
       ORDER BY cp.id DESC
     `);
     res.json({
