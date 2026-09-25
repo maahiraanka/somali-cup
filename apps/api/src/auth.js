@@ -8,12 +8,12 @@ export const hashSessionToken = sha256;
 export const hashDeviceKey = sha256;
 export const makeAdminToken = () => crypto.randomBytes(32).toString('base64url');
 
-export async function createSession(userId, userAgent='') {
+export async function createSession(userId, userAgent='', db=pool) {
   const token = makeSessionToken();
   const tokenHash = hashSessionToken(token);
   const userAgentHash = userAgent ? sha256(userAgent) : null;
   const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24 * 30);
-  await pool.query(
+  await db.query(
     'INSERT INTO identity_sessions(user_id,token_hash,user_agent_hash,expires_at) VALUES (?,?,?,?)',
     [userId, tokenHash, userAgentHash, expiresAt]
   );
