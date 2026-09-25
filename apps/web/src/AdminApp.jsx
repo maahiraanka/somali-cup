@@ -432,14 +432,15 @@ function CompetitionsAdmin({d,act,refresh}){
   const addChoice=async()=>{
     if(!selected)return;
     const isCity=selected.choice_type==='CITY';
+    const isMaster=['UNIVERSITY','CLUB'].includes(selected.choice_type);
     const name=newChoice.trim();
-    if(isCity&&!Number.isInteger(Number(newChoice)))return;
-    if(!isCity&&name.length<2)return;
+    if((isCity||isMaster)&&!Number.isInteger(Number(newChoice)))return;
+    if(!isCity&&!isMaster&&name.length<2)return;
     setContentBusy(true);
     try{
       await adminApi('/api/admin/competitions/'+selected.id+'/choices',{
         method:'POST',
-        body:JSON.stringify(isCity?{cityId:Number(newChoice)}:{name})
+        body:JSON.stringify(isCity?{cityId:Number(newChoice)}:isMaster?{masterEntryId:Number(newChoice)}:{name})
       });
       setNewChoice('');
       await loadCompetitionData(selected.id);
@@ -570,11 +571,11 @@ function CompetitionsAdmin({d,act,refresh}){
 
       <section className="adminPanel">
         <div className="adminPanelAction"><PanelHead eyebrow="CHOICES" title="Manage what people can support"/><span className="opsHint">Add, edit, pause or delete choices</span></div>
-        <div className="competitionAddChoice">{selected.choice_type==='CITY'?<select value={newChoice} onChange={e=>setNewChoice(e.target.value)}><option value="">Choose a city from City Directory</option>{masterCities.filter(city=>!choices.some(choice=>Number(choice.legacy_city_id)===Number(city.id))).map(city=><option value={city.id} key={city.id}>{city.name} · {city.code}</option>)}</select>:<input value={newChoice} onChange={e=>setNewChoice(e.target.value)} placeholder={'Add a '+String(selected.choice_type||'choice').toLowerCase()}/>}<button onClick={addChoice} disabled={contentBusy||!String(newChoice).trim()}><Plus size={13}/> ADD</button></div>
+        <div className="competitionAddChoice">{selected.choice_type==='CITY'?<select value={newChoice} onChange={e=>setNewChoice(e.target.value)}><option value="">Choose a city from City Directory</option>{masterCities.filter(city=>!choices.some(choice=>Number(choice.legacy_city_id)===Number(city.id))).map(city=><option value={city.id} key={city.id}>{city.name} · {city.code}</option>)}</select>:['UNIVERSITY','CLUB'].includes(selected.choice_type)?<select value={newChoice} onChange={e=>setNewChoice(e.target.value)}><option value="">Choose from Master Directories</option>{(masterEntries[selected.choice_type]||[]).filter(entry=>!choices.some(choice=>Number(choice.master_entry_id)===Number(entry.id))).map(entry=><option value={entry.id} key={entry.id}>{entry.name} · {entry.code}</option>)}</select>:<input value={newChoice} onChange={e=>setNewChoice(e.target.value)} placeholder={'Add a '+String(selected.choice_type||'choice').toLowerCase()}/>}<button onClick={addChoice} disabled={contentBusy||!String(newChoice).trim()}><Plus size={13}/> ADD</button></div>
         <div className="competitionChoiceAdminList">
           {choices.map(choice=><div className="competitionChoiceAdmin" key={choice.id}>
             {editingChoice?.id===choice.id?<div className="competitionChoiceEdit">
-              <input value={editingChoice.name||''} onChange={e=>setEditingChoice({...editingChoice,name:e.target.value})}/>
+              <input value={editingChoice.name||''} disabled={Boolean(editingChoice.legacy_city_id||editingChoice.master_entry_id)} title={editingChoice.legacy_city_id||editingChoice.master_entry_id?'Rename this item in its master directory':''} onChange={e=>setEditingChoice({...editingChoice,name:e.target.value})}/>
               <select value={editingChoice.status||'ACTIVE'} onChange={e=>setEditingChoice({...editingChoice,status:e.target.value})}><option>ACTIVE</option><option>PAUSED</option><option>ELIMINATED</option><option>WINNER</option></select>
               <input type="number" value={editingChoice.target??''} placeholder="Target" onChange={e=>setEditingChoice({...editingChoice,target:e.target.value===''?null:Number(e.target.value)})}/>
               <button onClick={()=>saveChoice(choice)} disabled={contentBusy}><Save size={13}/> SAVE</button>
