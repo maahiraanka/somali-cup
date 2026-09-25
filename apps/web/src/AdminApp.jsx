@@ -804,6 +804,8 @@ function OperationsAdmin({d,act}){
   const [cleanBusy,setCleanBusy]=useState(false);
   const [cleanProof,setCleanProof]=useState(null);
   const [cleanError,setCleanError]=useState('');
+  const [showCleanConfirm,setShowCleanConfirm]=useState(false);
+  const [cleanConfirmText,setCleanConfirmText]=useState('');
   const change=(area,mode,label)=>{
     if(reason.trim().length<5)return;
     const action=mode==='FROZEN'?'freeze':'reopen';
@@ -813,7 +815,7 @@ function OperationsAdmin({d,act}){
     })}),label+' '+(mode==='FROZEN'?'frozen':'reopened'));
   };
   const prepareCleanSystem=async()=>{
-    const confirmation=window.prompt('This permanently removes all non-admin users, cities, supporters, matches and competitions. Type PREPARE CLEAN SYSTEM to continue.');
+    const confirmation=cleanConfirmText.trim();
     if(confirmation!=='PREPARE CLEAN SYSTEM')return;
     setCleanBusy(true);setCleanError('');setCleanProof(null);
     try{
@@ -822,6 +824,8 @@ function OperationsAdmin({d,act}){
         body:JSON.stringify({confirmation})
       });
       setCleanProof(result.proof||null);
+      setShowCleanConfirm(false);
+      setCleanConfirmText('');
     }catch(e){
       setCleanError(humanErrorAdmin(e));
     }finally{
@@ -858,7 +862,7 @@ function OperationsAdmin({d,act}){
     <section className="adminPanel cleanSystemCard">
       <div className="adminPanelAction"><PanelHead eyebrow="ONE-CLICK RECOVERY" title="Prepare Clean System"/><span className="opsHint">No terminal or migration command needed</span></div>
       <p className="cleanSystemIntro">Use this once to remove every old city, supporter, match, competition and non-admin user from the live database. Admin access and all application functionality stay.</p>
-      <button className="cleanSystemButton" disabled={cleanBusy} onClick={prepareCleanSystem}>{cleanBusy?<><RefreshCw className="spin" size={15}/> CLEANING…</>:<><Trash2 size={15}/> PREPARE CLEAN SYSTEM</>}</button>
+      <button className="cleanSystemButton" disabled={cleanBusy} onClick={()=>{setCleanError('');setCleanConfirmText('');setShowCleanConfirm(true)}}>{cleanBusy?<><RefreshCw className="spin" size={15}/> CLEANING…</>:<><Trash2 size={15}/> PREPARE CLEAN SYSTEM</>}</button>
       {cleanError&&<div className="adminError"><AlertTriangle size={15}/>{cleanError}</div>}
       {cleanProof&&<div className="cleanProof">
         <div className="cleanProofHead"><CheckCircle2 size={18}/><div><b>Clean system confirmed</b><span>The database proved these counts after the reset.</span></div></div>
@@ -874,6 +878,53 @@ function OperationsAdmin({d,act}){
         <button className="adminPrimary" onClick={()=>window.location.reload()}><RefreshCw size={14}/> RELOAD ADMIN</button>
       </div>}
     </section>
+
+    {showCleanConfirm&&<div className="cleanConfirmOverlay" role="dialog" aria-modal="true" aria-labelledby="clean-confirm-title">
+      <section className="cleanConfirmModal">
+        <button className="cleanConfirmClose" onClick={()=>{if(!cleanBusy){setShowCleanConfirm(false);setCleanConfirmText('')}}} aria-label="Close"><X size={18}/></button>
+        <div className="cleanConfirmIcon"><AlertTriangle size={26}/></div>
+        <small>DESTRUCTIVE ACTION</small>
+        <h2 id="clean-confirm-title">Prepare a brand-new clean system?</h2>
+        <p>This will permanently remove the old public and user-generated data from this installation.</p>
+
+        <div className="cleanConfirmColumns">
+          <div className="remove">
+            <span>WILL BE REMOVED</span>
+            <ul>
+              <li><X size={13}/> Cities and qualification records</li>
+              <li><X size={13}/> Supporters and non-admin users</li>
+              <li><X size={13}/> Matches, scores and participation</li>
+              <li><X size={13}/> Competitions, choices and nominations</li>
+            </ul>
+          </div>
+          <div className="keep">
+            <span>WILL BE KEPT</span>
+            <ul>
+              <li><Check size={13}/> Admin account and access</li>
+              <li><Check size={13}/> Application functionality</li>
+              <li><Check size={13}/> Audit history</li>
+              <li><Check size={13}/> Platform settings</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="cleanConfirmRule"><LockKeyhole size={15}/><span>This action cannot be undone. The database will be checked for zero old-data counts before success is shown.</span></div>
+
+        <label className="cleanConfirmField">
+          <span>Type <b>PREPARE CLEAN SYSTEM</b> to confirm</span>
+          <input autoFocus value={cleanConfirmText} onChange={e=>setCleanConfirmText(e.target.value)} placeholder="PREPARE CLEAN SYSTEM" disabled={cleanBusy}/>
+        </label>
+
+        {cleanError&&<div className="adminError"><AlertTriangle size={15}/>{cleanError}</div>}
+
+        <div className="cleanConfirmActions">
+          <button className="secondary" disabled={cleanBusy} onClick={()=>{setShowCleanConfirm(false);setCleanConfirmText('');setCleanError('')}}>CANCEL</button>
+          <button className="dangerPrimary" disabled={cleanBusy||cleanConfirmText.trim()!=='PREPARE CLEAN SYSTEM'} onClick={prepareCleanSystem}>
+            {cleanBusy?<><RefreshCw className="spin" size={15}/> PREPARING…</>:<><Trash2 size={15}/> PREPARE CLEAN SYSTEM</>}
+          </button>
+        </div>
+      </section>
+    </div>}
   </>
 }
 

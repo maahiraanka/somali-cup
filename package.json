@@ -1,7 +1,7 @@
 {
   "name": "somali-cup",
   "private": true,
-  "version": "0.6.3-factory-reset-self-fk",
+  "version": "0.6.4-premium-confirmation-modal",
   "type": "module",
   "engines": {
     "node": ">=22"
