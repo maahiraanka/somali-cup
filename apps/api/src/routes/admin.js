@@ -8,6 +8,7 @@ import { pool } from '../db/pool.js';
 import { requireAdminKey } from '../auth.js';
 import { getLaunchReadiness } from '../launchReadiness.js';
 import { progressTournament } from '../tournamentProgress.js';
+import { clearPublicCompetitionContent } from '../competitionDefaults.js';
 const execFileAsync=promisify(execFile);
 const __dirname=path.dirname(fileURLToPath(import.meta.url));
 const apiRoot=path.resolve(__dirname,'..');
@@ -205,6 +206,104 @@ router.post('/launch-mode',async(req,res,next)=>{
       VALUES (?,'PUBLIC_LAUNCH_MODE_CHANGED','PLATFORM_SETTING','PUBLIC_LAUNCH_MODE',JSON_OBJECT('mode',?))
     `,[req.admin?.user_id||null,mode]);
     res.json({ok:true,mode});
+  }catch(e){next(e)}
+});
+
+
+async function ensureCleanSystemSchema(){
+  const [[userColumn]]=await pool.query(`
+    SELECT COUNT(*) total FROM information_schema.columns
+    WHERE table_schema=DATABASE() AND table_name='users' AND column_name='is_test'
+  `);
+  if(Number(userColumn.total||0)===0){
+    await pool.query("ALTER TABLE users ADD COLUMN is_test TINYINT(1) NOT NULL DEFAULT 0 AFTER status");
+  }
+
+  const [[userIndex]]=await pool.query(`
+    SELECT COUNT(*) total FROM information_schema.statistics
+    WHERE table_schema=DATABASE() AND table_name='users' AND index_name='ix_users_test_role'
+  `);
+  if(Number(userIndex.total||0)===0){
+    await pool.query("ALTER TABLE users ADD INDEX ix_users_test_role(is_test,role)");
+  }
+
+  const [[competitionColumn]]=await pool.query(`
+    SELECT COUNT(*) total FROM information_schema.columns
+    WHERE table_schema=DATABASE() AND table_name='competitions' AND column_name='is_test'
+  `);
+  if(Number(competitionColumn.total||0)===0){
+    await pool.query("ALTER TABLE competitions ADD COLUMN is_test TINYINT(1) NOT NULL DEFAULT 0 AFTER allow_nominations");
+  }
+
+  const [[competitionIndex]]=await pool.query(`
+    SELECT COUNT(*) total FROM information_schema.statistics
+    WHERE table_schema=DATABASE() AND table_name='competitions' AND index_name='ix_competitions_test_status'
+  `);
+  if(Number(competitionIndex.total||0)===0){
+    await pool.query("ALTER TABLE competitions ADD INDEX ix_competitions_test_status(is_test,status)");
+  }
+}
+
+router.post('/prepare-clean-system',async(req,res,next)=>{
+  if(String(req.body?.confirmation||'')!=='PREPARE CLEAN SYSTEM'){
+    return res.status(400).json({error:'prepare_clean_system_confirmation_required'});
+  }
+
+  try{
+    await ensureCleanSystemSchema();
+
+    const conn=await pool.getConnection();
+    try{
+      await conn.beginTransaction();
+      const result=await clearPublicCompetitionContent(conn);
+
+      const [[proof]]=await conn.query(`
+        SELECT
+          (SELECT COUNT(*) FROM cities) cities,
+          (SELECT COUNT(*) FROM city_memberships) supporters,
+          (SELECT COUNT(*) FROM matches) matches,
+          (SELECT COUNT(*) FROM competitions WHERE is_test=0) competitions,
+          (SELECT COUNT(*) FROM competition_choices cc JOIN competitions cp ON cp.id=cc.competition_id WHERE cp.is_test=0) choices,
+          (SELECT COUNT(*) FROM competition_supporters cs JOIN competitions cp ON cp.id=cs.competition_id WHERE cp.is_test=0) competition_supporters,
+          (SELECT COUNT(*) FROM users WHERE role<>'ADMIN' AND is_test=0) non_admin_users,
+          (SELECT COUNT(*) FROM users WHERE role='ADMIN') admins
+      `);
+
+      const zeroKeys=['cities','supporters','matches','competitions','choices','competition_supporters','non_admin_users'];
+      const dirty=zeroKeys.filter(key=>Number(proof[key]||0)!==0);
+      if(dirty.length){
+        throw new Error('clean_system_proof_failed:'+dirty.map(key=>key+'='+proof[key]).join(','));
+      }
+
+      await conn.query(`
+        INSERT IGNORE INTO schema_migrations(filename)
+        VALUES ('024_factory_reset_and_test_mode.sql')
+      `);
+      await conn.query(
+        'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+        [req.admin?.user_id||null,'PREPARE_CLEAN_SYSTEM_COMPLETED','SYSTEM','clean-system',JSON.stringify({result,proof})]
+      );
+
+      await conn.commit();
+      res.json({
+        ok:true,
+        proof:{
+          cities:Number(proof.cities||0),
+          supporters:Number(proof.supporters||0),
+          matches:Number(proof.matches||0),
+          competitions:Number(proof.competitions||0),
+          choices:Number(proof.choices||0),
+          competitionSupporters:Number(proof.competition_supporters||0),
+          nonAdminUsers:Number(proof.non_admin_users||0),
+          admins:Number(proof.admins||0)
+        }
+      });
+    }catch(error){
+      await conn.rollback();
+      throw error;
+    }finally{
+      conn.release();
+    }
   }catch(e){next(e)}
 });
 
