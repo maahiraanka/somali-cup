@@ -1,0 +1,151 @@
+import { Router } from 'express';
+import { pool } from '../db/pool.js';
+import { requireAdminKey } from '../auth.js';
+
+const router=Router();
+router.use(requireAdminKey);
+
+const clean=(v,max=160)=>typeof v==='string'?v.trim().slice(0,max):'';
+const cleanCode=v=>clean(v,12).toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12);
+const aliasesFrom=value=>{
+  const input=Array.isArray(value)?value:String(value||'').split(',');
+  return [...new Set(input.map(x=>clean(x,120)).filter(Boolean))].slice(0,20);
+};
+
+async function usageFor(cityId){
+  const [[row]]=await pool.query(`
+    SELECT
+      (SELECT COUNT(*) FROM competition_choices WHERE legacy_city_id=?) competition_choices,
+      (SELECT COUNT(*) FROM season_cities WHERE city_id=?) season_links,
+      (SELECT COUNT(*) FROM matches WHERE home_city_id=? OR away_city_id=?) matches,
+      (SELECT COUNT(*) FROM city_memberships WHERE city_id=?) memberships
+  `,[cityId,cityId,cityId,cityId,cityId]);
+  return {
+    competitions:Number(row.competition_choices||0),
+    seasons:Number(row.season_links||0),
+    matches:Number(row.matches||0),
+    memberships:Number(row.memberships||0)
+  };
+}
+
+router.get('/',async(_req,res,next)=>{
+  try{
+    const [rows]=await pool.query(`
+      SELECT c.id,c.name,c.country,c.region,c.code,c.tier,c.aliases_json,c.image_url,c.is_active,c.created_at,c.updated_at,
+        (SELECT COUNT(*) FROM competition_choices cc WHERE cc.legacy_city_id=c.id) competition_count,
+        (SELECT COUNT(*) FROM season_cities sc WHERE sc.city_id=c.id) season_count
+      FROM cities c
+      ORDER BY c.is_active DESC,c.name
+    `);
+    res.json({cities:rows.map(x=>({
+      ...x,
+      id:Number(x.id),
+      is_active:Boolean(x.is_active),
+      aliases:Array.isArray(x.aliases_json)?x.aliases_json:[],
+      competition_count:Number(x.competition_count||0),
+      season_count:Number(x.season_count||0)
+    }))});
+  }catch(e){next(e)}
+});
+
+router.post('/',async(req,res,next)=>{
+  const name=clean(req.body?.name,120);
+  const country=clean(req.body?.country||'Somalia',120);
+  const region=clean(req.body?.region,120)||null;
+  const code=cleanCode(req.body?.code||name);
+  const tier=clean(req.body?.tier||'PREMIER',20).toUpperCase();
+  const aliases=aliasesFrom(req.body?.aliases);
+  const imageUrl=clean(req.body?.imageUrl,500)||null;
+
+  if(name.length<2)return res.status(400).json({error:'city_name_required'});
+  if(!code)return res.status(400).json({error:'city_code_required'});
+  if(!['PREMIER','CHAMPIONSHIP','RISING'].includes(tier))return res.status(400).json({error:'invalid_city_tier'});
+
+  try{
+    const [[duplicate]]=await pool.query(
+      'SELECT id FROM cities WHERE LOWER(name)=LOWER(?) AND LOWER(country)=LOWER(?) LIMIT 1',
+      [name,country]
+    );
+    if(duplicate)return res.status(409).json({error:'city_already_exists'});
+    const [r]=await pool.query(`
+      INSERT INTO cities(name,country,region,code,tier,aliases_json,image_url,is_active)
+      VALUES (?,?,?,?,?,?,?,1)
+    `,[name,country,region,code,tier,JSON.stringify(aliases),imageUrl]);
+    await pool.query(
+      'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'MASTER_CITY_CREATED','CITY',String(r.insertId),JSON.stringify({name,country,region,code,tier})]
+    );
+    res.status(201).json({ok:true,id:Number(r.insertId)});
+  }catch(e){
+    if(e.code==='ER_DUP_ENTRY')return res.status(409).json({error:'city_code_exists'});
+    next(e);
+  }
+});
+
+router.patch('/:id',async(req,res,next)=>{
+  const id=Number(req.params.id);
+  if(!Number.isInteger(id)||id<1)return res.status(400).json({error:'invalid_city'});
+  try{
+    const [[current]]=await pool.query('SELECT * FROM cities WHERE id=? LIMIT 1',[id]);
+    if(!current)return res.status(404).json({error:'city_not_found'});
+
+    const name=clean(req.body?.name,120)||current.name;
+    const country=clean(req.body?.country,120)||current.country;
+    const region=req.body?.region===undefined?current.region:(clean(req.body.region,120)||null);
+    const code=req.body?.code===undefined?current.code:cleanCode(req.body.code);
+    const tier=clean(req.body?.tier||current.tier,20).toUpperCase();
+    const aliases=req.body?.aliases===undefined?(Array.isArray(current.aliases_json)?current.aliases_json:[]):aliasesFrom(req.body.aliases);
+    const imageUrl=req.body?.imageUrl===undefined?current.image_url:(clean(req.body.imageUrl,500)||null);
+    const isActive=req.body?.isActive===undefined?Boolean(current.is_active):Boolean(req.body.isActive);
+
+    if(name.length<2||!code)return res.status(400).json({error:'invalid_city'});
+    if(!['PREMIER','CHAMPIONSHIP','RISING'].includes(tier))return res.status(400).json({error:'invalid_city_tier'});
+
+    const [[duplicate]]=await pool.query(
+      'SELECT id FROM cities WHERE id<>? AND LOWER(name)=LOWER(?) AND LOWER(country)=LOWER(?) LIMIT 1',
+      [id,name,country]
+    );
+    if(duplicate)return res.status(409).json({error:'city_already_exists'});
+
+    await pool.query(`
+      UPDATE cities
+      SET name=?,country=?,region=?,code=?,tier=?,aliases_json=?,image_url=?,is_active=?
+      WHERE id=?
+    `,[name,country,region,code,tier,JSON.stringify(aliases),imageUrl,isActive?1:0,id]);
+
+    await pool.query(
+      'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'MASTER_CITY_UPDATED','CITY',String(id),JSON.stringify({
+        before:{name:current.name,country:current.country,region:current.region,code:current.code,tier:current.tier,isActive:Boolean(current.is_active)},
+        after:{name,country,region,code,tier,isActive}
+      })]
+    );
+    res.json({ok:true});
+  }catch(e){
+    if(e.code==='ER_DUP_ENTRY')return res.status(409).json({error:'city_code_exists'});
+    next(e);
+  }
+});
+
+router.delete('/:id',async(req,res,next)=>{
+  const id=Number(req.params.id);
+  const confirmation=clean(req.body?.confirmation,180);
+  if(!Number.isInteger(id)||id<1)return res.status(400).json({error:'invalid_city'});
+  try{
+    const [[city]]=await pool.query('SELECT id,name FROM cities WHERE id=? LIMIT 1',[id]);
+    if(!city)return res.status(404).json({error:'city_not_found'});
+    if(confirmation!==('DELETE '+city.name))return res.status(400).json({error:'confirmation_required'});
+    const usage=await usageFor(id);
+    const inUse=Object.values(usage).some(v=>v>0);
+    if(inUse)return res.status(409).json({error:'city_in_use',usage});
+
+    await pool.query('DELETE FROM cities WHERE id=?',[id]);
+    await pool.query(
+      'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'MASTER_CITY_DELETED','CITY',String(id),JSON.stringify({name:city.name})]
+    );
+    res.json({ok:true});
+  }catch(e){next(e)}
+});
+
+export default router;
