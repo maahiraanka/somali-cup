@@ -963,6 +963,9 @@ function CityDirectoryAdmin({d,refresh}){
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
   const [search,setSearch]=useState('');
+  const [showBulk,setShowBulk]=useState(false);
+  const [bulkText,setBulkText]=useState('');
+  const [bulkResult,setBulkResult]=useState(null);
   const filtered=cities.filter(city=>{
     const q=search.trim().toLowerCase();
     return !q||[city.name,city.code,city.region,city.country,...(city.aliases||[])].filter(Boolean).join(' ').toLowerCase().includes(q);
@@ -993,14 +996,35 @@ function CityDirectoryAdmin({d,refresh}){
     catch(e){setError(e?.body?.error==='city_in_use'?'This city is already used. Disable it instead of deleting it.':humanErrorAdmin(e))}
     finally{setBusy(false)}
   };
+  const bulkAdd=async()=>{
+    const rows=bulkText.split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{
+      const [name='',code='',region='',country='Somalia']=line.split('|').map(x=>x.trim());
+      return {name,code,region,country};
+    }).filter(x=>x.name);
+    if(!rows.length)return;
+    setBusy(true);setError('');setBulkResult(null);
+    try{
+      const result=await adminApi('/api/admin/city-directory/bulk',{method:'POST',body:JSON.stringify({cities:rows})});
+      setBulkResult(result);setBulkText('');await refresh();
+    }catch(e){setError(humanErrorAdmin(e))}
+    finally{setBusy(false)}
+  };
 
   return <div className="cityDirectoryPage">
     <section className="cityDirectoryHero">
       <div><small>MASTER DATA</small><h2>Set up cities once. Reuse them everywhere.</h2><p>Somali Cup, Best City, head-to-heads and future city competitions all use this one directory.</p></div>
-      <div><strong>{fmt(cities.length)}</strong><span>master cities</span></div>
+      <div className="cityDirectoryHeroRight"><div><strong>{fmt(cities.length)}</strong><span>master cities</span></div><button onClick={()=>setShowBulk(!showBulk)}><Plus size={13}/> {showBulk?'CLOSE BULK ADD':'BULK ADD'}</button></div>
     </section>
 
     {error&&<div className="adminError"><AlertTriangle size={15}/>{error}</div>}
+    {bulkResult&&<div className="adminNotice"><CheckCircle2 size={15}/>{fmt(bulkResult.created?.length||0)} cities added · {fmt(bulkResult.skipped?.length||0)} skipped</div>}
+
+    {showBulk&&<section className="adminPanel cityBulkPanel">
+      <div className="adminPanelAction"><PanelHead eyebrow="FAST SETUP" title="Add many cities at once"/><span className="opsHint">One city per line</span></div>
+      <p>Use: <b>City name | Code | Region | Country</b>. Country can be left blank for Somalia.</p>
+      <textarea value={bulkText} onChange={e=>setBulkText(e.target.value)} placeholder={"Mogadishu | MOG | Banaadir | Somalia\nHargeisa | HAR | Maroodi Jeex | Somalia\nBosaso | BOS | Bari | Somalia"}/>
+      <button className="adminPrimary" disabled={busy||!bulkText.trim()} onClick={bulkAdd}>{busy?'ADDING…':'ADD THESE CITIES'} <Plus size={14}/></button>
+    </section>}
 
     <section className="adminPanel">
       <div className="adminPanelAction"><PanelHead eyebrow={editing?'EDIT MASTER CITY':'ADD MASTER CITY'} title={editing?editing.name:'Add a city once'}/>{editing&&<button className="adminTextButton" onClick={()=>{setEditing(null);setForm(blank)}}>CANCEL</button>}</div>
