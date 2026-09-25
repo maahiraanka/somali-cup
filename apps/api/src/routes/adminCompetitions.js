@@ -66,14 +66,14 @@ router.post('/',async(req,res,next)=>{
 
 router.post('/clear-content',async(req,res,next)=>{
   const confirmation=clean(req.body?.confirmation,80);
-  if(confirmation!=='RESET PUBLIC CONTENT')return res.status(400).json({error:'confirmation_required'});
+  if(confirmation!=='FACTORY RESET')return res.status(400).json({error:'confirmation_required'});
   const conn=await pool.getConnection();
   try{
     await conn.beginTransaction();
     const result=await clearPublicCompetitionContent(conn);
     await conn.query(
       'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
-      [req.admin?.user_id||null,'PUBLIC_COMPETITION_CONTENT_CLEARED','SYSTEM','competition-content-clear',JSON.stringify(result)]
+      [req.admin?.user_id||null,'FACTORY_RESET_COMPLETED','SYSTEM','competition-content-clear',JSON.stringify(result)]
     );
     await conn.commit();
     res.json({ok:true,...result});
