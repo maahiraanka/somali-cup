@@ -1,7 +1,7 @@
 {
   "name": "somali-cup",
   "private": true,
-  "version": "0.6.0-factory-reset-test-lab",
+  "version": "0.6.1-force-factory-reset",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -16,6 +16,7 @@
     "start": "node server.js",
     "db:migrate": "node apps/api/src/db/migrate.js",
     "db:seed": "node apps/api/src/db/seed.js",
+    "db:factory-reset": "node apps/api/src/db/factoryReset.js",
     "verify": "npm run build && node apps/api/src/verify.js",
     "preflight": "node apps/api/src/preflight.js",
     "acceptance:safe": "node apps/api/src/acceptanceSafe.js",
