@@ -702,7 +702,7 @@ function BestCityExperience({data,me,onBack,onRefresh}){
     <section className="bestCityHow">
       <div><span>1</span><b>Choose your {choiceSingular}</b><p>You can support one {choiceSingular} in this competition.</p></div>
       <div><span>2</span><b>Bring your friends</b><p>Share your city and ask your friends to join.</p></div>
-      <div><span>3</span><b>Reach the target</b><p>{nice(choicePlural)} that reach the target move to the next round.</p></div>
+      <div><span>3</span><b>Reach the target</b><p>{choicePlural.charAt(0).toUpperCase()+choicePlural.slice(1)} that reach the target move to the next round.</p></div>
     </section>
 
     {showJoin&&selected&&<div className="simpleModal"><section>
@@ -717,7 +717,7 @@ function BestCityExperience({data,me,onBack,onRefresh}){
     {showNominate&&<div className="simpleModal"><section>
       <button className="simpleModalClose" onClick={()=>setShowNominate(false)}><X/></button>
       <small>CAN'T FIND YOUR {choiceSingular.toUpperCase()}?</small><h2>Add my {choiceSingular}</h2><p>Tell us the {choiceSingular} name. We will review it before adding it to the competition.</p>
-      <label><span>{nice(choiceSingular)} name</span><input value={nomination.name} onChange={e=>setNomination({...nomination,name:e.target.value})} placeholder={nice(choiceSingular)+' name'}/></label>
+      <label><span>{choiceSingular.charAt(0).toUpperCase()+choiceSingular.slice(1)} name</span><input value={nomination.name} onChange={e=>setNomination({...nomination,name:e.target.value})} placeholder={choiceSingular.charAt(0).toUpperCase()+choiceSingular.slice(1)+' name'}/></label>
       <label><span>Region or area <i>optional</i></span><input value={nomination.location} onChange={e=>setNomination({...nomination,location:e.target.value})} placeholder="Region or area"/></label>
       <button className="bestCityPrimary full" disabled={busy||nomination.name.trim().length<2} onClick={nominate}>{busy?'PLEASE WAIT…':'SEND MY '+choiceSingular.toUpperCase()}</button>
     </section></div>}
