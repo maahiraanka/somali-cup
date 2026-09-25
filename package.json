@@ -1,7 +1,7 @@
 {
   "name": "somali-cup",
   "private": true,
-  "version": "0.8.4-join-transaction-fix",
+  "version": "0.8.5-join-diagnostics",
   "type": "module",
   "engines": {
     "node": ">=22"

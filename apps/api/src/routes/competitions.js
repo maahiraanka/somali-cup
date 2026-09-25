@@ -158,19 +158,28 @@ router.post('/:slug/join',async(req,res,next)=>{
   if(deviceKey.length<24)return res.status(400).json({error:'device_key_required'});
   if(!choiceCode)return res.status(400).json({error:'choice_required'});
   const deviceHash=hashDeviceKey(deviceKey);
+  const traceId=makePublicId().slice(0,10);
+  const startedAt=Date.now();
+  const logStep=step=>console.log('[competition-join]',JSON.stringify({traceId,slug,step,ms:Date.now()-startedAt}));
   const conn=await pool.getConnection();
   try{
+    res.set('x-join-trace-id',traceId);
+    await conn.query('SET SESSION innodb_lock_wait_timeout=5');
+    logStep('connection_ready');
     await conn.beginTransaction();
+    logStep('transaction_started');
     const [[competition]]=await conn.query(
-      "SELECT id,slug,name,status,choice_type,language_preset,language_overrides_json FROM competitions WHERE slug=? AND is_test=0 LIMIT 1 FOR UPDATE",
+      "SELECT id,slug,name,status,choice_type,language_preset,language_overrides_json FROM competitions WHERE slug=? AND is_test=0 LIMIT 1",
       [slug]
     );
+    logStep('competition_loaded');
     if(!competition)throw Object.assign(new Error('competition_not_found'),{status:404});
     if(!['OPEN','LIVE'].includes(competition.status))throw Object.assign(new Error('competition_not_open'),{status:409});
     const [[currentStage]]=await conn.query(
-      "SELECT id,target FROM competition_stages WHERE competition_id=? AND status='OPEN' ORDER BY sequence_no LIMIT 1 FOR UPDATE",
+      "SELECT id,target FROM competition_stages WHERE competition_id=? AND status='OPEN' ORDER BY sequence_no LIMIT 1",
       [competition.id]
     );
+    logStep('stage_loaded');
     if(!currentStage)throw Object.assign(new Error('competition_round_not_open'),{status:409});
     const [[choice]]=await conn.query(`
       SELECT cc.id,cc.name,cc.code,cc.target,cc.next_supporter_no
@@ -179,6 +188,7 @@ router.post('/:slug/join',async(req,res,next)=>{
       WHERE cc.competition_id=? AND cc.code=? AND cc.status='ACTIVE'
       LIMIT 1 FOR UPDATE
     `,[currentStage.id,competition.id,choiceCode]);
+    logStep('choice_locked');
     if(!choice)throw Object.assign(new Error('choice_not_in_current_round'),{status:409});
 
     const [[claimed]]=await conn.query(`
@@ -189,6 +199,7 @@ router.post('/:slug/join',async(req,res,next)=>{
       WHERE cdc.competition_id=? AND cdc.device_hash=?
       LIMIT 1 FOR UPDATE
     `,[competition.id,deviceHash]);
+    logStep('device_checked');
     if(claimed){
       const err=Object.assign(new Error('device_already_joined'),{status:409});
       err.payload={error:'device_already_joined',choice:{code:claimed.code,name:claimed.name}};
@@ -220,17 +231,20 @@ router.post('/:slug/join',async(req,res,next)=>{
       createdUser=true;
     }
 
+    logStep('identity_ready');
     const supporterNo=Math.max(1,Number(choice.next_supporter_no||1));
     await conn.query('UPDATE competition_choices SET next_supporter_no=? WHERE id=?',[supporterNo+1,choice.id]);
     await conn.query(`
       INSERT INTO competition_supporters(competition_id,choice_id,user_id,supporter_no)
       VALUES (?,?,?,?)
     `,[competition.id,choice.id,userId,supporterNo]);
+    logStep('supporter_inserted');
     await conn.query(
       'INSERT INTO competition_device_claims(competition_id,user_id,device_hash) VALUES (?,?,?)',
       [competition.id,userId,deviceHash]
     );
 
+    logStep('device_claimed');
     let referrer=null;
     if(refPublicId){
       [[referrer]]=await conn.query(`
@@ -254,10 +268,13 @@ router.post('/:slug/join',async(req,res,next)=>{
       WHERE competition_id=? AND choice_id=? AND status='ACTIVE'
     `,[competition.id,choice.id]);
 
+    logStep('stats_ready');
     let session=null;
     if(createdUser)session=await createSession(userId,req.get('user-agent')||'',conn);
+    logStep('session_ready');
 
     await conn.commit();
+    logStep('committed');
     res.status(201).json({
       token:session?.token||null,
       expiresAt:session?.expiresAt||null,
@@ -272,6 +289,7 @@ router.post('/:slug/join',async(req,res,next)=>{
       friendAdded:Boolean(referrer)
     });
   }catch(e){
+    console.error('[competition-join-error]',JSON.stringify({traceId,slug,ms:Date.now()-startedAt,code:e?.code||null,message:e?.message||'unknown'}));
     await conn.rollback();
     if(e.status)return res.status(e.status).json(e.payload||{error:e.message});
     if(e.code==='ER_DUP_ENTRY')return res.status(409).json({error:'already_joined'});
