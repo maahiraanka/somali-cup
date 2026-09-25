@@ -43,7 +43,7 @@ router.get('/',async(_req,res,next)=>{
         (SELECT COUNT(*) FROM competition_choices cc WHERE cc.competition_id=cp.id AND cc.status='ACTIVE') choice_count,
         (SELECT COUNT(*) FROM competition_supporters cs WHERE cs.competition_id=cp.id AND cs.status='ACTIVE') supporter_count
       FROM competitions cp
-      WHERE cp.status IN ('OPEN','LIVE','COMPLETE')
+      WHERE cp.is_test=0 AND cp.status IN ('OPEN','LIVE','COMPLETE')
       ORDER BY FIELD(cp.status,'LIVE','OPEN','COMPLETE'),cp.starts_at DESC,cp.id DESC
     `);
     res.json({competitions:rows.map(r=>({...shapeCompetition(r),choiceCount:Number(r.choice_count||0),supporterCount:Number(r.supporter_count||0)}))});
@@ -56,7 +56,7 @@ router.get('/:slug',async(req,res,next)=>{
     const [[competition]]=await pool.query(`
       SELECT id,slug,name,short_name,competition_type,choice_type,language_preset,
         language_overrides_json,status,allow_nominations,starts_at,ends_at
-      FROM competitions WHERE slug=? LIMIT 1
+      FROM competitions WHERE slug=? AND is_test=0 LIMIT 1
     `,[slug]);
     if(!competition)return res.status(404).json({error:'competition_not_found'});
     const [choices]=await pool.query(`
@@ -162,7 +162,7 @@ router.post('/:slug/join',async(req,res,next)=>{
   try{
     await conn.beginTransaction();
     const [[competition]]=await conn.query(
-      "SELECT id,slug,name,status,choice_type,language_preset,language_overrides_json FROM competitions WHERE slug=? LIMIT 1 FOR UPDATE",
+      "SELECT id,slug,name,status,choice_type,language_preset,language_overrides_json FROM competitions WHERE slug=? AND is_test=0 LIMIT 1 FOR UPDATE",
       [slug]
     );
     if(!competition)throw Object.assign(new Error('competition_not_found'),{status:404});
