@@ -15,6 +15,7 @@ export async function clearPublicCompetitionContent(conn){
   await conn.query('DELETE FROM scoring_events');
   await conn.query('DELETE FROM match_assists');
   await conn.query('DELETE FROM match_state_events');
+  await conn.query('UPDATE match_participations SET parent_participation_id=NULL WHERE parent_participation_id IS NOT NULL');
   await conn.query('DELETE FROM match_participations');
   await conn.query('DELETE FROM tournament_advancement_slots');
   await conn.query('DELETE FROM matches');

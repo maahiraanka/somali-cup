@@ -14,6 +14,7 @@ DELETE FROM awards;
 DELETE FROM scoring_events;
 DELETE FROM match_assists;
 DELETE FROM match_state_events;
+UPDATE match_participations SET parent_participation_id=NULL WHERE parent_participation_id IS NOT NULL;
 DELETE FROM match_participations;
 DELETE FROM tournament_advancement_slots;
 DELETE FROM matches;
