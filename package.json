@@ -1,7 +1,7 @@
 {
   "name": "somali-cup",
   "private": true,
-  "version": "0.6.4-premium-confirmation-modal",
+  "version": "0.7.0-master-city-directory",
   "type": "module",
   "engines": {
     "node": ">=22"
