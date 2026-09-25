@@ -55,6 +55,29 @@ await check('competition_referrals_table',()=>pool.query("SELECT competition_id,
 await check('competition_stages_table',()=>pool.query("SELECT competition_id,code,stage_type,status,rule_type,target,advance_count FROM competition_stages LIMIT 1"));
 await check('competition_stage_choices_table',()=>pool.query("SELECT stage_id,choice_id,result_status,entry_supporter_count FROM competition_stage_choices LIMIT 1"));
 await check('competition_stage_events_table',()=>pool.query("SELECT competition_id,stage_id,event_type FROM competition_stage_events LIMIT 1"));
+await check('master_city_directory_schema',async()=>{
+  const [rows]=await pool.query(`
+    SELECT column_name
+    FROM information_schema.columns
+    WHERE table_schema=DATABASE()
+      AND table_name='cities'
+      AND column_name IN ('region','aliases_json','image_url','updated_at')
+  `);
+  if(rows.length!==4)throw new Error('master city directory columns missing');
+});
+
+await check('master_city_links_valid',async()=>{
+  const [[r]]=await pool.query(`
+    SELECT COUNT(*) broken
+    FROM competition_choices cc
+    LEFT JOIN cities c ON c.id=cc.legacy_city_id
+    WHERE cc.choice_type='CITY'
+      AND cc.legacy_city_id IS NOT NULL
+      AND c.id IS NULL
+  `);
+  if(Number(r?.broken||0)!==0)throw new Error('broken master city references: '+r.broken);
+});
+
 await check('competition_creator_schema_ready',async()=>{
   await pool.query("SELECT id,slug,status FROM competitions LIMIT 1");
   await pool.query("SELECT id,competition_id,code FROM competition_choices LIMIT 1");

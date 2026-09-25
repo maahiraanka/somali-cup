@@ -231,24 +231,28 @@ router.post('/create-complete',async(req,res,next)=>{
   const allowNominations=req.body?.allowNominations?1:0;
   const publishNow=Boolean(req.body?.publishNow);
   const choices=Array.isArray(req.body?.choices)?req.body.choices:[];
+  const cityIds=Array.isArray(req.body?.cityIds)?[...new Set(req.body.cityIds.map(Number).filter(x=>Number.isInteger(x)&&x>0))]:[];
   const stages=Array.isArray(req.body?.stages)?req.body.stages:[];
 
   if(name.length<3||!slug)return res.status(400).json({error:'name_required'});
   if(!['STAGED','GOAL_RACE','TIMED','HEAD_TO_HEAD'].includes(competitionType))return res.status(400).json({error:'invalid_competition_type'});
   if(!['CITY','UNIVERSITY','CLUB','BUSINESS','PERSON','COMMUNITY','CUSTOM'].includes(choiceType))return res.status(400).json({error:'invalid_choice_type'});
   if(!supportedLanguagePresets().includes(languagePreset))return res.status(400).json({error:'invalid_language_preset'});
-  if(choices.length<2)return res.status(400).json({error:'at_least_two_choices_required'});
+  if(choiceType==='CITY'&&cityIds.length<2)return res.status(400).json({error:'at_least_two_cities_required'});
+  if(choiceType!=='CITY'&&choices.length<2)return res.status(400).json({error:'at_least_two_choices_required'});
   if(!stages.length)return res.status(400).json({error:'at_least_one_round_required'});
 
   const normalizedChoices=[];
-  const seenCodes=new Set();
-  for(let i=0;i<choices.length;i++){
-    const choiceName=clean(choices[i]?.name,140);
-    const choiceCode=clean(choices[i]?.code||choiceName,24).toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24);
-    if(choiceName.length<2||!choiceCode)return res.status(400).json({error:'invalid_choice',index:i});
-    if(seenCodes.has(choiceCode))return res.status(400).json({error:'duplicate_choice_code',code:choiceCode});
-    seenCodes.add(choiceCode);
-    normalizedChoices.push({name:choiceName,shortName:clean(choices[i]?.shortName||choiceName,80),code:choiceCode});
+  if(choiceType!=='CITY'){
+    const seenCodes=new Set();
+    for(let i=0;i<choices.length;i++){
+      const choiceName=clean(choices[i]?.name,140);
+      const choiceCode=clean(choices[i]?.code||choiceName,24).toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24);
+      if(choiceName.length<2||!choiceCode)return res.status(400).json({error:'invalid_choice',index:i});
+      if(seenCodes.has(choiceCode))return res.status(400).json({error:'duplicate_choice_code',code:choiceCode});
+      seenCodes.add(choiceCode);
+      normalizedChoices.push({name:choiceName,shortName:clean(choices[i]?.shortName||choiceName,80),code:choiceCode,legacyCityId:null});
+    }
   }
 
   const normalizedStages=[];
@@ -277,6 +281,25 @@ router.post('/create-complete',async(req,res,next)=>{
   const conn=await pool.getConnection();
   try{
     await conn.beginTransaction();
+
+    if(choiceType==='CITY'){
+      const placeholders=cityIds.map(()=>'?').join(',');
+      const [masterCities]=await conn.query(
+        `SELECT id,name,code,country,region,tier,image_url FROM cities WHERE id IN (${placeholders}) AND is_active=1 ORDER BY name`,
+        cityIds
+      );
+      if(masterCities.length!==cityIds.length)throw Object.assign(new Error('city_directory_selection_invalid'),{status:409});
+      for(const city of masterCities){
+        normalizedChoices.push({
+          name:city.name,
+          shortName:city.name,
+          code:city.code,
+          legacyCityId:Number(city.id),
+          metadata:{country:city.country,region:city.region,tier:city.tier,imageUrl:city.image_url}
+        });
+      }
+    }
+
     const [created]=await conn.query(`
       INSERT INTO competitions(
         slug,name,short_name,competition_type,choice_type,language_preset,status,allow_nominations
@@ -288,9 +311,13 @@ router.post('/create-complete',async(req,res,next)=>{
     for(let i=0;i<normalizedChoices.length;i++){
       const ch=normalizedChoices[i];
       const [inserted]=await conn.query(`
-        INSERT INTO competition_choices(competition_id,name,short_name,code,choice_type,status,sort_order)
-        VALUES (?,?,?,?,?,'ACTIVE',?)
-      `,[competitionId,ch.name,ch.shortName,ch.code,choiceType,i+1]);
+        INSERT INTO competition_choices(
+          competition_id,name,short_name,code,choice_type,legacy_city_id,status,sort_order,metadata_json
+        ) VALUES (?,?,?,?,?,?,'ACTIVE',?,?)
+      `,[
+        competitionId,ch.name,ch.shortName,ch.code,choiceType,ch.legacyCityId||null,i+1,
+        ch.metadata?JSON.stringify(ch.metadata):null
+      ]);
       choiceRows.push({id:Number(inserted.insertId),...ch});
     }
 
@@ -343,6 +370,7 @@ router.post('/create-complete',async(req,res,next)=>{
     });
   }catch(e){
     await conn.rollback();
+    if(e.status)return res.status(e.status).json({error:e.message});
     if(e.code==='ER_DUP_ENTRY')return res.status(409).json({error:'competition_or_choice_exists'});
     next(e);
   }finally{conn.release()}
@@ -383,7 +411,7 @@ router.get('/:id/choices',async(req,res,next)=>{
     const competitionId=Number(req.params.id);
     if(!Number.isInteger(competitionId)||competitionId<1)return res.status(400).json({error:'invalid_competition'});
     const [rows]=await pool.query(`
-      SELECT cc.id,cc.name,cc.short_name,cc.code,cc.choice_type,cc.status,cc.target,cc.sort_order,
+      SELECT cc.id,cc.name,cc.short_name,cc.code,cc.choice_type,cc.legacy_city_id,cc.status,cc.target,cc.sort_order,
         (SELECT COUNT(*) FROM competition_supporters cs WHERE cs.competition_id=cc.competition_id AND cs.choice_id=cc.id AND cs.status='ACTIVE') supporter_count
       FROM competition_choices cc
       WHERE cc.competition_id=?
@@ -395,24 +423,40 @@ router.get('/:id/choices',async(req,res,next)=>{
 
 router.post('/:id/choices',async(req,res,next)=>{
   const competitionId=Number(req.params.id);
-  const name=clean(req.body?.name,140);
-  const shortName=clean(req.body?.shortName||name,80)||null;
-  const code=clean(req.body?.code||name,24).toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24);
   const targetRaw=req.body?.target;
   const target=targetRaw===null||targetRaw===undefined||targetRaw===''?null:Number(targetRaw);
   if(!Number.isInteger(competitionId)||competitionId<1)return res.status(400).json({error:'invalid_competition'});
-  if(name.length<2||!code)return res.status(400).json({error:'choice_name_required'});
   if(target!==null&&(!Number.isInteger(target)||target<1))return res.status(400).json({error:'invalid_target'});
   try{
     const [[competition]]=await pool.query('SELECT id,choice_type FROM competitions WHERE id=? LIMIT 1',[competitionId]);
     if(!competition)return res.status(404).json({error:'competition_not_found'});
+
+    let name,shortName,code,legacyCityId=null,metadata=null;
+    if(competition.choice_type==='CITY'){
+      const cityId=Number(req.body?.cityId);
+      if(!Number.isInteger(cityId)||cityId<1)return res.status(400).json({error:'master_city_required'});
+      const [[city]]=await pool.query(
+        'SELECT id,name,code,country,region,tier,image_url FROM cities WHERE id=? AND is_active=1 LIMIT 1',
+        [cityId]
+      );
+      if(!city)return res.status(404).json({error:'master_city_not_found'});
+      name=city.name;shortName=city.name;code=city.code;legacyCityId=Number(city.id);
+      metadata=JSON.stringify({country:city.country,region:city.region,tier:city.tier,imageUrl:city.image_url});
+    }else{
+      name=clean(req.body?.name,140);
+      shortName=clean(req.body?.shortName||name,80)||null;
+      code=clean(req.body?.code||name,24).toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24);
+      if(name.length<2||!code)return res.status(400).json({error:'choice_name_required'});
+    }
+
     const [r]=await pool.query(`
-      INSERT INTO competition_choices(competition_id,name,short_name,code,choice_type,target)
-      VALUES (?,?,?,?,?,?)
-    `,[competitionId,name,shortName,code,competition.choice_type,target]);
+      INSERT INTO competition_choices(
+        competition_id,name,short_name,code,choice_type,legacy_city_id,target,metadata_json
+      ) VALUES (?,?,?,?,?,?,?,?)
+    `,[competitionId,name,shortName,code,competition.choice_type,legacyCityId,target,metadata]);
     await pool.query(
       'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
-      [req.admin?.user_id||null,'COMPETITION_CHOICE_ADDED','COMPETITION_CHOICE',String(r.insertId),JSON.stringify({competitionId,name,code,target})]
+      [req.admin?.user_id||null,'COMPETITION_CHOICE_ADDED','COMPETITION_CHOICE',String(r.insertId),JSON.stringify({competitionId,name,code,target,legacyCityId})]
     );
     res.status(201).json({ok:true,id:Number(r.insertId)});
   }catch(e){
