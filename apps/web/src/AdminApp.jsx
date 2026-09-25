@@ -654,7 +654,7 @@ function CompetitionsAdmin({d,act,refresh}){
               {masterCities.map(city=>{
                 const checked=selectedCityIds.includes(city.id);
                 return <button type="button" className={checked?'selected':''} key={city.id} onClick={()=>setCreator({...creator,cityIds:checked?selectedCityIds.filter(id=>id!==city.id):[...selectedCityIds,city.id]})}>
-                  <span className="creatorCityCode">{city.code}</span><div><b>{city.name}</b><small>{city.region||city.country}</small></div><i>{checked?<Check size={13}/>:null}</i>
+                  <span className="creatorCityPhoto">{city.image_url?<img src={city.image_url} alt="" loading="lazy"/>:<b>{city.code}</b>}</span><div><b>{city.name}</b><small>{city.region||city.country}</small></div><i>{checked?<Check size={13}/>:null}</i>
                 </button>
               })}
             </div>}
@@ -1172,7 +1172,7 @@ function CityDirectoryAdmin({d,refresh}){
       <div className="adminPanelAction"><PanelHead eyebrow="CITY DIRECTORY" title="Reusable cities"/><div className="cityDirectorySearch"><Search size={14}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search cities"/></div></div>
       {!filtered.length?<div className="adminEmpty"><Flag/><div><b>No cities yet</b><p>Add each city once here. Competition Creator will reuse them later.</p></div></div>:<div className="cityDirectoryList">
         {filtered.map(city=><article className={'cityDirectoryRow '+(!city.is_active?'inactive':'')} key={city.id}>
-          <div className="cityDirectoryCode">{city.code}</div>
+          <div className="cityDirectoryAvatar">{city.image_url?<img src={city.image_url} alt="" loading="lazy"/>:<span>{city.code}</span>}</div>
           <div className="cityDirectoryIdentity"><strong>{city.name}</strong><span>{city.region||'No region'} · {city.country}</span>{city.aliases?.length>0&&<small>{city.aliases.join(' · ')}</small>}</div>
           <div className="cityDirectoryUse"><span>Used in</span><strong>{fmt(city.competition_count)} competitions</strong></div>
           <div className="cityDirectoryStatus"><span className={city.is_active?'adminYes':'adminNo'}>{city.is_active?'ACTIVE':'DISABLED'}</span></div>
