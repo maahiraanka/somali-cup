@@ -38,6 +38,8 @@ DELETE FROM season_device_claims;
 DELETE FROM identity_integrity_events;
 DELETE FROM moderation_cases;
 
+UPDATE users u JOIN admin_credentials ac ON ac.user_id=u.id SET u.role='ADMIN';
+
 UPDATE audit_log al
 JOIN users u ON u.id=al.actor_user_id
 SET al.actor_user_id=NULL
