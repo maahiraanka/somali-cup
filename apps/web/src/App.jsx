@@ -349,7 +349,7 @@ export default function App(){
       setInitialLoading(false);
     }
   };
-  useEffect(()=>{refresh();const params=new URLSearchParams(window.location.search);trackEvent('LANDING_VIEW',{source:(params.get('src')||'direct').slice(0,32)});const competition=params.get('competition');if(competition==='best-city-somalia'){api('/api/competitions/best-city-somalia').then(d=>{setBestCity(d);setView('best-city')}).catch(()=>{})}},[]);
+  useEffect(()=>{refresh();const params=new URLSearchParams(window.location.search);trackEvent('LANDING_VIEW',{source:(params.get('src')||'direct').slice(0,32)});const competition=(params.get('competition')||'').trim();if(competition&&competition!=='somali-cup'){api('/api/competitions/'+encodeURIComponent(competition)).then(d=>{setBestCity(d);setView('best-city')}).catch(()=>{})}},[]);
   useEffect(()=>{
     if(!me?.membership)return;
     let cancelled=false;
@@ -454,20 +454,18 @@ export default function App(){
   const leaveMatchInvite=()=>{setViralMatch(null);window.history.replaceState({},'',window.location.pathname);setView('home')};
   const openCompetition=async(slug)=>{
     if(slug==='somali-cup'){setBestCity(null);setView('home');window.scrollTo({top:0,behavior:'smooth'});return}
-    if(slug==='best-city-somalia'){
-      try{
-        const d=await api('/api/competitions/best-city-somalia');
-        setBestCity(d);
-        setView('best-city');
-        window.scrollTo({top:0,behavior:'smooth'});
-      }catch{
-        setNotice('We could not open Best City right now.');
-        setTimeout(()=>setNotice(''),2400);
-      }
-      return;
+    try{
+      const d=await api('/api/competitions/'+encodeURIComponent(slug));
+      setBestCity(d);
+      setView('best-city');
+      const params=new URLSearchParams(window.location.search);
+      params.set('competition',slug);
+      window.history.replaceState({},'',window.location.pathname+'?'+params.toString());
+      window.scrollTo({top:0,behavior:'smooth'});
+    }catch{
+      setNotice('We could not open this competition right now.');
+      setTimeout(()=>setNotice(''),2400);
     }
-    setNotice('This competition is coming soon.');
-    setTimeout(()=>setNotice(''),2200);
   };
   const showCompetitionChrome=!['hub','best-city'].includes(view);
 
@@ -488,7 +486,7 @@ export default function App(){
 
     <AmbientMotion/>
     <main className={(viralCity&&!me?.membership)||viralMatch?'mainStage viralStage':'mainStage'}>
-      {viralMatch?<ViralMatchLanding data={viralMatch} me={me} matches={matches} busy={inviteBusy} onIdentity={()=>requestJoin()} onEnter={enterInvitedMatch} onLeave={leaveMatchInvite}/>:viralMatchError?<InviteRecovery message={viralMatchError} onHome={leaveMatchInvite}/>:viralCity&&!me?.membership?<ViralCityLanding city={viralCity} standings={standings} fromName={viralFrom} onJoin={()=>requestJoin(viralCity)} onOther={leaveViralLanding}/>:initialLoading?<LiveDataState loading onRetry={refresh}/>:view==='hub'?<TournamentHub competitions={competitions} error={competitionError} onOpen={openCompetition} onRetry={refresh}/>:view==='best-city'?<BestCityExperience data={bestCity} me={me} onBack={()=>setView('hub')} onRefresh={async()=>{const d=await api('/api/competitions/best-city-somalia');setBestCity(d)}}/>:<>
+      {viralMatch?<ViralMatchLanding data={viralMatch} me={me} matches={matches} busy={inviteBusy} onIdentity={()=>requestJoin()} onEnter={enterInvitedMatch} onLeave={leaveMatchInvite}/>:viralMatchError?<InviteRecovery message={viralMatchError} onHome={leaveMatchInvite}/>:viralCity&&!me?.membership?<ViralCityLanding city={viralCity} standings={standings} fromName={viralFrom} onJoin={()=>requestJoin(viralCity)} onOther={leaveViralLanding}/>:initialLoading?<LiveDataState loading onRetry={refresh}/>:view==='hub'?<TournamentHub competitions={competitions} error={competitionError} onOpen={openCompetition} onRetry={refresh}/>:view==='best-city'?<BestCityExperience data={bestCity} me={me} onBack={()=>{setBestCity(null);setView('hub');window.history.replaceState({},'',window.location.pathname)}} onRefresh={async()=>{const slug=bestCity?.competition?.slug;if(!slug)return;const d=await api('/api/competitions/'+encodeURIComponent(slug));setBestCity(d)}}/>:<>
         {view==='home'&&(qualificationUnavailable?<LiveDataState title="Live city race unavailable" body="We couldn’t load the verified city standings. No demo numbers are being shown." onRetry={refresh}/>:<Home standings={standings} top={top} total={total} season={season} myCity={myCity} me={me} matches={matches} onJoin={requestJoin} openCity={openCity} goQualification={()=>setView('qualification')} goMatches={()=>setView('matches')}/>)}
         {view==='qualification'&&(qualificationUnavailable?<LiveDataState title="Live table unavailable" body="The verified qualification table could not be loaded." onRetry={refresh}/>:<Qualification standings={standings} season={season} onJoin={requestJoin} openCity={openCity}/>)}
         {view==='cities'&&(qualificationUnavailable?<LiveDataState title="City data unavailable" body="We couldn’t load the verified city list." onRetry={refresh}/>:<Cities standings={standings} openCity={openCity} onJoin={requestJoin}/>)}
@@ -539,14 +537,19 @@ function TournamentHub({competitions,error,onOpen,onRetry}){
     <section className="hubSection">
       <div className="hubSectionHead"><div><small>LIVE NOW</small><h2>What do you want to support?</h2></div></div>
       {error&&!competitions.length?<LiveDataState title="Competitions are unavailable" body="We could not load the live competitions." onRetry={onRetry}/>:!live.length?<div className="hubEmptyState"><Trophy size={28}/><h3>No competitions yet</h3><p>New competitions will appear here after Admin creates and launches them.</p></div>:<div className="hubCards">
-        {live.map((competition,index)=><button className={'hubCard '+(competition.slug==='best-city-somalia'?'cityCompetition':'cupCompetition')} key={competition.slug} onClick={()=>onOpen(competition.slug)}>
-          <div className="hubCardTop"><span className="hubLive"><i/> LIVE</span><span>{competition.choiceCount||0} {competition.choiceType==='CITY'?'cities':'choices'}</span></div>
-          <div className="hubCardIcon">{competition.slug==='best-city-somalia'?'🏙️':'🏆'}</div>
-          <small>{competition.slug==='best-city-somalia'?'CITY CHALLENGE':'CUP COMPETITION'}</small>
-          <h3>{competition.name}</h3>
-          <p>{competition.slug==='best-city-somalia'?'Support your city. Bring your friends. Help your city move to the next round.':'Represent your city. Score your Goal. Bring your friends into the Cup.'}</p>
-          <div className="hubCardStats"><div><strong>{fmt(competition.supporterCount)}</strong><span>{competition.slug==='best-city-somalia'?'supporters':'supporters'}</span></div><b>JOIN <ArrowRight size={16}/></b></div>
-        </button>)}
+        {live.map((competition,index)=>{
+          const icon=competition.choiceType==='CITY'?'🏙️':competition.choiceType==='UNIVERSITY'?'🎓':competition.choiceType==='CLUB'?'⚽':'🏆';
+          const typeLabel=competition.choiceType==='CITY'?'CITY COMPETITION':competition.choiceType==='UNIVERSITY'?'UNIVERSITY COMPETITION':competition.choiceType==='CLUB'?'CLUB COMPETITION':'COMPETITION';
+          const description=competition.choiceType==='CITY'?'Support your city. Bring your friends. Help your city move through the rounds.':competition.choiceType==='UNIVERSITY'?'Support your university and bring your friends from campus.':competition.choiceType==='CLUB'?'Support your club and bring your fellow fans.':'Choose who you support and bring your friends.';
+          return <button className={'hubCard '+(competition.choiceType==='CITY'?'cityCompetition':'cupCompetition')} key={competition.slug} onClick={()=>onOpen(competition.slug)}>
+            <div className="hubCardTop"><span className="hubLive"><i/> LIVE</span><span>{competition.choiceCount||0} {competition.choiceType==='CITY'?'cities':competition.choiceType==='UNIVERSITY'?'universities':competition.choiceType==='CLUB'?'clubs':'choices'}</span></div>
+            <div className="hubCardIcon">{icon}</div>
+            <small>{typeLabel}</small>
+            <h3>{competition.name}</h3>
+            <p>{description}</p>
+            <div className="hubCardStats"><div><strong>{fmt(competition.supporterCount)}</strong><span>supporters</span></div><b>OPEN <ArrowRight size={16}/></b></div>
+          </button>
+        })}
         {coming.map(x=><div className="hubCard comingCard" key={x.slug}>
           <div className="hubCardTop"><span className="comingPill">COMING SOON</span><span>Universities</span></div>
           <div className="hubCardIcon">🎓</div>
