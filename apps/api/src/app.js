@@ -33,7 +33,7 @@ if(config.env!=='production'){
 app.get('/api/health',(_req,res)=>res.json({
   ok:true,
   service:'somali-cup-api',
-  version:'0.8.2-generic-live-competition'
+  version:'0.8.3-generic-competition-runtime'
 }));
 
 app.get('/api/startup',(_req,res)=>{
