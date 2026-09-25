@@ -371,6 +371,7 @@ function CompetitionsAdmin({d,act,refresh}){
   };
   const loadCompetitionData=async id=>Promise.all([loadStages(id),loadChoices(id)]);
   useEffect(()=>{if(selected?.id){setSelectedId(selected.id);loadCompetitionData(selected.id)}},[selected?.id]);
+  useEffect(()=>{adminApi('/api/admin/city-directory').then(x=>setMasterCities((x.cities||[]).filter(city=>city.is_active))).catch(()=>setMasterCities([]))},[]);
 
   const saveStage=async(stage)=>{
     const form=editing?.id===stage.id?editing:stage;
@@ -425,11 +426,17 @@ function CompetitionsAdmin({d,act,refresh}){
   };
 
   const addChoice=async()=>{
+    if(!selected)return;
+    const isCity=selected.choice_type==='CITY';
     const name=newChoice.trim();
-    if(!selected||name.length<2)return;
+    if(isCity&&!Number.isInteger(Number(newChoice)))return;
+    if(!isCity&&name.length<2)return;
     setContentBusy(true);
     try{
-      await adminApi('/api/admin/competitions/'+selected.id+'/choices',{method:'POST',body:JSON.stringify({name})});
+      await adminApi('/api/admin/competitions/'+selected.id+'/choices',{
+        method:'POST',
+        body:JSON.stringify(isCity?{cityId:Number(newChoice)}:{name})
+      });
       setNewChoice('');
       await loadCompetitionData(selected.id);
       await refresh();
@@ -556,7 +563,7 @@ function CompetitionsAdmin({d,act,refresh}){
 
       <section className="adminPanel">
         <div className="adminPanelAction"><PanelHead eyebrow="CHOICES" title="Manage what people can support"/><span className="opsHint">Add, edit, pause or delete choices</span></div>
-        <div className="competitionAddChoice"><input value={newChoice} onChange={e=>setNewChoice(e.target.value)} placeholder={'Add a '+String(selected.choice_type||'choice').toLowerCase()}/><button onClick={addChoice} disabled={contentBusy||newChoice.trim().length<2}><Plus size={13}/> ADD</button></div>
+        <div className="competitionAddChoice">{selected.choice_type==='CITY'?<select value={newChoice} onChange={e=>setNewChoice(e.target.value)}><option value="">Choose a city from City Directory</option>{masterCities.filter(city=>!choices.some(choice=>Number(choice.legacy_city_id)===Number(city.id))).map(city=><option value={city.id} key={city.id}>{city.name} · {city.code}</option>)}</select>:<input value={newChoice} onChange={e=>setNewChoice(e.target.value)} placeholder={'Add a '+String(selected.choice_type||'choice').toLowerCase()}/>}<button onClick={addChoice} disabled={contentBusy||!String(newChoice).trim()}><Plus size={13}/> ADD</button></div>
         <div className="competitionChoiceAdminList">
           {choices.map(choice=><div className="competitionChoiceAdmin" key={choice.id}>
             {editingChoice?.id===choice.id?<div className="competitionChoiceEdit">
