@@ -15,6 +15,7 @@ import adminAuthRoutes from './routes/adminAuth.js';
 import awardRoutes from './routes/awards.js';
 import competitionRoutes from './routes/competitions.js';
 import adminCompetitionRoutes from './routes/adminCompetitions.js';
+import adminTestLabRoutes from './routes/adminTestLab.js';
 import { getStartupState } from './startupState.js';
 
 const app = express();
@@ -30,7 +31,7 @@ if(config.env!=='production'){
 app.get('/api/health',(_req,res)=>res.json({
   ok:true,
   service:'somali-cup-api',
-  version:'0.5.3-startup-ready-hotfix'
+  version:'0.6.0-factory-reset-test-lab'
 }));
 
 app.get('/api/startup',(_req,res)=>{
@@ -60,6 +61,7 @@ app.use('/api/tournament',tournamentRoutes);
 app.use('/api/admin/auth',adminAuthRoutes);
 app.use('/api/admin/awards',awardRoutes);
 app.use('/api/admin/competitions',adminCompetitionRoutes);
+app.use('/api/admin/test-lab',adminTestLabRoutes);
 app.use('/api/admin/tournament',adminTournamentRoutes);
 app.use('/api/admin',adminRoutes);
 
