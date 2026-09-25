@@ -629,7 +629,7 @@ function BestCityExperience({data,me,onBack,onRefresh}){
       });
       setShowJoin(false);
       setMessage('You now support '+payload.choice.name+'.');
-      await onRefresh();
+      Promise.resolve(onRefresh?.()).catch(()=>{});
     }catch(e){
       const code=e?.body?.error;
       if(code==='device_already_joined'||code==='already_joined'){
