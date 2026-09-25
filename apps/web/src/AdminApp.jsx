@@ -344,9 +344,10 @@ function CompetitionsAdmin({d,act,refresh}){
   const [creatorStep,setCreatorStep]=useState(1);
   const [creatorBusy,setCreatorBusy]=useState(false);
   const [creatorError,setCreatorError]=useState('');
+  const [masterCities,setMasterCities]=useState([]);
   const [creator,setCreator]=useState({
     name:'',competitionType:'STAGED',choiceType:'CITY',languagePreset:'CITY',allowNominations:true,publishNow:false,
-    choices:['',''],
+    choices:['',''],cityIds:[],
     stages:[
       {name:'Round 1',code:'ROUND_1',stageType:'QUALIFICATION',ruleType:'TARGET',target:1000,advanceCount:null,groupSize:null},
       {name:'Group Round',code:'GROUP',stageType:'GROUP',ruleType:'TARGET_OR_TOP_N',target:2500,advanceCount:2,groupSize:4},
@@ -480,7 +481,7 @@ function CompetitionsAdmin({d,act,refresh}){
     setCreatorStep(1);setCreatorError('');
     setCreator({
       name:'',competitionType:'STAGED',choiceType:'CITY',languagePreset:'CITY',allowNominations:true,publishNow:false,
-      choices:['',''],
+      choices:['',''],cityIds:[],
       stages:[
         {name:'Round 1',code:'ROUND_1',stageType:'QUALIFICATION',ruleType:'TARGET',target:1000,advanceCount:null,groupSize:null},
         {name:'Group Round',code:'GROUP',stageType:'GROUP',ruleType:'TARGET_OR_TOP_N',target:2500,advanceCount:2,groupSize:4},
@@ -490,18 +491,19 @@ function CompetitionsAdmin({d,act,refresh}){
     });
   };
 
-  const openCreator=()=>{resetCreator();setShowCreator(true)};
+  const openCreator=async()=>{resetCreator();setShowCreator(true);try{const x=await adminApi('/api/admin/city-directory');setMasterCities((x.cities||[]).filter(city=>city.is_active))}catch{setMasterCities([])}};
   const closeCreator=()=>{setShowCreator(false);resetCreator()};
   const choiceWord=creator.choiceType==='CITY'?'city':creator.choiceType==='UNIVERSITY'?'university':creator.choiceType==='CLUB'?'club':creator.choiceType==='BUSINESS'?'business':creator.choiceType==='PERSON'?'person':creator.choiceType==='COMMUNITY'?'community':'choice';
   const validChoices=creator.choices.map(x=>x.trim()).filter(Boolean);
+  const selectedCityIds=Array.isArray(creator.cityIds)?creator.cityIds:[];
   const canNext=creatorStep===1?creator.name.trim().length>=3:
     creatorStep===2?Boolean(creator.choiceType&&creator.languagePreset):
-    creatorStep===3?validChoices.length>=2:
+    creatorStep===3?(creator.choiceType==='CITY'?selectedCityIds.length>=2:validChoices.length>=2):
     creatorStep===4?creator.stages.length>=1:true;
 
   const setChoiceType=type=>{
     const preset=type==='CITY'?'CITY':type==='UNIVERSITY'?'UNIVERSITY':type==='CLUB'?'CLUB':type==='PERSON'?'FAN':'SIMPLE';
-    setCreator({...creator,choiceType:type,languagePreset:preset});
+    setCreator({...creator,choiceType:type,languagePreset:preset,cityIds:type==='CITY'?(creator.cityIds||[]):[]});
   };
 
   const submitCreator=async()=>{
@@ -509,7 +511,8 @@ function CompetitionsAdmin({d,act,refresh}){
     try{
       const payload={
         ...creator,
-        choices:validChoices.map((name,i)=>({name,code:(name.toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,20)||('CHOICE_'+(i+1)))}))
+        cityIds:creator.choiceType==='CITY'?selectedCityIds:[],
+        choices:creator.choiceType==='CITY'?[]:validChoices.map((name,i)=>({name,code:(name.toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,20)||('CHOICE_'+(i+1)))}))
       };
       const result=await adminApi('/api/admin/competitions/create-complete',{method:'POST',body:JSON.stringify(payload)});
       setShowCreator(false);resetCreator();
@@ -630,11 +633,23 @@ function CompetitionsAdmin({d,act,refresh}){
         </div>}
 
         {creatorStep===3&&<div className="creatorBody">
-          <span className="creatorQuestion">Add the {choiceWord}s</span>
-          <div className="creatorChoiceList">
-            {creator.choices.map((value,index)=><div key={index}><span>{index+1}</span><input value={value} onChange={e=>{const next=[...creator.choices];next[index]=e.target.value;setCreator({...creator,choices:next})}} placeholder={'Name of '+choiceWord}/>{creator.choices.length>2&&<button onClick={()=>setCreator({...creator,choices:creator.choices.filter((_,i)=>i!==index)})}><X size={14}/></button>}</div>)}
-          </div>
-          <button className="creatorAdd" onClick={()=>setCreator({...creator,choices:[...creator.choices,'']})}><Plus size={14}/> ADD ANOTHER {choiceWord.toUpperCase()}</button>
+          {creator.choiceType==='CITY'?<>
+            <div className="creatorCityPickerHead"><div><span className="creatorQuestion">Choose cities from your directory</span><p>{fmt(selectedCityIds.length)} selected · the same city can be reused in unlimited competitions.</p></div><button onClick={()=>setCreator({...creator,cityIds:selectedCityIds.length===masterCities.length?[]:masterCities.map(x=>x.id)})}>{selectedCityIds.length===masterCities.length?'CLEAR ALL':'SELECT ALL'}</button></div>
+            {!masterCities.length?<div className="creatorDirectoryEmpty"><Flag size={22}/><b>No master cities yet</b><p>Go to City Directory and add your cities once. Then come back here to reuse them.</p></div>:<div className="creatorCityPicker">
+              {masterCities.map(city=>{
+                const checked=selectedCityIds.includes(city.id);
+                return <button type="button" className={checked?'selected':''} key={city.id} onClick={()=>setCreator({...creator,cityIds:checked?selectedCityIds.filter(id=>id!==city.id):[...selectedCityIds,city.id]})}>
+                  <span className="creatorCityCode">{city.code}</span><div><b>{city.name}</b><small>{city.region||city.country}</small></div><i>{checked?<Check size={13}/>:null}</i>
+                </button>
+              })}
+            </div>}
+          </>:<>
+            <span className="creatorQuestion">Add the {choiceWord}s</span>
+            <div className="creatorChoiceList">
+              {creator.choices.map((value,index)=><div key={index}><span>{index+1}</span><input value={value} onChange={e=>{const next=[...creator.choices];next[index]=e.target.value;setCreator({...creator,choices:next})}} placeholder={'Name of '+choiceWord}/>{creator.choices.length>2&&<button onClick={()=>setCreator({...creator,choices:creator.choices.filter((_,i)=>i!==index)})}><X size={14}/></button>}</div>)}
+            </div>
+            <button className="creatorAdd" onClick={()=>setCreator({...creator,choices:[...creator.choices,'']})}><Plus size={14}/> ADD ANOTHER {choiceWord.toUpperCase()}</button>
+          </>}
         </div>}
 
         {creatorStep===4&&<div className="creatorBody">
@@ -656,7 +671,7 @@ function CompetitionsAdmin({d,act,refresh}){
           <div className="creatorReview">
             <div><span>Name</span><strong>{creator.name}</strong></div>
             <div><span>People will support</span><strong>{nice(creator.choiceType)}</strong></div>
-            <div><span>Choices</span><strong>{fmt(validChoices.length)}</strong></div>
+            <div><span>Choices</span><strong>{fmt(creator.choiceType==='CITY'?selectedCityIds.length:validChoices.length)}</strong></div>
             <div><span>Rounds</span><strong>{fmt(creator.stages.length)}</strong></div>
             <div><span>Suggestions</span><strong>{creator.allowNominations?'Allowed':'Closed'}</strong></div>
           </div>
