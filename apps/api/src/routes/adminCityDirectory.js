@@ -33,6 +33,42 @@ async function ensureCityDirectorySchema(){
     if(Number(r.total||0)===0)await pool.query(sql);
   }
   await pool.query("INSERT IGNORE INTO schema_migrations(filename) VALUES ('025_master_city_directory.sql')");
+
+  const [[cityPackApplied]]=await pool.query(
+    "SELECT COUNT(*) total FROM schema_migrations WHERE filename='027_top10_somalia_city_pack.sql'"
+  );
+  if(Number(cityPackApplied.total||0)===0){
+    const cityPack=[
+      ['Mogadishu','Somalia','Banaadir','MOG','PREMIER',['Muqdisho','Xamar'],'https://commons.wikimedia.org/wiki/Special:Redirect/file/Mogadishu%20Skyline%2017th%20picture.jpg'],
+      ['Hargeisa','Somalia','Maroodi Jeex','HAR','PREMIER',['Hargeysa'],'https://commons.wikimedia.org/wiki/Special:Redirect/file/Hargeysa%20plane%20monument.jpg'],
+      ['Bosaso','Somalia','Bari','BOS','PREMIER',['Boosaaso','Bossaso'],'https://commons.wikimedia.org/wiki/Special:Redirect/file/Bosaso%20Seaport.jpg'],
+      ['Kismayo','Somalia','Lower Juba','KIS','PREMIER',['Kismaayo'],'https://commons.wikimedia.org/wiki/Special:Redirect/file/Aerial%20views%20of%20Kismayo%2005%20%288071373584%29.jpg'],
+      ['Baidoa','Somalia','Bay','BDO','PREMIER',['Baydhabo'],'https://commons.wikimedia.org/wiki/Special:Redirect/file/Baidoa%20Market.jpg'],
+      ['Galkayo','Somalia','Mudug','GLK','PREMIER',['Gaalkacyo'],'https://commons.wikimedia.org/wiki/Special:Redirect/file/Gaalkacyo.jpg'],
+      ['Garowe','Somalia','Nugaal','GAR','PREMIER',['Garoowe'],'https://commons.wikimedia.org/wiki/Special:Redirect/file/From%20the%20Heart%20of%20Garowe-%20A%20Panoramic%20View%20of%20Puntland%E2%80%99s%20Capital.png'],
+      ['Berbera','Somalia','Sahil','BER','PREMIER',[],'https://commons.wikimedia.org/wiki/Special:Redirect/file/Port%20de%20Berbera.jpg'],
+      ['Burao','Somalia','Togdheer','BUR','PREMIER',['Burco'],'https://commons.wikimedia.org/wiki/Special:Redirect/file/Burao%20city%2C%20Somaliland.jpg'],
+      ['Beledweyne','Somalia','Hiraan','BLW','PREMIER',['Belet Weyne','Beled Weyne'],'https://commons.wikimedia.org/wiki/Special:Redirect/file/Beledweyne%2001.jpg']
+    ];
+    for(const [name,country,region,code,tier,aliases,imageUrl] of cityPack){
+      const [[existing]]=await pool.query(
+        'SELECT id FROM cities WHERE code=? OR (LOWER(name)=LOWER(?) AND LOWER(country)=LOWER(?)) LIMIT 1',
+        [code,name,country]
+      );
+      if(existing){
+        await pool.query(
+          'UPDATE cities SET region=?,tier=?,aliases_json=?,image_url=?,is_active=1 WHERE id=?',
+          [region,tier,JSON.stringify(aliases),imageUrl,existing.id]
+        );
+      }else{
+        await pool.query(
+          'INSERT INTO cities(name,country,region,code,tier,aliases_json,image_url,is_active) VALUES (?,?,?,?,?,?,?,1)',
+          [name,country,region,code,tier,JSON.stringify(aliases),imageUrl]
+        );
+      }
+    }
+    await pool.query("INSERT IGNORE INTO schema_migrations(filename) VALUES ('027_top10_somalia_city_pack.sql')");
+  }
 }
 
 router.use(async(_req,_res,next)=>{
