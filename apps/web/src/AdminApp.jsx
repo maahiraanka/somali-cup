@@ -107,6 +107,7 @@ const nav=[
   ['overview','Overview',LayoutDashboard],
   ['launch','Launch Readiness',Rocket],
   ['operations','Operations',Power],
+  ['citydirectory','City Directory',Flag],
   ['cities','Cities & Qualification',Flag],
   ['matches','Matches',Radio],
   ['competitions','Competitions',Trophy],
@@ -143,6 +144,7 @@ export default function AdminApp(){
     overview:'/api/admin/overview',
     launch:'/api/admin/launch-readiness',
     operations:'/api/admin/operations',
+    citydirectory:'/api/admin/city-directory',
     cities:'/api/admin/qualification',
     matches:'/api/admin/matches',
     competitions:'/api/admin/competitions',
@@ -209,6 +211,7 @@ export default function AdminApp(){
           view==='overview'?<Overview d={data.overview}/>:
           view==='launch'?<LaunchReadiness d={data.launch} act={act}/>:
           view==='operations'?<OperationsAdmin d={data.operations} act={act}/>:
+          view==='citydirectory'?<CityDirectoryAdmin d={data.citydirectory} refresh={refresh}/>:
           view==='cities'?<CitiesAdmin d={data.cities} act={act}/>:
           view==='matches'?<MatchesAdmin d={data.matches} act={act}/>:
           view==='competitions'?<CompetitionsAdmin d={data.competitions} act={act} refresh={refresh}/>:
@@ -928,6 +931,84 @@ function OperationsAdmin({d,act}){
   </>
 }
 
+
+
+function CityDirectoryAdmin({d,refresh}){
+  const cities=d?.cities||[];
+  const blank={name:'',code:'',country:'Somalia',region:'',tier:'PREMIER',aliases:'',imageUrl:'',isActive:true};
+  const [form,setForm]=useState(blank);
+  const [editing,setEditing]=useState(null);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  const [search,setSearch]=useState('');
+  const filtered=cities.filter(city=>{
+    const q=search.trim().toLowerCase();
+    return !q||[city.name,city.code,city.region,city.country,...(city.aliases||[])].filter(Boolean).join(' ').toLowerCase().includes(q);
+  });
+
+  const save=async()=>{
+    setBusy(true);setError('');
+    try{
+      const payload={...form,aliases:String(form.aliases||'').split(',').map(x=>x.trim()).filter(Boolean)};
+      if(editing)await adminApi('/api/admin/city-directory/'+editing.id,{method:'PATCH',body:JSON.stringify(payload)});
+      else await adminApi('/api/admin/city-directory',{method:'POST',body:JSON.stringify(payload)});
+      setEditing(null);setForm(blank);await refresh();
+    }catch(e){setError(humanErrorAdmin(e))}
+    finally{setBusy(false)}
+  };
+  const startEdit=city=>{
+    setEditing(city);
+    setForm({
+      name:city.name||'',code:city.code||'',country:city.country||'Somalia',region:city.region||'',
+      tier:city.tier||'PREMIER',aliases:(city.aliases||[]).join(', '),imageUrl:city.image_url||'',isActive:Boolean(city.is_active)
+    });
+  };
+  const remove=async city=>{
+    const confirmation=window.prompt('Type DELETE '+city.name+' to permanently delete this master city. A city already used by a competition cannot be deleted.');
+    if(confirmation!=='DELETE '+city.name)return;
+    setBusy(true);setError('');
+    try{await adminApi('/api/admin/city-directory/'+city.id,{method:'DELETE',body:JSON.stringify({confirmation})});await refresh()}
+    catch(e){setError(e?.body?.error==='city_in_use'?'This city is already used. Disable it instead of deleting it.':humanErrorAdmin(e))}
+    finally{setBusy(false)}
+  };
+
+  return <div className="cityDirectoryPage">
+    <section className="cityDirectoryHero">
+      <div><small>MASTER DATA</small><h2>Set up cities once. Reuse them everywhere.</h2><p>Somali Cup, Best City, head-to-heads and future city competitions all use this one directory.</p></div>
+      <div><strong>{fmt(cities.length)}</strong><span>master cities</span></div>
+    </section>
+
+    {error&&<div className="adminError"><AlertTriangle size={15}/>{error}</div>}
+
+    <section className="adminPanel">
+      <div className="adminPanelAction"><PanelHead eyebrow={editing?'EDIT MASTER CITY':'ADD MASTER CITY'} title={editing?editing.name:'Add a city once'}/>{editing&&<button className="adminTextButton" onClick={()=>{setEditing(null);setForm(blank)}}>CANCEL</button>}</div>
+      <div className="cityDirectoryForm">
+        <label><span>City name</span><input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="Mogadishu"/></label>
+        <label><span>Code</span><input value={form.code} onChange={e=>setForm({...form,code:e.target.value.toUpperCase()})} placeholder="MOG" maxLength={12}/></label>
+        <label><span>Country</span><input value={form.country} onChange={e=>setForm({...form,country:e.target.value})}/></label>
+        <label><span>Region</span><input value={form.region} onChange={e=>setForm({...form,region:e.target.value})} placeholder="Banaadir"/></label>
+        <label><span>Level</span><select value={form.tier} onChange={e=>setForm({...form,tier:e.target.value})}><option>PREMIER</option><option>CHAMPIONSHIP</option><option>RISING</option></select></label>
+        <label className="wide"><span>Other names <i>optional, comma separated</i></span><input value={form.aliases} onChange={e=>setForm({...form,aliases:e.target.value})} placeholder="Xamar, Muqdisho"/></label>
+        <label className="wide"><span>Image URL <i>optional</i></span><input value={form.imageUrl} onChange={e=>setForm({...form,imageUrl:e.target.value})} placeholder="https://..."/></label>
+        {editing&&<label className="cityDirectoryToggle"><input type="checkbox" checked={form.isActive} onChange={e=>setForm({...form,isActive:e.target.checked})}/><span>Available for new competitions</span></label>}
+        <button className="adminPrimary" disabled={busy||form.name.trim().length<2||!form.code.trim()} onClick={save}>{busy?'SAVING…':editing?'SAVE CITY':'ADD CITY'} <Save size={14}/></button>
+      </div>
+    </section>
+
+    <section className="adminPanel">
+      <div className="adminPanelAction"><PanelHead eyebrow="CITY DIRECTORY" title="Reusable cities"/><div className="cityDirectorySearch"><Search size={14}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search cities"/></div></div>
+      {!filtered.length?<div className="adminEmpty"><Flag/><div><b>No cities yet</b><p>Add each city once here. Competition Creator will reuse them later.</p></div></div>:<div className="cityDirectoryList">
+        {filtered.map(city=><article className={'cityDirectoryRow '+(!city.is_active?'inactive':'')} key={city.id}>
+          <div className="cityDirectoryCode">{city.code}</div>
+          <div className="cityDirectoryIdentity"><strong>{city.name}</strong><span>{city.region||'No region'} · {city.country}</span>{city.aliases?.length>0&&<small>{city.aliases.join(' · ')}</small>}</div>
+          <div className="cityDirectoryUse"><span>Used in</span><strong>{fmt(city.competition_count)} competitions</strong></div>
+          <div className="cityDirectoryStatus"><span className={city.is_active?'adminYes':'adminNo'}>{city.is_active?'ACTIVE':'DISABLED'}</span></div>
+          <div className="cityDirectoryActions"><button onClick={()=>startEdit(city)}><Pencil size={13}/> EDIT</button><button className="danger" disabled={busy} onClick={()=>remove(city)}><Trash2 size={13}/> DELETE</button></div>
+        </article>)}
+      </div>}
+    </section>
+  </div>
+}
 
 function CitiesAdmin({d,act}){
   const [editing,setEditing]=useState(null);
