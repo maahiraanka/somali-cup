@@ -108,6 +108,7 @@ const nav=[
   ['launch','Launch Readiness',Rocket],
   ['operations','Operations',Power],
   ['citydirectory','City Directory',Flag],
+  ['directories','Universities & Clubs',ClipboardList],
   ['cities','Cities & Qualification',Flag],
   ['matches','Matches',Radio],
   ['competitions','Competitions',Trophy],
@@ -145,6 +146,7 @@ export default function AdminApp(){
     launch:'/api/admin/launch-readiness',
     operations:'/api/admin/operations',
     citydirectory:'/api/admin/city-directory',
+    directories:'/api/admin/master-directories',
     cities:'/api/admin/qualification',
     matches:'/api/admin/matches',
     competitions:'/api/admin/competitions',
@@ -212,6 +214,7 @@ export default function AdminApp(){
           view==='launch'?<LaunchReadiness d={data.launch} act={act}/>:
           view==='operations'?<OperationsAdmin d={data.operations} act={act}/>:
           view==='citydirectory'?<CityDirectoryAdmin d={data.citydirectory} refresh={refresh}/>:
+          view==='directories'?<MasterDirectoriesAdmin d={data.directories} refresh={refresh}/>:
           view==='cities'?<CitiesAdmin d={data.cities} act={act}/>:
           view==='matches'?<MatchesAdmin d={data.matches} act={act}/>:
           view==='competitions'?<CompetitionsAdmin d={data.competitions} act={act} refresh={refresh}/>:
@@ -345,9 +348,10 @@ function CompetitionsAdmin({d,act,refresh}){
   const [creatorBusy,setCreatorBusy]=useState(false);
   const [creatorError,setCreatorError]=useState('');
   const [masterCities,setMasterCities]=useState([]);
+  const [masterEntries,setMasterEntries]=useState({UNIVERSITY:[],CLUB:[]});
   const [creator,setCreator]=useState({
     name:'',competitionType:'STAGED',choiceType:'CITY',languagePreset:'CITY',allowNominations:true,publishNow:false,
-    choices:['',''],cityIds:[],
+    choices:['',''],cityIds:[],masterEntryIds:[],
     stages:[
       {name:'Round 1',code:'ROUND_1',stageType:'QUALIFICATION',ruleType:'TARGET',target:1000,advanceCount:null,groupSize:null},
       {name:'Group Round',code:'GROUP',stageType:'GROUP',ruleType:'TARGET_OR_TOP_N',target:2500,advanceCount:2,groupSize:4},
@@ -371,7 +375,7 @@ function CompetitionsAdmin({d,act,refresh}){
   };
   const loadCompetitionData=async id=>Promise.all([loadStages(id),loadChoices(id)]);
   useEffect(()=>{if(selected?.id){setSelectedId(selected.id);loadCompetitionData(selected.id)}},[selected?.id]);
-  useEffect(()=>{adminApi('/api/admin/city-directory').then(x=>setMasterCities((x.cities||[]).filter(city=>city.is_active))).catch(()=>setMasterCities([]))},[]);
+  useEffect(()=>{adminApi('/api/admin/city-directory').then(x=>setMasterCities((x.cities||[]).filter(city=>city.is_active))).catch(()=>setMasterCities([]));adminApi('/api/admin/master-directories').then(x=>setMasterEntries({UNIVERSITY:(x.universities||[]).filter(v=>v.is_active),CLUB:(x.clubs||[]).filter(v=>v.is_active)})).catch(()=>setMasterEntries({UNIVERSITY:[],CLUB:[]}))},[]);
 
   const saveStage=async(stage)=>{
     const form=editing?.id===stage.id?editing:stage;
@@ -428,14 +432,15 @@ function CompetitionsAdmin({d,act,refresh}){
   const addChoice=async()=>{
     if(!selected)return;
     const isCity=selected.choice_type==='CITY';
+    const isMaster=['UNIVERSITY','CLUB'].includes(selected.choice_type);
     const name=newChoice.trim();
-    if(isCity&&!Number.isInteger(Number(newChoice)))return;
-    if(!isCity&&name.length<2)return;
+    if((isCity||isMaster)&&!Number.isInteger(Number(newChoice)))return;
+    if(!isCity&&!isMaster&&name.length<2)return;
     setContentBusy(true);
     try{
       await adminApi('/api/admin/competitions/'+selected.id+'/choices',{
         method:'POST',
-        body:JSON.stringify(isCity?{cityId:Number(newChoice)}:{name})
+        body:JSON.stringify(isCity?{cityId:Number(newChoice)}:isMaster?{masterEntryId:Number(newChoice)}:{name})
       });
       setNewChoice('');
       await loadCompetitionData(selected.id);
@@ -488,7 +493,7 @@ function CompetitionsAdmin({d,act,refresh}){
     setCreatorStep(1);setCreatorError('');
     setCreator({
       name:'',competitionType:'STAGED',choiceType:'CITY',languagePreset:'CITY',allowNominations:true,publishNow:false,
-      choices:['',''],cityIds:[],
+      choices:['',''],cityIds:[],masterEntryIds:[],
       stages:[
         {name:'Round 1',code:'ROUND_1',stageType:'QUALIFICATION',ruleType:'TARGET',target:1000,advanceCount:null,groupSize:null},
         {name:'Group Round',code:'GROUP',stageType:'GROUP',ruleType:'TARGET_OR_TOP_N',target:2500,advanceCount:2,groupSize:4},
@@ -498,19 +503,21 @@ function CompetitionsAdmin({d,act,refresh}){
     });
   };
 
-  const openCreator=async()=>{resetCreator();setShowCreator(true);try{const x=await adminApi('/api/admin/city-directory');setMasterCities((x.cities||[]).filter(city=>city.is_active))}catch{setMasterCities([])}};
+  const openCreator=async()=>{resetCreator();setShowCreator(true);try{const [cities,directories]=await Promise.all([adminApi('/api/admin/city-directory'),adminApi('/api/admin/master-directories')]);setMasterCities((cities.cities||[]).filter(city=>city.is_active));setMasterEntries({UNIVERSITY:(directories.universities||[]).filter(v=>v.is_active),CLUB:(directories.clubs||[]).filter(v=>v.is_active)})}catch{setMasterCities([]);setMasterEntries({UNIVERSITY:[],CLUB:[]})}};
   const closeCreator=()=>{setShowCreator(false);resetCreator()};
   const choiceWord=creator.choiceType==='CITY'?'city':creator.choiceType==='UNIVERSITY'?'university':creator.choiceType==='CLUB'?'club':creator.choiceType==='BUSINESS'?'business':creator.choiceType==='PERSON'?'person':creator.choiceType==='COMMUNITY'?'community':'choice';
   const validChoices=creator.choices.map(x=>x.trim()).filter(Boolean);
   const selectedCityIds=Array.isArray(creator.cityIds)?creator.cityIds:[];
+  const selectedMasterEntryIds=Array.isArray(creator.masterEntryIds)?creator.masterEntryIds:[];
+  const directoryChoices=masterEntries[creator.choiceType]||[];
   const canNext=creatorStep===1?creator.name.trim().length>=3:
     creatorStep===2?Boolean(creator.choiceType&&creator.languagePreset):
-    creatorStep===3?(creator.choiceType==='CITY'?selectedCityIds.length>=2:validChoices.length>=2):
+    creatorStep===3?(creator.choiceType==='CITY'?selectedCityIds.length>=2:['UNIVERSITY','CLUB'].includes(creator.choiceType)?selectedMasterEntryIds.length>=2:validChoices.length>=2):
     creatorStep===4?creator.stages.length>=1:true;
 
   const setChoiceType=type=>{
     const preset=type==='CITY'?'CITY':type==='UNIVERSITY'?'UNIVERSITY':type==='CLUB'?'CLUB':type==='PERSON'?'FAN':'SIMPLE';
-    setCreator({...creator,choiceType:type,languagePreset:preset,cityIds:type==='CITY'?(creator.cityIds||[]):[]});
+    setCreator({...creator,choiceType:type,languagePreset:preset,cityIds:type==='CITY'?(creator.cityIds||[]):[],masterEntryIds:['UNIVERSITY','CLUB'].includes(type)?(creator.masterEntryIds||[]):[]});
   };
 
   const submitCreator=async()=>{
@@ -519,7 +526,8 @@ function CompetitionsAdmin({d,act,refresh}){
       const payload={
         ...creator,
         cityIds:creator.choiceType==='CITY'?selectedCityIds:[],
-        choices:creator.choiceType==='CITY'?[]:validChoices.map((name,i)=>({name,code:(name.toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,20)||('CHOICE_'+(i+1)))}))
+        masterEntryIds:['UNIVERSITY','CLUB'].includes(creator.choiceType)?selectedMasterEntryIds:[],
+        choices:['CITY','UNIVERSITY','CLUB'].includes(creator.choiceType)?[]:validChoices.map((name,i)=>({name,code:(name.toUpperCase().replace(/[^A-Z0-9]+/g,'_').replace(/^_+|_+$/g,'').slice(0,20)||('CHOICE_'+(i+1)))}))
       };
       const result=await adminApi('/api/admin/competitions/create-complete',{method:'POST',body:JSON.stringify(payload)});
       setShowCreator(false);resetCreator();
@@ -563,11 +571,11 @@ function CompetitionsAdmin({d,act,refresh}){
 
       <section className="adminPanel">
         <div className="adminPanelAction"><PanelHead eyebrow="CHOICES" title="Manage what people can support"/><span className="opsHint">Add, edit, pause or delete choices</span></div>
-        <div className="competitionAddChoice">{selected.choice_type==='CITY'?<select value={newChoice} onChange={e=>setNewChoice(e.target.value)}><option value="">Choose a city from City Directory</option>{masterCities.filter(city=>!choices.some(choice=>Number(choice.legacy_city_id)===Number(city.id))).map(city=><option value={city.id} key={city.id}>{city.name} · {city.code}</option>)}</select>:<input value={newChoice} onChange={e=>setNewChoice(e.target.value)} placeholder={'Add a '+String(selected.choice_type||'choice').toLowerCase()}/>}<button onClick={addChoice} disabled={contentBusy||!String(newChoice).trim()}><Plus size={13}/> ADD</button></div>
+        <div className="competitionAddChoice">{selected.choice_type==='CITY'?<select value={newChoice} onChange={e=>setNewChoice(e.target.value)}><option value="">Choose a city from City Directory</option>{masterCities.filter(city=>!choices.some(choice=>Number(choice.legacy_city_id)===Number(city.id))).map(city=><option value={city.id} key={city.id}>{city.name} · {city.code}</option>)}</select>:['UNIVERSITY','CLUB'].includes(selected.choice_type)?<select value={newChoice} onChange={e=>setNewChoice(e.target.value)}><option value="">Choose from Master Directories</option>{(masterEntries[selected.choice_type]||[]).filter(entry=>!choices.some(choice=>Number(choice.master_entry_id)===Number(entry.id))).map(entry=><option value={entry.id} key={entry.id}>{entry.name} · {entry.code}</option>)}</select>:<input value={newChoice} onChange={e=>setNewChoice(e.target.value)} placeholder={'Add a '+String(selected.choice_type||'choice').toLowerCase()}/>}<button onClick={addChoice} disabled={contentBusy||!String(newChoice).trim()}><Plus size={13}/> ADD</button></div>
         <div className="competitionChoiceAdminList">
           {choices.map(choice=><div className="competitionChoiceAdmin" key={choice.id}>
             {editingChoice?.id===choice.id?<div className="competitionChoiceEdit">
-              <input value={editingChoice.name||''} onChange={e=>setEditingChoice({...editingChoice,name:e.target.value})}/>
+              <input value={editingChoice.name||''} disabled={Boolean(editingChoice.legacy_city_id||editingChoice.master_entry_id)} title={editingChoice.legacy_city_id||editingChoice.master_entry_id?'Rename this item in its master directory':''} onChange={e=>setEditingChoice({...editingChoice,name:e.target.value})}/>
               <select value={editingChoice.status||'ACTIVE'} onChange={e=>setEditingChoice({...editingChoice,status:e.target.value})}><option>ACTIVE</option><option>PAUSED</option><option>ELIMINATED</option><option>WINNER</option></select>
               <input type="number" value={editingChoice.target??''} placeholder="Target" onChange={e=>setEditingChoice({...editingChoice,target:e.target.value===''?null:Number(e.target.value)})}/>
               <button onClick={()=>saveChoice(choice)} disabled={contentBusy}><Save size={13}/> SAVE</button>
@@ -650,6 +658,16 @@ function CompetitionsAdmin({d,act,refresh}){
                 </button>
               })}
             </div>}
+          </>:['UNIVERSITY','CLUB'].includes(creator.choiceType)?<>
+            <div className="creatorCityPickerHead"><div><span className="creatorQuestion">Choose {creator.choiceType==='UNIVERSITY'?'universities':'clubs'} from Master Directories</span><p>{fmt(selectedMasterEntryIds.length)} selected · reuse these identities in unlimited competitions.</p></div><button onClick={()=>setCreator({...creator,masterEntryIds:selectedMasterEntryIds.length===directoryChoices.length?[]:directoryChoices.map(x=>x.id)})}>{selectedMasterEntryIds.length===directoryChoices.length?'CLEAR ALL':'SELECT ALL'}</button></div>
+            {!directoryChoices.length?<div className="creatorDirectoryEmpty"><ClipboardList size={22}/><b>No master {creator.choiceType==='UNIVERSITY'?'universities':'clubs'} yet</b><p>Go to Master Directories and add them once. Then reuse them here.</p></div>:<div className="creatorCityPicker">
+              {directoryChoices.map(entry=>{
+                const checked=selectedMasterEntryIds.includes(entry.id);
+                return <button type="button" className={checked?'selected':''} key={entry.id} onClick={()=>setCreator({...creator,masterEntryIds:checked?selectedMasterEntryIds.filter(id=>id!==entry.id):[...selectedMasterEntryIds,entry.id]})}>
+                  <span className="creatorCityCode">{entry.code}</span><div><b>{entry.name}</b><small>{entry.region||entry.country||entry.category||'Master entry'}</small></div><i>{checked?<Check size={13}/>:null}</i>
+                </button>
+              })}
+            </div>}
           </>:<>
             <span className="creatorQuestion">Add the {choiceWord}s</span>
             <div className="creatorChoiceList">
@@ -678,7 +696,7 @@ function CompetitionsAdmin({d,act,refresh}){
           <div className="creatorReview">
             <div><span>Name</span><strong>{creator.name}</strong></div>
             <div><span>People will support</span><strong>{nice(creator.choiceType)}</strong></div>
-            <div><span>Choices</span><strong>{fmt(creator.choiceType==='CITY'?selectedCityIds.length:validChoices.length)}</strong></div>
+            <div><span>Choices</span><strong>{fmt(creator.choiceType==='CITY'?selectedCityIds.length:['UNIVERSITY','CLUB'].includes(creator.choiceType)?selectedMasterEntryIds.length:validChoices.length)}</strong></div>
             <div><span>Rounds</span><strong>{fmt(creator.stages.length)}</strong></div>
             <div><span>Suggestions</span><strong>{creator.allowNominations?'Allowed':'Closed'}</strong></div>
           </div>
@@ -954,6 +972,115 @@ function OperationsAdmin({d,act}){
 }
 
 
+
+
+function MasterDirectoriesAdmin({d,refresh}){
+  const [type,setType]=useState('UNIVERSITY');
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  const [editing,setEditing]=useState(null);
+  const [search,setSearch]=useState('');
+  const [showBulk,setShowBulk]=useState(false);
+  const [bulkText,setBulkText]=useState('');
+  const [bulkResult,setBulkResult]=useState(null);
+  const blank={name:'',shortName:'',code:'',country:'Somalia',region:'',category:'',aliases:'',imageUrl:'',isActive:true};
+  const [form,setForm]=useState(blank);
+  const entries=type==='UNIVERSITY'?(d?.universities||[]):(d?.clubs||[]);
+  const label=type==='UNIVERSITY'?'University':'Club';
+  const plural=type==='UNIVERSITY'?'Universities':'Clubs';
+  const filtered=entries.filter(entry=>{
+    const q=search.trim().toLowerCase();
+    return !q||[entry.name,entry.code,entry.country,entry.region,entry.category,...(entry.aliases||[])].filter(Boolean).join(' ').toLowerCase().includes(q);
+  });
+
+  const resetForm=()=>{setEditing(null);setForm(blank);setError('')};
+  const startEdit=entry=>{
+    setEditing(entry);
+    setForm({
+      name:entry.name||'',shortName:entry.short_name||'',code:entry.code||'',country:entry.country||'Somalia',
+      region:entry.region||'',category:entry.category||'',aliases:(entry.aliases||[]).join(', '),
+      imageUrl:entry.image_url||'',isActive:Boolean(entry.is_active)
+    });
+  };
+  const save=async()=>{
+    setBusy(true);setError('');
+    try{
+      const payload={...form,aliases:String(form.aliases||'').split(',').map(x=>x.trim()).filter(Boolean)};
+      if(editing)await adminApi('/api/admin/master-directories/'+type+'/'+editing.id,{method:'PATCH',body:JSON.stringify(payload)});
+      else await adminApi('/api/admin/master-directories/'+type,{method:'POST',body:JSON.stringify(payload)});
+      resetForm();await refresh();
+    }catch(e){setError(humanErrorAdmin(e))}
+    finally{setBusy(false)}
+  };
+  const remove=async entry=>{
+    const confirmation=window.prompt('Type DELETE '+entry.name+' to permanently delete this '+label.toLowerCase()+'. An entry already used by a competition cannot be deleted.');
+    if(confirmation!=='DELETE '+entry.name)return;
+    setBusy(true);setError('');
+    try{await adminApi('/api/admin/master-directories/'+type+'/'+entry.id,{method:'DELETE',body:JSON.stringify({confirmation})});await refresh()}
+    catch(e){setError(e?.body?.error==='directory_entry_in_use'?'This '+label.toLowerCase()+' is already used. Disable it instead of deleting it.':humanErrorAdmin(e))}
+    finally{setBusy(false)}
+  };
+  const bulkAdd=async()=>{
+    const rows=bulkText.split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{
+      const [name='',code='',region='',country='Somalia',category='']=line.split('|').map(x=>x.trim());
+      return {name,code,region,country,category};
+    }).filter(x=>x.name);
+    if(!rows.length)return;
+    setBusy(true);setError('');setBulkResult(null);
+    try{
+      const result=await adminApi('/api/admin/master-directories/'+type+'/bulk',{method:'POST',body:JSON.stringify({entries:rows})});
+      setBulkResult(result);setBulkText('');await refresh();
+    }catch(e){setError(humanErrorAdmin(e))}
+    finally{setBusy(false)}
+  };
+
+  return <div className="masterDirectoriesPage">
+    <section className="masterDirectoriesHero">
+      <div><small>REUSABLE MASTER DATA</small><h2>Set it up once. Use it in every competition.</h2><p>Universities and clubs now work like cities: one master identity, unlimited competitions, separate supporter totals.</p></div>
+      <div className="masterDirectoryCounts"><button className={type==='UNIVERSITY'?'active':''} onClick={()=>{setType('UNIVERSITY');resetForm()}}><strong>{fmt(d?.counts?.universities||0)}</strong><span>Universities</span></button><button className={type==='CLUB'?'active':''} onClick={()=>{setType('CLUB');resetForm()}}><strong>{fmt(d?.counts?.clubs||0)}</strong><span>Clubs</span></button></div>
+    </section>
+
+    <section className="masterDirectoryTabs"><button className={type==='UNIVERSITY'?'active':''} onClick={()=>{setType('UNIVERSITY');resetForm()}}>🎓 UNIVERSITIES</button><button className={type==='CLUB'?'active':''} onClick={()=>{setType('CLUB');resetForm()}}>⚽ CLUBS</button><button onClick={()=>setShowBulk(!showBulk)}><Plus size={13}/> {showBulk?'CLOSE BULK ADD':'BULK ADD'}</button></section>
+
+    {error&&<div className="adminError"><AlertTriangle size={15}/>{error}</div>}
+    {bulkResult&&<div className="adminNotice"><CheckCircle2 size={15}/>{fmt(bulkResult.created?.length||0)} added · {fmt(bulkResult.skipped?.length||0)} skipped</div>}
+
+    {showBulk&&<section className="adminPanel cityBulkPanel">
+      <div className="adminPanelAction"><PanelHead eyebrow="FAST SETUP" title={'Add many '+plural.toLowerCase()+' at once'}/><span className="opsHint">One per line</span></div>
+      <p>Use: <b>Name | Code | Region | Country | Category</b>. Only Name and Code are required.</p>
+      <textarea value={bulkText} onChange={e=>setBulkText(e.target.value)} placeholder={type==='UNIVERSITY'?"SIMAD University | SIMAD | Banaadir | Somalia | Private\nMogadishu University | MU | Banaadir | Somalia | Private":"Horseed FC | HRS | Banaadir | Somalia | Football\nElman FC | ELM | Banaadir | Somalia | Football"}/>
+      <button className="adminPrimary" disabled={busy||!bulkText.trim()} onClick={bulkAdd}>{busy?'ADDING…':'ADD THESE '+plural.toUpperCase()} <Plus size={14}/></button>
+    </section>}
+
+    <section className="adminPanel">
+      <div className="adminPanelAction"><PanelHead eyebrow={editing?'EDIT MASTER '+type:'ADD MASTER '+type} title={editing?editing.name:'Add a '+label.toLowerCase()+' once'}/>{editing&&<button className="adminTextButton" onClick={resetForm}>CANCEL</button>}</div>
+      <div className="cityDirectoryForm">
+        <label><span>{label} name</span><input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder={type==='UNIVERSITY'?'SIMAD University':'Horseed FC'}/></label>
+        <label><span>Code</span><input value={form.code} onChange={e=>setForm({...form,code:e.target.value.toUpperCase()})} placeholder={type==='UNIVERSITY'?'SIMAD':'HRS'} maxLength={24}/></label>
+        <label><span>Country</span><input value={form.country} onChange={e=>setForm({...form,country:e.target.value})}/></label>
+        <label><span>Region / city</span><input value={form.region} onChange={e=>setForm({...form,region:e.target.value})} placeholder="Banaadir"/></label>
+        <label><span>Category</span><input value={form.category} onChange={e=>setForm({...form,category:e.target.value})} placeholder={type==='UNIVERSITY'?'Public / Private':'Football'}/></label>
+        <label className="wide"><span>Other names <i>optional</i></span><input value={form.aliases} onChange={e=>setForm({...form,aliases:e.target.value})} placeholder="Comma separated"/></label>
+        <label className="wide"><span>Image URL <i>optional</i></span><input value={form.imageUrl} onChange={e=>setForm({...form,imageUrl:e.target.value})} placeholder="https://..."/></label>
+        {editing&&<label className="cityDirectoryToggle"><input type="checkbox" checked={form.isActive} onChange={e=>setForm({...form,isActive:e.target.checked})}/><span>Available for new competitions</span></label>}
+        <button className="adminPrimary" disabled={busy||form.name.trim().length<2||!form.code.trim()} onClick={save}>{busy?'SAVING…':editing?'SAVE '+type:'ADD '+type} <Save size={14}/></button>
+      </div>
+    </section>
+
+    <section className="adminPanel">
+      <div className="adminPanelAction"><PanelHead eyebrow={type+' DIRECTORY'} title={'Reusable '+plural}/><div className="cityDirectorySearch"><Search size={14}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={'Search '+plural.toLowerCase()}/></div></div>
+      {!filtered.length?<div className="adminEmpty"><ClipboardList/><div><b>No {plural.toLowerCase()} yet</b><p>Add them once here, then reuse them from Competition Creator.</p></div></div>:<div className="cityDirectoryList">
+        {filtered.map(entry=><article className={'cityDirectoryRow '+(!entry.is_active?'inactive':'')} key={entry.id}>
+          <div className="cityDirectoryCode">{entry.code}</div>
+          <div className="cityDirectoryIdentity"><strong>{entry.name}</strong><span>{entry.region||entry.country||'No location'}{entry.category?' · '+entry.category:''}</span>{entry.aliases?.length>0&&<small>{entry.aliases.join(' · ')}</small>}</div>
+          <div className="cityDirectoryUse"><span>Used in</span><strong>{fmt(entry.competition_count)} competitions</strong></div>
+          <div className="cityDirectoryStatus"><span className={entry.is_active?'adminYes':'adminNo'}>{entry.is_active?'ACTIVE':'DISABLED'}</span></div>
+          <div className="cityDirectoryActions"><button onClick={()=>startEdit(entry)}><Pencil size={13}/> EDIT</button><button className="danger" disabled={busy} onClick={()=>remove(entry)}><Trash2 size={13}/> DELETE</button></div>
+        </article>)}
+      </div>}
+    </section>
+  </div>
+}
 
 function CityDirectoryAdmin({d,refresh}){
   const cities=d?.cities||[];

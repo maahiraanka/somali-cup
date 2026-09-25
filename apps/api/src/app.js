@@ -16,6 +16,7 @@ import awardRoutes from './routes/awards.js';
 import competitionRoutes from './routes/competitions.js';
 import adminCompetitionRoutes from './routes/adminCompetitions.js';
 import adminCityDirectoryRoutes from './routes/adminCityDirectory.js';
+import adminMasterDirectoriesRoutes from './routes/adminMasterDirectories.js';
 import adminTestLabRoutes from './routes/adminTestLab.js';
 import { getStartupState } from './startupState.js';
 
@@ -32,7 +33,7 @@ if(config.env!=='production'){
 app.get('/api/health',(_req,res)=>res.json({
   ok:true,
   service:'somali-cup-api',
-  version:'0.7.0-master-city-directory'
+  version:'0.8.0-master-directories'
 }));
 
 app.get('/api/startup',(_req,res)=>{
@@ -63,6 +64,7 @@ app.use('/api/admin/auth',adminAuthRoutes);
 app.use('/api/admin/awards',awardRoutes);
 app.use('/api/admin/competitions',adminCompetitionRoutes);
 app.use('/api/admin/city-directory',adminCityDirectoryRoutes);
+app.use('/api/admin/master-directories',adminMasterDirectoriesRoutes);
 app.use('/api/admin/test-lab',adminTestLabRoutes);
 app.use('/api/admin/tournament',adminTournamentRoutes);
 app.use('/api/admin',adminRoutes);

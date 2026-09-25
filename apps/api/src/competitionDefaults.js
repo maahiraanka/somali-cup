@@ -8,6 +8,7 @@ export async function clearPublicCompetitionContent(conn){
   await conn.query('DELETE FROM competition_nominations');
   await conn.query('DELETE FROM competition_choices');
   await conn.query('DELETE FROM competitions');
+  await conn.query('DELETE FROM master_directory_entries');
 
   await conn.query('DELETE FROM competition_awards');
   await conn.query('DELETE FROM funnel_events');
