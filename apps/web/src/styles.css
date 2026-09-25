@@ -835,3 +835,15 @@ linear-gradient(135deg,#061b18,#04101a);border:1px solid rgba(72,201,165,.18)}
 .testCheckList{display:grid;gap:5px;margin-top:10px}.testCheckList>div{display:grid;grid-template-columns:auto 1fr auto;gap:7px;align-items:center;padding:9px 10px;border-radius:9px;background:#04101a;border:1px solid rgba(77,157,200,.06)}.testCheckList>div.pass{color:#77e2ad}.testCheckList>div.fail{color:#ff9a9a}.testCheckList span{font-size:8px;color:#bccbd4}.testCheckList b{font-size:7px}
 @media(max-width:850px){.testLabHero{align-items:flex-start;flex-direction:column}.testLabStats{grid-template-columns:1fr 1fr}.testLabChoicePicker{grid-template-columns:1fr}.testLabQuick{grid-template-columns:repeat(4,1fr)}.testScenarioGrid{grid-template-columns:1fr}}
 @media(max-width:520px){.testLabStats{grid-template-columns:1fr 1fr}.testLabQuick{grid-template-columns:repeat(2,1fr)}}
+
+
+/* v0.6.2 one-click clean system */
+.cleanSystemCard{border-color:rgba(255,196,74,.16)!important;background:linear-gradient(180deg,rgba(58,42,12,.16),rgba(8,15,22,.92))!important}
+.cleanSystemIntro{max-width:780px;color:#8298a9;font-size:9px;line-height:1.6;margin:0 0 12px}
+.cleanSystemButton{display:inline-flex;align-items:center;gap:7px;border:1px solid rgba(255,190,71,.24);background:linear-gradient(180deg,#ffd45c,#efb62e);color:#211500;border-radius:9px;padding:10px 13px;font-size:8px;font-weight:1000;cursor:pointer}
+.cleanSystemButton:disabled{opacity:.55;cursor:not-allowed}
+.cleanProof{margin-top:13px;padding:14px;border-radius:12px;background:rgba(24,87,60,.18);border:1px solid rgba(83,220,158,.18)}
+.cleanProofHead{display:flex;align-items:flex-start;gap:9px;color:#7ce2ad}.cleanProofHead b,.cleanProofHead span{display:block}.cleanProofHead b{font-size:10px}.cleanProofHead span{font-size:7px;color:#76988a;margin-top:2px}
+.cleanProofGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:11px 0}.cleanProofGrid>div{padding:9px;border-radius:8px;background:#04120f}.cleanProofGrid span,.cleanProofGrid strong{display:block}.cleanProofGrid span{font-size:6px;color:#6d8d7e}.cleanProofGrid strong{font-size:15px;margin-top:3px;color:#eafff4}
+@media(max-width:900px){.cleanProofGrid{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:560px){.cleanProofGrid{grid-template-columns:1fr 1fr}.cleanSystemButton{width:100%;justify-content:center}}

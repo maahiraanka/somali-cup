@@ -2,7 +2,7 @@ import React,{useEffect,useMemo,useState} from 'react';
 import {
   Activity,AlertTriangle,BarChart3,Check,CheckCircle2,ChevronRight,ClipboardList,DoorOpen,
   Ban,CalendarClock,Flag,KeyRound,LayoutDashboard,LockKeyhole,Medal,Menu,Pencil,Plus,Power,Radio,RefreshCw,Rocket,Save,
-  Search,ShieldCheck,Trophy,UserPlus,Users,X
+  Search,ShieldCheck,Trash2,Trophy,UserPlus,Users,X
 } from 'lucide-react';
 
 const fmt=n=>Number(n||0).toLocaleString();
@@ -801,6 +801,9 @@ function Overview({d}){
 
 function OperationsAdmin({d,act}){
   const [reason,setReason]=useState('');
+  const [cleanBusy,setCleanBusy]=useState(false);
+  const [cleanProof,setCleanProof]=useState(null);
+  const [cleanError,setCleanError]=useState('');
   const change=(area,mode,label)=>{
     if(reason.trim().length<5)return;
     const action=mode==='FROZEN'?'freeze':'reopen';
@@ -808,6 +811,22 @@ function OperationsAdmin({d,act}){
     act(()=>adminApi('/api/admin/operations',{method:'PATCH',body:JSON.stringify({
       area,mode,reason,confirmation:'CONFIRM OPERATIONS CHANGE'
     })}),label+' '+(mode==='FROZEN'?'frozen':'reopened'));
+  };
+  const prepareCleanSystem=async()=>{
+    const confirmation=window.prompt('This permanently removes all non-admin users, cities, supporters, matches and competitions. Type PREPARE CLEAN SYSTEM to continue.');
+    if(confirmation!=='PREPARE CLEAN SYSTEM')return;
+    setCleanBusy(true);setCleanError('');setCleanProof(null);
+    try{
+      const result=await adminApi('/api/admin/prepare-clean-system',{
+        method:'POST',
+        body:JSON.stringify({confirmation})
+      });
+      setCleanProof(result.proof||null);
+    }catch(e){
+      setCleanError(humanErrorAdmin(e));
+    }finally{
+      setCleanBusy(false);
+    }
   };
   return <>
     <section className="opsCommandHero">
@@ -835,6 +854,26 @@ function OperationsAdmin({d,act}){
       </section>
     </div>
     <section className="opsSafetyNote"><LockKeyhole size={16}/><div><b>These controls do not delete or rewrite competition history.</b><p>They only stop new action while you investigate or recover an incident.</p></div></section>
+
+    <section className="adminPanel cleanSystemCard">
+      <div className="adminPanelAction"><PanelHead eyebrow="ONE-CLICK RECOVERY" title="Prepare Clean System"/><span className="opsHint">No terminal or migration command needed</span></div>
+      <p className="cleanSystemIntro">Use this once to remove every old city, supporter, match, competition and non-admin user from the live database. Admin access and all application functionality stay.</p>
+      <button className="cleanSystemButton" disabled={cleanBusy} onClick={prepareCleanSystem}>{cleanBusy?<><RefreshCw className="spin" size={15}/> CLEANING…</>:<><Trash2 size={15}/> PREPARE CLEAN SYSTEM</>}</button>
+      {cleanError&&<div className="adminError"><AlertTriangle size={15}/>{cleanError}</div>}
+      {cleanProof&&<div className="cleanProof">
+        <div className="cleanProofHead"><CheckCircle2 size={18}/><div><b>Clean system confirmed</b><span>The database proved these counts after the reset.</span></div></div>
+        <div className="cleanProofGrid">
+          <div><span>Cities</span><strong>{cleanProof.cities}</strong></div>
+          <div><span>Supporters</span><strong>{cleanProof.supporters}</strong></div>
+          <div><span>Matches</span><strong>{cleanProof.matches}</strong></div>
+          <div><span>Competitions</span><strong>{cleanProof.competitions}</strong></div>
+          <div><span>Choices</span><strong>{cleanProof.choices}</strong></div>
+          <div><span>Non-admin users</span><strong>{cleanProof.nonAdminUsers}</strong></div>
+          <div><span>Admins kept</span><strong>{cleanProof.admins}</strong></div>
+        </div>
+        <button className="adminPrimary" onClick={()=>window.location.reload()}><RefreshCw size={14}/> RELOAD ADMIN</button>
+      </div>}
+    </section>
   </>
 }
 
