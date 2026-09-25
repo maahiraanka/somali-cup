@@ -31,6 +31,8 @@ export async function clearPublicCompetitionContent(conn){
   await conn.query('DELETE FROM identity_integrity_events');
   await conn.query('DELETE FROM moderation_cases');
 
+  await conn.query("UPDATE users u JOIN admin_credentials ac ON ac.user_id=u.id SET u.role='ADMIN'");
+
   await conn.query(`
     UPDATE audit_log al
     JOIN users u ON u.id=al.actor_user_id
