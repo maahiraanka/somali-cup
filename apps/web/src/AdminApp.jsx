@@ -110,6 +110,7 @@ const nav=[
   ['cities','Cities & Qualification',Flag],
   ['matches','Matches',Radio],
   ['competitions','Competitions',Trophy],
+  ['testlab','Test Lab',Activity],
   ['tournament','Somali Cup Builder',Trophy],
   ['supporters','Supporters',Users],
   ['integrity','Integrity',ShieldCheck],
@@ -145,6 +146,7 @@ export default function AdminApp(){
     cities:'/api/admin/qualification',
     matches:'/api/admin/matches',
     competitions:'/api/admin/competitions',
+    testlab:'/api/admin/test-lab/status',
     tournament:'/api/admin/tournament-config',
     supporters:'/api/admin/supporters'+(query?'?q='+encodeURIComponent(query):''),
     integrity:'/api/admin/integrity?days=7',
@@ -210,6 +212,7 @@ export default function AdminApp(){
           view==='cities'?<CitiesAdmin d={data.cities} act={act}/>:
           view==='matches'?<MatchesAdmin d={data.matches} act={act}/>:
           view==='competitions'?<CompetitionsAdmin d={data.competitions} act={act} refresh={refresh}/>:
+          view==='testlab'?<TestLabAdmin d={data.testlab} refresh={refresh}/>:
           view==='tournament'?<TournamentAdmin d={data.tournament} act={act}/>:
           view==='supporters'?<SupportersAdmin d={data.supporters} query={query} setQuery={setQuery} refresh={refresh} act={act}/>:
           view==='integrity'?<IntegrityAdmin d={data.integrity} act={act}/>:
@@ -222,6 +225,106 @@ export default function AdminApp(){
   </div>
 }
 
+
+
+function TestLabAdmin({d,refresh}){
+  const sandbox=d?.competitions?.[0]||null;
+  const [choices,setChoices]=useState([]);
+  const [selectedChoice,setSelectedChoice]=useState('');
+  const [busy,setBusy]=useState(false);
+  const [referrals,setReferrals]=useState(true);
+  const [checks,setChecks]=useState([]);
+  const [localError,setLocalError]=useState('');
+  const [notice,setNotice]=useState('');
+
+  const reloadChoices=async(id)=>{
+    if(!id){setChoices([]);setSelectedChoice('');return}
+    try{
+      const x=await adminApi('/api/admin/competitions/'+id+'/choices');
+      setChoices(x.choices||[]);
+      if(!selectedChoice&&x.choices?.[0])setSelectedChoice(String(x.choices[0].id));
+    }catch{setChoices([])}
+  };
+  useEffect(()=>{reloadChoices(sandbox?.id)},[sandbox?.id]);
+
+  const run=async(fn,message)=>{
+    setBusy(true);setLocalError('');
+    try{await fn();setNotice(message||'Test action complete');setTimeout(()=>setNotice(''),2200);await refresh();if(sandbox?.id)await reloadChoices(sandbox.id)}
+    catch(e){setLocalError(humanErrorAdmin(e))}
+    finally{setBusy(false)}
+  };
+
+  const setSupporters=target=>run(
+    ()=>adminApi('/api/admin/test-lab/supporters/set',{method:'POST',body:JSON.stringify({competitionId:sandbox.id,choiceId:Number(selectedChoice),target,withReferrals:referrals})}),
+    'Supporters set to '+target
+  );
+
+  const edgeScenario=()=>run(async()=>{
+    const fresh=await adminApi('/api/admin/competitions/'+sandbox.id+'/choices');
+    const targets=[501,500,499,10,0,0,0,0];
+    for(let i=0;i<(fresh.choices||[]).length;i++){
+      await adminApi('/api/admin/test-lab/supporters/set',{method:'POST',body:JSON.stringify({
+        competitionId:sandbox.id,
+        choiceId:Number(fresh.choices[i].id),
+        target:targets[i]??0,
+        withReferrals:i<2
+      })});
+    }
+  },'Qualification edge test prepared');
+
+  const runChecks=async()=>{
+    if(!sandbox)return;
+    setBusy(true);setLocalError('');
+    try{const x=await adminApi('/api/admin/test-lab/checks/'+sandbox.id);setChecks(x.checks||[])}
+    catch(e){setLocalError(humanErrorAdmin(e))}
+    finally{setBusy(false)}
+  };
+
+  return <div className="testLabPage">
+    <section className="testLabHero">
+      <div><small>SAFE TESTING AREA</small><h2>Test everything without real users</h2><p>Sandbox data stays out of the public website. Generate supporters, referrals and round outcomes instantly.</p></div>
+      {!sandbox?<button className="adminPrimary" disabled={busy} onClick={()=>run(()=>adminApi('/api/admin/test-lab/sandbox',{method:'POST'}),'Sandbox created')}><Plus size={15}/> CREATE TEST SANDBOX</button>:<span className="testLabBadge">ISOLATED TEST DATA</span>}
+    </section>
+
+    {notice&&<div className="adminNotice"><Check size={15}/>{notice}</div>}
+    {localError&&<div className="adminError"><AlertTriangle size={15}/>{localError}</div>}
+
+    <div className="testLabStats">
+      <Stat label="Test competitions" value={d?.summary?.competitions||0} detail="Never public"/>
+      <Stat label="Test supporters" value={d?.summary?.test_users||0} detail="Synthetic users"/>
+      <Stat label="Support rows" value={d?.summary?.supporters||0} detail="Real engine rows"/>
+      <Stat label="Referrals" value={d?.summary?.referrals||0} detail="Synthetic chain links"/>
+    </div>
+
+    {sandbox&&<>
+      <section className="adminPanel">
+        <div className="adminPanelAction"><PanelHead eyebrow="SANDBOX" title={sandbox.name}/><span className="opsHint">Current round: {sandbox.current_round||'—'}</span></div>
+        <div className="testLabChoicePicker">
+          <label><span>Choose a test city</span><select value={selectedChoice} onChange={e=>setSelectedChoice(e.target.value)}>{choices.map(x=><option value={x.id} key={x.id}>{x.name} — {fmt(x.supporter_count)} supporters</option>)}</select></label>
+          <label className="creatorToggle"><input type="checkbox" checked={referrals} onChange={e=>setReferrals(e.target.checked)}/><span>Also create referral chain</span></label>
+        </div>
+        <div className="testLabQuick">
+          {[0,10,100,499,500,501,1000].map(n=><button disabled={busy||!selectedChoice} key={n} onClick={()=>setSupporters(n)}><b>{fmt(n)}</b><span>supporters</span></button>)}
+        </div>
+      </section>
+
+      <section className="adminPanel">
+        <div className="adminPanelAction"><PanelHead eyebrow="BOUNDARY TESTS" title="One-click scenarios"/><span className="opsHint">Prove the rule at the exact threshold</span></div>
+        <div className="testScenarioGrid">
+          <button disabled={busy} onClick={edgeScenario}><strong>499 / 500 / 501</strong><span>Qualification edge test</span><small>Prepares cities immediately below, exactly at and above the 500 target.</small></button>
+          <button disabled={busy} onClick={()=>run(()=>adminApi('/api/admin/test-lab/advance',{method:'POST',body:JSON.stringify({competitionId:sandbox.id})}),'Current round closed and progression calculated')}><strong>Close current round</strong><span>Test progression</span><small>Runs the same round-closing engine used by the real product.</small></button>
+          <button disabled={busy} onClick={runChecks}><strong>Run health checks</strong><span>Test invariants</span><small>Checks isolation, open-round state and synthetic supporter boundaries.</small></button>
+        </div>
+        {!!checks.length&&<div className="testCheckList">{checks.map((x,i)=><div className={x.pass?'pass':'fail'} key={i}>{x.pass?<CheckCircle2 size={14}/>:<AlertTriangle size={14}/>}<span>{x.name}</span><b>{x.pass?'PASS':'FAIL'}</b></div>)}</div>}
+      </section>
+
+      <section className="adminPanel dangerZone">
+        <div><small>TEST CLEANUP</small><h3>Clear sandbox</h3><p>Deletes every synthetic supporter, referral and test competition. Real content is untouched.</p></div>
+        <button className="danger" disabled={busy} onClick={()=>run(()=>adminApi('/api/admin/test-lab/sandbox/'+sandbox.id,{method:'DELETE'}),'Test sandbox cleared')}><X size={14}/> CLEAR TEST DATA</button>
+      </section>
+    </>}
+  </div>
+}
 
 function CompetitionsAdmin({d,act,refresh}){
   const competitions=d?.competitions||[];
