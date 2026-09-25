@@ -32,6 +32,7 @@ async function ensureCityDirectorySchema(){
     `,[index]);
     if(Number(r.total||0)===0)await pool.query(sql);
   }
+  await pool.query("INSERT IGNORE INTO schema_migrations(filename) VALUES ('025_master_city_directory.sql')");
 }
 
 router.use(async(_req,_res,next)=>{
@@ -111,6 +112,47 @@ router.post('/',async(req,res,next)=>{
     if(e.code==='ER_DUP_ENTRY')return res.status(409).json({error:'city_code_exists'});
     next(e);
   }
+});
+
+
+router.post('/bulk',async(req,res,next)=>{
+  const input=Array.isArray(req.body?.cities)?req.body.cities:[];
+  if(!input.length)return res.status(400).json({error:'cities_required'});
+  if(input.length>200)return res.status(400).json({error:'too_many_cities'});
+  const conn=await pool.getConnection();
+  try{
+    await conn.beginTransaction();
+    const created=[];
+    const skipped=[];
+    for(let i=0;i<input.length;i++){
+      const item=input[i]||{};
+      const name=clean(item.name,120);
+      const country=clean(item.country||'Somalia',120);
+      const region=clean(item.region,120)||null;
+      const code=cleanCode(item.code||name);
+      const tier=clean(item.tier||'PREMIER',20).toUpperCase();
+      if(name.length<2||!code||!['PREMIER','CHAMPIONSHIP','RISING'].includes(tier)){
+        skipped.push({index:i,name:name||null,reason:'invalid'});
+        continue;
+      }
+      const [[dupe]]=await conn.query(
+        'SELECT id FROM cities WHERE code=? OR (LOWER(name)=LOWER(?) AND LOWER(country)=LOWER(?)) LIMIT 1',
+        [code,name,country]
+      );
+      if(dupe){skipped.push({index:i,name,reason:'duplicate'});continue}
+      const [r]=await conn.query(
+        'INSERT INTO cities(name,country,region,code,tier,aliases_json,is_active) VALUES (?,?,?,?,?,JSON_ARRAY(),1)',
+        [name,country,region,code,tier]
+      );
+      created.push({id:Number(r.insertId),name,code});
+    }
+    await conn.query(
+      'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
+      [req.admin?.user_id||null,'MASTER_CITIES_BULK_CREATED','CITY_SET','bulk',JSON.stringify({created:created.length,skipped:skipped.length})]
+    );
+    await conn.commit();
+    res.status(201).json({ok:true,created,skipped});
+  }catch(e){await conn.rollback();next(e)}finally{conn.release()}
 });
 
 router.patch('/:id',async(req,res,next)=>{
