@@ -7,6 +7,37 @@ router.use(requireAdminKey);
 
 const clean=(v,max=160)=>typeof v==='string'?v.trim().slice(0,max):'';
 const cleanCode=v=>clean(v,12).toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12);
+async function ensureCityDirectorySchema(){
+  const columns=[
+    ['region',"ALTER TABLE cities ADD COLUMN region VARCHAR(120) NULL AFTER country"],
+    ['aliases_json',"ALTER TABLE cities ADD COLUMN aliases_json JSON NULL AFTER tier"],
+    ['image_url',"ALTER TABLE cities ADD COLUMN image_url VARCHAR(500) NULL AFTER aliases_json"],
+    ['updated_at',"ALTER TABLE cities ADD COLUMN updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP AFTER created_at"]
+  ];
+  for(const [column,sql] of columns){
+    const [[r]]=await pool.query(`
+      SELECT COUNT(*) total FROM information_schema.columns
+      WHERE table_schema=DATABASE() AND table_name='cities' AND column_name=?
+    `,[column]);
+    if(Number(r.total||0)===0)await pool.query(sql);
+  }
+  const indexes=[
+    ['ix_cities_country_active',"ALTER TABLE cities ADD INDEX ix_cities_country_active(country,is_active)"],
+    ['ix_cities_region',"ALTER TABLE cities ADD INDEX ix_cities_region(region)"]
+  ];
+  for(const [index,sql] of indexes){
+    const [[r]]=await pool.query(`
+      SELECT COUNT(*) total FROM information_schema.statistics
+      WHERE table_schema=DATABASE() AND table_name='cities' AND index_name=?
+    `,[index]);
+    if(Number(r.total||0)===0)await pool.query(sql);
+  }
+}
+
+router.use(async(_req,_res,next)=>{
+  try{await ensureCityDirectorySchema();next()}catch(e){next(e)}
+});
+
 const aliasesFrom=value=>{
   const input=Array.isArray(value)?value:String(value||'').split(',');
   return [...new Set(input.map(x=>clean(x,120)).filter(Boolean))].slice(0,20);
