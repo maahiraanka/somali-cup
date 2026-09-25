@@ -158,9 +158,11 @@ router.post('/bulk',async(req,res,next)=>{
 router.patch('/:id',async(req,res,next)=>{
   const id=Number(req.params.id);
   if(!Number.isInteger(id)||id<1)return res.status(400).json({error:'invalid_city'});
+  const conn=await pool.getConnection();
   try{
-    const [[current]]=await pool.query('SELECT * FROM cities WHERE id=? LIMIT 1',[id]);
-    if(!current)return res.status(404).json({error:'city_not_found'});
+    await conn.beginTransaction();
+    const [[current]]=await conn.query('SELECT * FROM cities WHERE id=? LIMIT 1 FOR UPDATE',[id]);
+    if(!current)throw Object.assign(new Error('city_not_found'),{status:404});
 
     const name=clean(req.body?.name,120)||current.name;
     const country=clean(req.body?.country,120)||current.country;
@@ -171,35 +173,45 @@ router.patch('/:id',async(req,res,next)=>{
     const imageUrl=req.body?.imageUrl===undefined?current.image_url:(clean(req.body.imageUrl,500)||null);
     const isActive=req.body?.isActive===undefined?Boolean(current.is_active):Boolean(req.body.isActive);
 
-    if(name.length<2||!code)return res.status(400).json({error:'invalid_city'});
-    if(!['PREMIER','CHAMPIONSHIP','RISING'].includes(tier))return res.status(400).json({error:'invalid_city_tier'});
+    if(name.length<2||!code)throw Object.assign(new Error('invalid_city'),{status:400});
+    if(!['PREMIER','CHAMPIONSHIP','RISING'].includes(tier))throw Object.assign(new Error('invalid_city_tier'),{status:400});
 
-    const [[duplicate]]=await pool.query(
+    const [[duplicate]]=await conn.query(
       'SELECT id FROM cities WHERE id<>? AND LOWER(name)=LOWER(?) AND LOWER(country)=LOWER(?) LIMIT 1',
       [id,name,country]
     );
-    if(duplicate)return res.status(409).json({error:'city_already_exists'});
+    if(duplicate)throw Object.assign(new Error('city_already_exists'),{status:409});
 
-    await pool.query(`
+    await conn.query(`
       UPDATE cities
       SET name=?,country=?,region=?,code=?,tier=?,aliases_json=?,image_url=?,is_active=?
       WHERE id=?
     `,[name,country,region,code,tier,JSON.stringify(aliases),imageUrl,isActive?1:0,id]);
 
-    await pool.query(
+    await conn.query(`
+      UPDATE competition_choices
+      SET name=?,short_name=?,code=?,
+          metadata_json=JSON_OBJECT('country',?,'region',?,'tier',?,'imageUrl',?)
+      WHERE legacy_city_id=?
+    `,[name,name,code,country,region,tier,imageUrl,id]);
+
+    await conn.query(
       'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
       [req.admin?.user_id||null,'MASTER_CITY_UPDATED','CITY',String(id),JSON.stringify({
         before:{name:current.name,country:current.country,region:current.region,code:current.code,tier:current.tier,isActive:Boolean(current.is_active)},
-        after:{name,country,region,code,tier,isActive}
+        after:{name,country,region,code,tier,isActive},
+        propagatedToCompetitions:true
       })]
     );
+    await conn.commit();
     res.json({ok:true});
   }catch(e){
+    await conn.rollback();
+    if(e.status)return res.status(e.status).json({error:e.message});
     if(e.code==='ER_DUP_ENTRY')return res.status(409).json({error:'city_code_exists'});
     next(e);
-  }
+  }finally{conn.release()}
 });
-
 router.delete('/:id',async(req,res,next)=>{
   const id=Number(req.params.id);
   const confirmation=clean(req.body?.confirmation,180);
