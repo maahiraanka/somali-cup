@@ -55,6 +55,30 @@ await check('competition_referrals_table',()=>pool.query("SELECT competition_id,
 await check('competition_stages_table',()=>pool.query("SELECT competition_id,code,stage_type,status,rule_type,target,advance_count FROM competition_stages LIMIT 1"));
 await check('competition_stage_choices_table',()=>pool.query("SELECT stage_id,choice_id,result_status,entry_supporter_count FROM competition_stage_choices LIMIT 1"));
 await check('competition_stage_events_table',()=>pool.query("SELECT competition_id,stage_id,event_type FROM competition_stage_events LIMIT 1"));
+await check('master_directories_schema',async()=>{
+  const [[table]]=await pool.query(`
+    SELECT COUNT(*) total FROM information_schema.tables
+    WHERE table_schema=DATABASE() AND table_name='master_directory_entries'
+  `);
+  if(Number(table.total||0)!==1)throw new Error('master_directory_entries table missing');
+  const [[column]]=await pool.query(`
+    SELECT COUNT(*) total FROM information_schema.columns
+    WHERE table_schema=DATABASE() AND table_name='competition_choices' AND column_name='master_entry_id'
+  `);
+  if(Number(column.total||0)!==1)throw new Error('competition_choices.master_entry_id missing');
+});
+
+await check('master_directory_links_valid',async()=>{
+  const [[r]]=await pool.query(`
+    SELECT COUNT(*) broken
+    FROM competition_choices cc
+    LEFT JOIN master_directory_entries m ON m.id=cc.master_entry_id
+    WHERE cc.master_entry_id IS NOT NULL
+      AND (m.id IS NULL OR m.entity_type<>cc.choice_type)
+  `);
+  if(Number(r?.broken||0)!==0)throw new Error('broken master directory references: '+r.broken);
+});
+
 await check('master_city_directory_schema',async()=>{
   const [rows]=await pool.query(`
     SELECT column_name
