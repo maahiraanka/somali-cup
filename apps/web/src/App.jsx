@@ -586,10 +586,10 @@ function BestCityExperience({data,me,onBack,onRefresh}){
   },[choices.length]);
   useEffect(()=>{
     if(!competition)return;
-    api('/api/competitions/best-city-somalia/me').then(d=>setMySupport({...d.support,publicId:d.user?.public_id||''})).catch(()=>setMySupport(null));
+    api('/api/competitions/'+encodeURIComponent(competition.slug)+'/me').then(d=>setMySupport({...d.support,publicId:d.user?.public_id||''})).catch(()=>setMySupport(null));
   },[competition?.slug]);
 
-  if(!competition)return <LiveDataState title="Best City is unavailable" body="We could not load this competition." onRetry={onRefresh}/>;
+  if(!competition)return <LiveDataState title="Competition unavailable" body="We could not load this competition." onRetry={onRefresh}/>;
   const stages=Array.isArray(data?.stages)?data.stages:[];
   const currentStage=data?.currentStage||stages.find(s=>s.status==='OPEN')||null;
   const currentCodes=new Set((currentStage?.choices||[]).filter(x=>x.resultStatus==='ACTIVE').map(x=>x.code));
@@ -597,18 +597,20 @@ function BestCityExperience({data,me,onBack,onRefresh}){
   const rankedActive=[...activeChoices].sort((a,b)=>Number(b.supporterCount||0)-Number(a.supporterCount||0)||Number(a.rank||999)-Number(b.rank||999));
   const top=rankedActive[0]||choices[0];
   const roundTarget=Number(currentStage?.target||0);
+  const choiceSingular=competition.choiceType==='CITY'?'city':competition.choiceType==='UNIVERSITY'?'university':competition.choiceType==='CLUB'?'club':'choice';
+  const choicePlural=competition.choiceType==='CITY'?'cities':competition.choiceType==='UNIVERSITY'?'universities':competition.choiceType==='CLUB'?'clubs':'choices';
   const ruleText=!currentStage?'Competition is getting ready.':
     currentStage.ruleType==='TARGET'?'Reach '+fmt(roundTarget)+' supporters to move to the next round.':
-    currentStage.ruleType==='TOP_N'?'The top '+fmt(currentStage.advanceCount)+' cities move to the next round.':
+    currentStage.ruleType==='TOP_N'?'The top '+fmt(currentStage.advanceCount)+' '+choicePlural+' move to the next round.':
     currentStage.ruleType==='TARGET_OR_TOP_N'?'Reach '+fmt(roundTarget)+' supporters, or finish in the top '+fmt(currentStage.advanceCount)+' in your group.':
-    'The city with the most support when this round closes wins.';
+    'The '+choiceSingular+' with the most support when this round closes wins.';
 
   const join=async()=>{
     if(!selected)return;
     setBusy(true);setMessage('');
     try{
       const params=new URLSearchParams(window.location.search);
-      const payload=await api('/api/competitions/best-city-somalia/join',{method:'POST',body:JSON.stringify({
+      const payload=await api('/api/competitions/'+encodeURIComponent(competition.slug)+'/join',{method:'POST',body:JSON.stringify({
         displayName:name,
         choiceCode:selected.code,
         refPublicId:(params.get('ref')||'').trim(),
@@ -633,7 +635,7 @@ function BestCityExperience({data,me,onBack,onRefresh}){
   const nominate=async()=>{
     setBusy(true);setMessage('');
     try{
-      await api('/api/competitions/best-city-somalia/nominations',{method:'POST',body:JSON.stringify(nomination)});
+      await api('/api/competitions/'+encodeURIComponent(competition.slug)+'/nominations',{method:'POST',body:JSON.stringify(nomination)});
       setShowNominate(false);setNomination({name:'',location:''});
       setMessage('Thanks. We will review your city.');
     }catch(e){
@@ -642,24 +644,24 @@ function BestCityExperience({data,me,onBack,onRefresh}){
   };
 
   return <div className="bestCityPage">
-    <header className="bestCityTop"><button onClick={onBack}><ArrowLeft size={17}/> All competitions</button><div><b>BEST CITY</b><span>IN SOMALIA</span></div>{mySupport?<span className="mySupportPill">You support {mySupport.choice_name}</span>:<span/>}</header>
+    <header className="bestCityTop"><button onClick={onBack}><ArrowLeft size={17}/> All competitions</button><div><b>{competition.shortName||competition.name}</b><span>{competition.choiceType==='CITY'?'CITY COMPETITION':competition.choiceType==='UNIVERSITY'?'UNIVERSITY COMPETITION':competition.choiceType==='CLUB'?'CLUB COMPETITION':'LIVE COMPETITION'}</span></div>{mySupport?<span className="mySupportPill">You support {mySupport.choice_name}</span>:<span/>}</header>
     <section className="bestCityHero">
       <div>
-        <small>BEST CITY IN SOMALIA</small>
-        <h1>Which city<br/><em>has the most support?</em></h1>
+        <small>{competition.name.toUpperCase()}</small>
+        <h1>Which {choiceSingular}<br/><em>has the most support?</em></h1>
         <p>{currentStage?<><b>{currentStage.name}:</b> {ruleText}</>:<>Choose your city. Bring your friends. Help your city move to the next round.</>}</p>
-        {!mySupport&&<button className="bestCityPrimary" onClick={()=>{setSelected(selected||top||null);setShowJoin(true)}}>SUPPORT MY CITY <ArrowRight size={17}/></button>}
+        {!mySupport&&<button className="bestCityPrimary" onClick={()=>{setSelected(selected||top||null);setShowJoin(true)}}>CHOOSE MY {choiceSingular.toUpperCase()} <ArrowRight size={17}/></button>}
         {mySupport&&<div className="mySupportHero"><Check size={18}/><div><span>YOU SUPPORT</span><strong>{mySupport.choice_name}</strong><small>You are supporter #{fmt(mySupport.supporter_no)} · {fmt(mySupport.friends_brought)} friends brought</small></div></div>}
         {mySupport&&<button className="bestCityShare" onClick={async()=>{
-          const url=`${window.location.origin}${window.location.pathname}?competition=best-city-somalia&choice=${encodeURIComponent(mySupport.code)}&ref=${encodeURIComponent(mySupport.publicId||'')}`;
+          const url=`${window.location.origin}${window.location.pathname}?competition=${encodeURIComponent(competition.slug)}&choice=${encodeURIComponent(mySupport.code)}&ref=${encodeURIComponent(mySupport.publicId||'')}`;
           try{
-            if(navigator.share)await navigator.share({title:'Best City in Somalia',text:`I support ${mySupport.choice_name}. Support your city too.`,url});
+            if(navigator.share)await navigator.share({title:competition.name,text:`I support ${mySupport.choice_name} in ${competition.name}. Join me.`,url});
             else {await navigator.clipboard.writeText(url);setMessage('Share link copied.');}
           }catch{}
         }}><Share2 size={16}/> SHARE {String(mySupport.choice_name||'MY CITY').toUpperCase()}</button>}
       </div>
       <div className="bestCityLeader">
-        <span>LEADING CITY</span>
+        <span>LEADING {choiceSingular.toUpperCase()}</span>
         <strong>{top?.name||'—'}</strong>
         <b>{fmt(top?.supporterCount)} supporters</b>
         <Progress value={top?.progressPct||0}/>
@@ -686,7 +688,7 @@ function BestCityExperience({data,me,onBack,onRefresh}){
     </section>
 
     <section className="bestCityListSection">
-      <div className="bestCitySectionHead"><div><small>{currentStage?.name?.toUpperCase()||'LIVE TABLE'}</small><h2>Support a city still in the competition</h2><p>One person can support one city in this competition.</p></div>{competition.allowNominations&&<button onClick={()=>setShowNominate(true)}>Can't find your city? <b>Add my city</b></button>}</div>
+      <div className="bestCitySectionHead"><div><small>{currentStage?.name?.toUpperCase()||'LIVE TABLE'}</small><h2>Support a {choiceSingular} still in the competition</h2><p>One person can support one {choiceSingular} in this competition.</p></div>{competition.allowNominations&&<button onClick={()=>setShowNominate(true)}>Can't find your {choiceSingular}? <b>Add my {choiceSingular}</b></button>}</div>
       <div className="bestCityGrid">
         {rankedActive.map((city,index)=><button key={city.code} className={'bestCityCard '+(mySupport?.code===city.code?'mine':'')} onClick={()=>{if(!mySupport){setSelected(city);setShowJoin(true)}}}>
           <div className="bestCityRank">#{index+1}</div>
@@ -698,26 +700,26 @@ function BestCityExperience({data,me,onBack,onRefresh}){
     </section>
 
     <section className="bestCityHow">
-      <div><span>1</span><b>Choose your city</b><p>You can support one city in this competition.</p></div>
+      <div><span>1</span><b>Choose your {choiceSingular}</b><p>You can support one {choiceSingular} in this competition.</p></div>
       <div><span>2</span><b>Bring your friends</b><p>Share your city and ask your friends to join.</p></div>
-      <div><span>3</span><b>Reach the target</b><p>Cities that reach the target move to the next round.</p></div>
+      <div><span>3</span><b>Reach the target</b><p>{nice(choicePlural)} that reach the target move to the next round.</p></div>
     </section>
 
     {showJoin&&selected&&<div className="simpleModal"><section>
       <button className="simpleModalClose" onClick={()=>setShowJoin(false)}><X/></button>
-      <small>SUPPORT YOUR CITY</small><h2>Support {selected.name}</h2>
+      <small>SUPPORT YOUR {choiceSingular.toUpperCase()}</small><h2>Support {selected.name}</h2>
       <div className="selectedSimpleCity"><CityThumb city={{...selected,country:'Somalia'}} size="lg"/><div><strong>{selected.name}</strong><span>{fmt(selected.supporterCount)} supporters</span></div></div>
       {!me&&!localStorage.getItem('somalicup_session')&&<label><span>Your name</span><input value={name} onChange={e=>setName(e.target.value)} placeholder="Your name"/></label>}
-      <p className="simplePromise"><ShieldCheck size={16}/> One person. One city in this competition.</p>
+      <p className="simplePromise"><ShieldCheck size={16}/> One person. One {choiceSingular} in this competition.</p>
       <button className="bestCityPrimary full" disabled={busy||(!me&&!localStorage.getItem('somalicup_session')&&name.trim().length<2)} onClick={join}>{busy?'PLEASE WAIT…':'SUPPORT '+selected.name.toUpperCase()}</button>
     </section></div>}
 
     {showNominate&&<div className="simpleModal"><section>
       <button className="simpleModalClose" onClick={()=>setShowNominate(false)}><X/></button>
-      <small>CAN'T FIND YOUR CITY?</small><h2>Add my city</h2><p>Tell us the city name. We will review it before adding it to the competition.</p>
-      <label><span>City name</span><input value={nomination.name} onChange={e=>setNomination({...nomination,name:e.target.value})} placeholder="City name"/></label>
+      <small>CAN'T FIND YOUR {choiceSingular.toUpperCase()}?</small><h2>Add my {choiceSingular}</h2><p>Tell us the {choiceSingular} name. We will review it before adding it to the competition.</p>
+      <label><span>{nice(choiceSingular)} name</span><input value={nomination.name} onChange={e=>setNomination({...nomination,name:e.target.value})} placeholder={nice(choiceSingular)+' name'}/></label>
       <label><span>Region or area <i>optional</i></span><input value={nomination.location} onChange={e=>setNomination({...nomination,location:e.target.value})} placeholder="Region or area"/></label>
-      <button className="bestCityPrimary full" disabled={busy||nomination.name.trim().length<2} onClick={nominate}>{busy?'PLEASE WAIT…':'SEND MY CITY'}</button>
+      <button className="bestCityPrimary full" disabled={busy||nomination.name.trim().length<2} onClick={nominate}>{busy?'PLEASE WAIT…':'SEND MY '+choiceSingular.toUpperCase()}</button>
     </section></div>}
   </div>
 }
