@@ -462,8 +462,8 @@ function CompetitionsAdmin({d,act,refresh}){
   };
 
   const resetPublicContent=async()=>{
-    const confirmation=window.prompt('This will remove all cities, supporters, competitions, matches and public activity. The functionality stays. Type CLEAR PUBLIC CONTENT to continue.');
-    if(confirmation!=='CLEAR PUBLIC CONTENT')return;
+    const confirmation=window.prompt('This permanently removes all non-admin users, cities, supporters, matches, competitions and test data. Admin accounts and functionality stay. Type FACTORY RESET to continue.');
+    if(confirmation!=='FACTORY RESET')return;
     setContentBusy(true);setCreatorError('');
     try{
       await adminApi('/api/admin/competitions/clear-content',{method:'POST',body:JSON.stringify({confirmation})});
@@ -601,8 +601,8 @@ function CompetitionsAdmin({d,act,refresh}){
       </section>
 
       <section className="adminPanel dangerZone">
-        <div><small>CONTENT RECOVERY</small><h3>Reset public content</h3><p>Remove all public competition data and leave the system empty. Admin accounts, audit history and system functionality are kept.</p></div>
-        <button className="danger" onClick={resetPublicContent} disabled={contentBusy}><RefreshCw size={14}/> CLEAR ALL CONTENT</button>
+        <div><small>CONTENT RECOVERY</small><h3>Factory reset</h3><p>Remove every non-admin/user-generated record and leave a brand-new empty system. Admin accounts, audit history and functionality are kept.</p></div>
+        <button className="danger" onClick={resetPublicContent} disabled={contentBusy}><RefreshCw size={14}/> FACTORY RESET</button>
       </section>
       {creatorError&&<div className="adminError"><AlertTriangle size={16}/>{creatorError}</div>}
     </>}
