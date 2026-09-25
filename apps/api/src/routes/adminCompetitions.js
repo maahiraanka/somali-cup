@@ -411,7 +411,7 @@ router.get('/:id/choices',async(req,res,next)=>{
     const competitionId=Number(req.params.id);
     if(!Number.isInteger(competitionId)||competitionId<1)return res.status(400).json({error:'invalid_competition'});
     const [rows]=await pool.query(`
-      SELECT cc.id,cc.name,cc.short_name,cc.code,cc.choice_type,cc.status,cc.target,cc.sort_order,
+      SELECT cc.id,cc.name,cc.short_name,cc.code,cc.choice_type,cc.legacy_city_id,cc.status,cc.target,cc.sort_order,
         (SELECT COUNT(*) FROM competition_supporters cs WHERE cs.competition_id=cc.competition_id AND cs.choice_id=cc.id AND cs.status='ACTIVE') supporter_count
       FROM competition_choices cc
       WHERE cc.competition_id=?
@@ -423,24 +423,40 @@ router.get('/:id/choices',async(req,res,next)=>{
 
 router.post('/:id/choices',async(req,res,next)=>{
   const competitionId=Number(req.params.id);
-  const name=clean(req.body?.name,140);
-  const shortName=clean(req.body?.shortName||name,80)||null;
-  const code=clean(req.body?.code||name,24).toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24);
   const targetRaw=req.body?.target;
   const target=targetRaw===null||targetRaw===undefined||targetRaw===''?null:Number(targetRaw);
   if(!Number.isInteger(competitionId)||competitionId<1)return res.status(400).json({error:'invalid_competition'});
-  if(name.length<2||!code)return res.status(400).json({error:'choice_name_required'});
   if(target!==null&&(!Number.isInteger(target)||target<1))return res.status(400).json({error:'invalid_target'});
   try{
     const [[competition]]=await pool.query('SELECT id,choice_type FROM competitions WHERE id=? LIMIT 1',[competitionId]);
     if(!competition)return res.status(404).json({error:'competition_not_found'});
+
+    let name,shortName,code,legacyCityId=null,metadata=null;
+    if(competition.choice_type==='CITY'){
+      const cityId=Number(req.body?.cityId);
+      if(!Number.isInteger(cityId)||cityId<1)return res.status(400).json({error:'master_city_required'});
+      const [[city]]=await pool.query(
+        'SELECT id,name,code,country,region,tier,image_url FROM cities WHERE id=? AND is_active=1 LIMIT 1',
+        [cityId]
+      );
+      if(!city)return res.status(404).json({error:'master_city_not_found'});
+      name=city.name;shortName=city.name;code=city.code;legacyCityId=Number(city.id);
+      metadata=JSON.stringify({country:city.country,region:city.region,tier:city.tier,imageUrl:city.image_url});
+    }else{
+      name=clean(req.body?.name,140);
+      shortName=clean(req.body?.shortName||name,80)||null;
+      code=clean(req.body?.code||name,24).toUpperCase().replace(/[^A-Z0-9_-]/g,'').slice(0,24);
+      if(name.length<2||!code)return res.status(400).json({error:'choice_name_required'});
+    }
+
     const [r]=await pool.query(`
-      INSERT INTO competition_choices(competition_id,name,short_name,code,choice_type,target)
-      VALUES (?,?,?,?,?,?)
-    `,[competitionId,name,shortName,code,competition.choice_type,target]);
+      INSERT INTO competition_choices(
+        competition_id,name,short_name,code,choice_type,legacy_city_id,target,metadata_json
+      ) VALUES (?,?,?,?,?,?,?,?)
+    `,[competitionId,name,shortName,code,competition.choice_type,legacyCityId,target,metadata]);
     await pool.query(
       'INSERT INTO audit_log(actor_user_id,action,entity_type,entity_id,metadata_json) VALUES (?,?,?,?,?)',
-      [req.admin?.user_id||null,'COMPETITION_CHOICE_ADDED','COMPETITION_CHOICE',String(r.insertId),JSON.stringify({competitionId,name,code,target})]
+      [req.admin?.user_id||null,'COMPETITION_CHOICE_ADDED','COMPETITION_CHOICE',String(r.insertId),JSON.stringify({competitionId,name,code,target,legacyCityId})]
     );
     res.status(201).json({ok:true,id:Number(r.insertId)});
   }catch(e){
