@@ -108,6 +108,7 @@ const nav=[
   ['launch','Launch Readiness',Rocket],
   ['operations','Operations',Power],
   ['citydirectory','City Directory',Flag],
+  ['directories','Master Directories',ClipboardList],
   ['cities','Cities & Qualification',Flag],
   ['matches','Matches',Radio],
   ['competitions','Competitions',Trophy],
@@ -145,6 +146,7 @@ export default function AdminApp(){
     launch:'/api/admin/launch-readiness',
     operations:'/api/admin/operations',
     citydirectory:'/api/admin/city-directory',
+    directories:'/api/admin/master-directories',
     cities:'/api/admin/qualification',
     matches:'/api/admin/matches',
     competitions:'/api/admin/competitions',
@@ -212,6 +214,7 @@ export default function AdminApp(){
           view==='launch'?<LaunchReadiness d={data.launch} act={act}/>:
           view==='operations'?<OperationsAdmin d={data.operations} act={act}/>:
           view==='citydirectory'?<CityDirectoryAdmin d={data.citydirectory} refresh={refresh}/>:
+          view==='directories'?<MasterDirectoriesAdmin d={data.directories} refresh={refresh}/>:
           view==='cities'?<CitiesAdmin d={data.cities} act={act}/>:
           view==='matches'?<MatchesAdmin d={data.matches} act={act}/>:
           view==='competitions'?<CompetitionsAdmin d={data.competitions} act={act} refresh={refresh}/>:
@@ -954,6 +957,115 @@ function OperationsAdmin({d,act}){
 }
 
 
+
+
+function MasterDirectoriesAdmin({d,refresh}){
+  const [type,setType]=useState('UNIVERSITY');
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState('');
+  const [editing,setEditing]=useState(null);
+  const [search,setSearch]=useState('');
+  const [showBulk,setShowBulk]=useState(false);
+  const [bulkText,setBulkText]=useState('');
+  const [bulkResult,setBulkResult]=useState(null);
+  const blank={name:'',shortName:'',code:'',country:'Somalia',region:'',category:'',aliases:'',imageUrl:'',isActive:true};
+  const [form,setForm]=useState(blank);
+  const entries=type==='UNIVERSITY'?(d?.universities||[]):(d?.clubs||[]);
+  const label=type==='UNIVERSITY'?'University':'Club';
+  const plural=type==='UNIVERSITY'?'Universities':'Clubs';
+  const filtered=entries.filter(entry=>{
+    const q=search.trim().toLowerCase();
+    return !q||[entry.name,entry.code,entry.country,entry.region,entry.category,...(entry.aliases||[])].filter(Boolean).join(' ').toLowerCase().includes(q);
+  });
+
+  const resetForm=()=>{setEditing(null);setForm(blank);setError('')};
+  const startEdit=entry=>{
+    setEditing(entry);
+    setForm({
+      name:entry.name||'',shortName:entry.short_name||'',code:entry.code||'',country:entry.country||'Somalia',
+      region:entry.region||'',category:entry.category||'',aliases:(entry.aliases||[]).join(', '),
+      imageUrl:entry.image_url||'',isActive:Boolean(entry.is_active)
+    });
+  };
+  const save=async()=>{
+    setBusy(true);setError('');
+    try{
+      const payload={...form,aliases:String(form.aliases||'').split(',').map(x=>x.trim()).filter(Boolean)};
+      if(editing)await adminApi('/api/admin/master-directories/'+type+'/'+editing.id,{method:'PATCH',body:JSON.stringify(payload)});
+      else await adminApi('/api/admin/master-directories/'+type,{method:'POST',body:JSON.stringify(payload)});
+      resetForm();await refresh();
+    }catch(e){setError(humanErrorAdmin(e))}
+    finally{setBusy(false)}
+  };
+  const remove=async entry=>{
+    const confirmation=window.prompt('Type DELETE '+entry.name+' to permanently delete this '+label.toLowerCase()+'. An entry already used by a competition cannot be deleted.');
+    if(confirmation!=='DELETE '+entry.name)return;
+    setBusy(true);setError('');
+    try{await adminApi('/api/admin/master-directories/'+type+'/'+entry.id,{method:'DELETE',body:JSON.stringify({confirmation})});await refresh()}
+    catch(e){setError(e?.body?.error==='directory_entry_in_use'?'This '+label.toLowerCase()+' is already used. Disable it instead of deleting it.':humanErrorAdmin(e))}
+    finally{setBusy(false)}
+  };
+  const bulkAdd=async()=>{
+    const rows=bulkText.split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{
+      const [name='',code='',region='',country='Somalia',category='']=line.split('|').map(x=>x.trim());
+      return {name,code,region,country,category};
+    }).filter(x=>x.name);
+    if(!rows.length)return;
+    setBusy(true);setError('');setBulkResult(null);
+    try{
+      const result=await adminApi('/api/admin/master-directories/'+type+'/bulk',{method:'POST',body:JSON.stringify({entries:rows})});
+      setBulkResult(result);setBulkText('');await refresh();
+    }catch(e){setError(humanErrorAdmin(e))}
+    finally{setBusy(false)}
+  };
+
+  return <div className="masterDirectoriesPage">
+    <section className="masterDirectoriesHero">
+      <div><small>REUSABLE MASTER DATA</small><h2>Set it up once. Use it in every competition.</h2><p>Universities and clubs now work like cities: one master identity, unlimited competitions, separate supporter totals.</p></div>
+      <div className="masterDirectoryCounts"><button className={type==='UNIVERSITY'?'active':''} onClick={()=>{setType('UNIVERSITY');resetForm()}}><strong>{fmt(d?.counts?.universities||0)}</strong><span>Universities</span></button><button className={type==='CLUB'?'active':''} onClick={()=>{setType('CLUB');resetForm()}}><strong>{fmt(d?.counts?.clubs||0)}</strong><span>Clubs</span></button></div>
+    </section>
+
+    <section className="masterDirectoryTabs"><button className={type==='UNIVERSITY'?'active':''} onClick={()=>{setType('UNIVERSITY');resetForm()}}>🎓 UNIVERSITIES</button><button className={type==='CLUB'?'active':''} onClick={()=>{setType('CLUB');resetForm()}}>⚽ CLUBS</button><button onClick={()=>setShowBulk(!showBulk)}><Plus size={13}/> {showBulk?'CLOSE BULK ADD':'BULK ADD'}</button></section>
+
+    {error&&<div className="adminError"><AlertTriangle size={15}/>{error}</div>}
+    {bulkResult&&<div className="adminNotice"><CheckCircle2 size={15}/>{fmt(bulkResult.created?.length||0)} added · {fmt(bulkResult.skipped?.length||0)} skipped</div>}
+
+    {showBulk&&<section className="adminPanel cityBulkPanel">
+      <div className="adminPanelAction"><PanelHead eyebrow="FAST SETUP" title={'Add many '+plural.toLowerCase()+' at once'}/><span className="opsHint">One per line</span></div>
+      <p>Use: <b>Name | Code | Region | Country | Category</b>. Only Name and Code are required.</p>
+      <textarea value={bulkText} onChange={e=>setBulkText(e.target.value)} placeholder={type==='UNIVERSITY'?"SIMAD University | SIMAD | Banaadir | Somalia | Private\nMogadishu University | MU | Banaadir | Somalia | Private":"Horseed FC | HRS | Banaadir | Somalia | Football\nElman FC | ELM | Banaadir | Somalia | Football"}/>
+      <button className="adminPrimary" disabled={busy||!bulkText.trim()} onClick={bulkAdd}>{busy?'ADDING…':'ADD THESE '+plural.toUpperCase()} <Plus size={14}/></button>
+    </section>}
+
+    <section className="adminPanel">
+      <div className="adminPanelAction"><PanelHead eyebrow={editing?'EDIT MASTER '+type:'ADD MASTER '+type} title={editing?editing.name:'Add a '+label.toLowerCase()+' once'}/>{editing&&<button className="adminTextButton" onClick={resetForm}>CANCEL</button>}</div>
+      <div className="cityDirectoryForm">
+        <label><span>{label} name</span><input value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder={type==='UNIVERSITY'?'SIMAD University':'Horseed FC'}/></label>
+        <label><span>Code</span><input value={form.code} onChange={e=>setForm({...form,code:e.target.value.toUpperCase()})} placeholder={type==='UNIVERSITY'?'SIMAD':'HRS'} maxLength={24}/></label>
+        <label><span>Country</span><input value={form.country} onChange={e=>setForm({...form,country:e.target.value})}/></label>
+        <label><span>Region / city</span><input value={form.region} onChange={e=>setForm({...form,region:e.target.value})} placeholder="Banaadir"/></label>
+        <label><span>Category</span><input value={form.category} onChange={e=>setForm({...form,category:e.target.value})} placeholder={type==='UNIVERSITY'?'Public / Private':'Football'}/></label>
+        <label className="wide"><span>Other names <i>optional</i></span><input value={form.aliases} onChange={e=>setForm({...form,aliases:e.target.value})} placeholder="Comma separated"/></label>
+        <label className="wide"><span>Image URL <i>optional</i></span><input value={form.imageUrl} onChange={e=>setForm({...form,imageUrl:e.target.value})} placeholder="https://..."/></label>
+        {editing&&<label className="cityDirectoryToggle"><input type="checkbox" checked={form.isActive} onChange={e=>setForm({...form,isActive:e.target.checked})}/><span>Available for new competitions</span></label>}
+        <button className="adminPrimary" disabled={busy||form.name.trim().length<2||!form.code.trim()} onClick={save}>{busy?'SAVING…':editing?'SAVE '+type:'ADD '+type} <Save size={14}/></button>
+      </div>
+    </section>
+
+    <section className="adminPanel">
+      <div className="adminPanelAction"><PanelHead eyebrow={type+' DIRECTORY'} title={'Reusable '+plural}/><div className="cityDirectorySearch"><Search size={14}/><input value={search} onChange={e=>setSearch(e.target.value)} placeholder={'Search '+plural.toLowerCase()}/></div></div>
+      {!filtered.length?<div className="adminEmpty"><ClipboardList/><div><b>No {plural.toLowerCase()} yet</b><p>Add them once here, then reuse them from Competition Creator.</p></div></div>:<div className="cityDirectoryList">
+        {filtered.map(entry=><article className={'cityDirectoryRow '+(!entry.is_active?'inactive':'')} key={entry.id}>
+          <div className="cityDirectoryCode">{entry.code}</div>
+          <div className="cityDirectoryIdentity"><strong>{entry.name}</strong><span>{entry.region||entry.country||'No location'}{entry.category?' · '+entry.category:''}</span>{entry.aliases?.length>0&&<small>{entry.aliases.join(' · ')}</small>}</div>
+          <div className="cityDirectoryUse"><span>Used in</span><strong>{fmt(entry.competition_count)} competitions</strong></div>
+          <div className="cityDirectoryStatus"><span className={entry.is_active?'adminYes':'adminNo'}>{entry.is_active?'ACTIVE':'DISABLED'}</span></div>
+          <div className="cityDirectoryActions"><button onClick={()=>startEdit(entry)}><Pencil size={13}/> EDIT</button><button className="danger" disabled={busy} onClick={()=>remove(entry)}><Trash2 size={13}/> DELETE</button></div>
+        </article>)}
+      </div>}
+    </section>
+  </div>
+}
 
 function CityDirectoryAdmin({d,refresh}){
   const cities=d?.cities||[];
