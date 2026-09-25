@@ -108,7 +108,7 @@ const nav=[
   ['launch','Launch Readiness',Rocket],
   ['operations','Operations',Power],
   ['citydirectory','City Directory',Flag],
-  ['directories','Master Directories',ClipboardList],
+  ['directories','Universities & Clubs',ClipboardList],
   ['cities','Cities & Qualification',Flag],
   ['matches','Matches',Radio],
   ['competitions','Competitions',Trophy],
