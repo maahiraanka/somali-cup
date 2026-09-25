@@ -43,7 +43,7 @@ router.get('/',async(_req,res,next)=>{
         (SELECT COUNT(*) FROM competition_choices cc WHERE cc.competition_id=cp.id AND cc.status='ACTIVE') choice_count,
         (SELECT COUNT(*) FROM competition_supporters cs WHERE cs.competition_id=cp.id AND cs.status='ACTIVE') supporter_count
       FROM competitions cp
-      WHERE cp.status IN ('OPEN','LIVE','COMPLETE')
+      WHERE cp.is_test=0 AND cp.status IN ('OPEN','LIVE','COMPLETE')
       ORDER BY FIELD(cp.status,'LIVE','OPEN','COMPLETE'),cp.starts_at DESC,cp.id DESC
     `);
     res.json({competitions:rows.map(r=>({...shapeCompetition(r),choiceCount:Number(r.choice_count||0),supporterCount:Number(r.supporter_count||0)}))});
@@ -56,7 +56,7 @@ router.get('/:slug',async(req,res,next)=>{
     const [[competition]]=await pool.query(`
       SELECT id,slug,name,short_name,competition_type,choice_type,language_preset,
         language_overrides_json,status,allow_nominations,starts_at,ends_at
-      FROM competitions WHERE slug=? LIMIT 1
+      FROM competitions WHERE slug=? AND is_test=0 LIMIT 1
     `,[slug]);
     if(!competition)return res.status(404).json({error:'competition_not_found'});
     const [choices]=await pool.query(`
@@ -142,7 +142,7 @@ router.get('/:slug/me',async(req,res,next)=>{
       FROM competitions cp
       JOIN competition_supporters cs ON cs.competition_id=cp.id AND cs.user_id=? AND cs.status='ACTIVE'
       JOIN competition_choices cc ON cc.id=cs.choice_id
-      WHERE cp.slug=? LIMIT 1
+      WHERE cp.slug=? AND cp.is_test=0 LIMIT 1
     `,[identity.user_id,slug]);
     if(!row)return res.status(404).json({error:'not_joined'});
     res.json({support:{...row,supporter_no:Number(row.supporter_no),friends_brought:Number(row.friends_brought||0)},user:identity});
@@ -162,7 +162,7 @@ router.post('/:slug/join',async(req,res,next)=>{
   try{
     await conn.beginTransaction();
     const [[competition]]=await conn.query(
-      "SELECT id,slug,name,status,choice_type,language_preset,language_overrides_json FROM competitions WHERE slug=? LIMIT 1 FOR UPDATE",
+      "SELECT id,slug,name,status,choice_type,language_preset,language_overrides_json FROM competitions WHERE slug=? AND is_test=0 LIMIT 1 FOR UPDATE",
       [slug]
     );
     if(!competition)throw Object.assign(new Error('competition_not_found'),{status:404});
@@ -285,7 +285,7 @@ router.post('/:slug/nominations',async(req,res,next)=>{
     const location=clean(req.body?.location,160)||null;
     const note=clean(req.body?.note,500)||null;
     if(name.length<2)return res.status(400).json({error:'name_required'});
-    const [[competition]]=await pool.query('SELECT id,allow_nominations,status FROM competitions WHERE slug=? LIMIT 1',[slug]);
+    const [[competition]]=await pool.query('SELECT id,allow_nominations,status FROM competitions WHERE slug=? AND is_test=0 LIMIT 1',[slug]);
     if(!competition)return res.status(404).json({error:'competition_not_found'});
     if(!competition.allow_nominations)return res.status(409).json({error:'nominations_not_open'});
     if(!['OPEN','LIVE'].includes(competition.status))return res.status(409).json({error:'competition_not_open'});

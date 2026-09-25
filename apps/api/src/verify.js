@@ -61,21 +61,34 @@ await check('competition_creator_schema_ready',async()=>{
   await pool.query("SELECT id,competition_id,sequence_no,status FROM competition_stages LIMIT 1");
   await pool.query("SELECT stage_id,choice_id FROM competition_stage_choices LIMIT 1");
 });
-await check('public_content_empty_migration_applied',async()=>{
-  const [[r]]=await pool.query("SELECT filename FROM schema_migrations WHERE filename='023_empty_public_data.sql' LIMIT 1");
-  if(!r)throw new Error('empty public data migration not applied');
+await check('factory_reset_test_mode_migration_applied',async()=>{
+  const [[r]]=await pool.query("SELECT filename FROM schema_migrations WHERE filename='024_factory_reset_and_test_mode.sql' LIMIT 1");
+  if(!r)throw new Error('factory reset/test mode migration not applied');
 });
-await check('public_content_is_empty',async()=>{
+await check('test_mode_columns',async()=>{
+  await pool.query("SELECT is_test FROM users LIMIT 1");
+  await pool.query("SELECT is_test FROM competitions LIMIT 1");
+});
+await check('real_content_is_empty',async()=>{
   const [[r]]=await pool.query(`
     SELECT
       (SELECT COUNT(*) FROM cities) cities,
       (SELECT COUNT(*) FROM city_memberships) supporters,
       (SELECT COUNT(*) FROM matches) matches,
-      (SELECT COUNT(*) FROM competitions) competitions,
-      (SELECT COUNT(*) FROM competition_choices) choices
+      (SELECT COUNT(*) FROM competitions WHERE is_test=0) competitions,
+      (SELECT COUNT(*) FROM competition_choices cc JOIN competitions cp ON cp.id=cc.competition_id WHERE cp.is_test=0) choices,
+      (SELECT COUNT(*) FROM users WHERE role<>'ADMIN' AND is_test=0) real_non_admin_users
   `);
   const nonZero=Object.entries(r||{}).filter(([,v])=>Number(v)!==0);
-  if(nonZero.length)throw new Error('expected empty public content: '+nonZero.map(([k,v])=>k+'='+v).join(','));
+  if(nonZero.length)throw new Error('expected clean real system: '+nonZero.map(([k,v])=>k+'='+v).join(','));
+});
+await check('test_data_is_isolated',async()=>{
+  const [[r]]=await pool.query(`
+    SELECT COUNT(*) leaked
+    FROM competitions
+    WHERE is_test=1 AND slug NOT LIKE 'test-%'
+  `);
+  if(Number(r?.leaked||0)>0)throw new Error('unexpected test competition identity');
 });
 await check('match_lifecycle_columns',()=>pool.query("SELECT regulation_ends_at,tiebreak_mode,tiebreak_started_at FROM matches LIMIT 1"));
 await check('tournament_stage_rules',()=>pool.query("SELECT tie_policy,match_duration_minutes FROM tournament_stages LIMIT 1"));

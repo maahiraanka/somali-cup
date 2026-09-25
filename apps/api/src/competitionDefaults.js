@@ -31,14 +31,39 @@ export async function clearPublicCompetitionContent(conn){
   await conn.query('DELETE FROM identity_integrity_events');
   await conn.query('DELETE FROM moderation_cases');
 
+  await conn.query("UPDATE users u JOIN admin_credentials ac ON ac.user_id=u.id SET u.role='ADMIN'");
+
+  await conn.query(`
+    UPDATE audit_log al
+    JOIN users u ON u.id=al.actor_user_id
+    SET al.actor_user_id=NULL
+    WHERE u.role<>'ADMIN'
+  `);
+  await conn.query(`
+    UPDATE platform_settings ps
+    JOIN users u ON u.id=ps.updated_by_user_id
+    SET ps.updated_by_user_id=NULL
+    WHERE u.role<>'ADMIN'
+  `);
+  await conn.query(`
+    DELETE s FROM identity_sessions s
+    JOIN users u ON u.id=s.user_id
+    WHERE u.role<>'ADMIN'
+  `);
+
   await conn.query('UPDATE users SET home_city_id=NULL WHERE home_city_id IS NOT NULL');
   await conn.query('DELETE FROM cities');
+  await conn.query("DELETE FROM users WHERE role<>'ADMIN'");
+
+  await conn.query('DELETE FROM seasons');
+  await conn.query("INSERT INTO seasons(id,name,status,starts_at,ends_at) VALUES (1,'Somali Cup','QUALIFICATION',NULL,NULL)");
 
   return {
     competitions:0,
     cities:0,
     supporters:0,
+    playerUsers:0,
     matches:0,
-    message:'Public competition content cleared'
+    message:'Factory reset complete'
   };
 }
