@@ -232,6 +232,7 @@ router.post('/create-complete',async(req,res,next)=>{
   const publishNow=Boolean(req.body?.publishNow);
   const choices=Array.isArray(req.body?.choices)?req.body.choices:[];
   const cityIds=Array.isArray(req.body?.cityIds)?[...new Set(req.body.cityIds.map(Number).filter(x=>Number.isInteger(x)&&x>0))]:[];
+  const masterEntryIds=Array.isArray(req.body?.masterEntryIds)?[...new Set(req.body.masterEntryIds.map(Number).filter(x=>Number.isInteger(x)&&x>0))]:[];
   const stages=Array.isArray(req.body?.stages)?req.body.stages:[];
 
   if(name.length<3||!slug)return res.status(400).json({error:'name_required'});
@@ -239,11 +240,12 @@ router.post('/create-complete',async(req,res,next)=>{
   if(!['CITY','UNIVERSITY','CLUB','BUSINESS','PERSON','COMMUNITY','CUSTOM'].includes(choiceType))return res.status(400).json({error:'invalid_choice_type'});
   if(!supportedLanguagePresets().includes(languagePreset))return res.status(400).json({error:'invalid_language_preset'});
   if(choiceType==='CITY'&&cityIds.length<2)return res.status(400).json({error:'at_least_two_cities_required'});
-  if(choiceType!=='CITY'&&choices.length<2)return res.status(400).json({error:'at_least_two_choices_required'});
+  if(['UNIVERSITY','CLUB'].includes(choiceType)&&masterEntryIds.length<2)return res.status(400).json({error:'at_least_two_directory_entries_required'});
+  if(!['CITY','UNIVERSITY','CLUB'].includes(choiceType)&&choices.length<2)return res.status(400).json({error:'at_least_two_choices_required'});
   if(!stages.length)return res.status(400).json({error:'at_least_one_round_required'});
 
   const normalizedChoices=[];
-  if(choiceType!=='CITY'){
+  if(!['CITY','UNIVERSITY','CLUB'].includes(choiceType)){
     const seenCodes=new Set();
     for(let i=0;i<choices.length;i++){
       const choiceName=clean(choices[i]?.name,140);
@@ -300,6 +302,28 @@ router.post('/create-complete',async(req,res,next)=>{
       }
     }
 
+    if(['UNIVERSITY','CLUB'].includes(choiceType)){
+      const placeholders=masterEntryIds.map(()=>'?').join(',');
+      const [entries]=await conn.query(
+        `SELECT id,name,short_name,code,country,region,category,image_url
+         FROM master_directory_entries
+         WHERE id IN (${placeholders}) AND entity_type=? AND is_active=1
+         ORDER BY name`,
+        [...masterEntryIds,choiceType]
+      );
+      if(entries.length!==masterEntryIds.length)throw Object.assign(new Error('master_directory_selection_invalid'),{status:409});
+      for(const entry of entries){
+        normalizedChoices.push({
+          name:entry.name,
+          shortName:entry.short_name||entry.name,
+          code:entry.code,
+          legacyCityId:null,
+          masterEntryId:Number(entry.id),
+          metadata:{country:entry.country,region:entry.region,category:entry.category,imageUrl:entry.image_url}
+        });
+      }
+    }
+
     const [created]=await conn.query(`
       INSERT INTO competitions(
         slug,name,short_name,competition_type,choice_type,language_preset,status,allow_nominations
@@ -312,10 +336,10 @@ router.post('/create-complete',async(req,res,next)=>{
       const ch=normalizedChoices[i];
       const [inserted]=await conn.query(`
         INSERT INTO competition_choices(
-          competition_id,name,short_name,code,choice_type,legacy_city_id,status,sort_order,metadata_json
-        ) VALUES (?,?,?,?,?,?,'ACTIVE',?,?)
+          competition_id,name,short_name,code,choice_type,legacy_city_id,master_entry_id,status,sort_order,metadata_json
+        ) VALUES (?,?,?,?,?,?,?,'ACTIVE',?,?)
       `,[
-        competitionId,ch.name,ch.shortName,ch.code,choiceType,ch.legacyCityId||null,i+1,
+        competitionId,ch.name,ch.shortName,ch.code,choiceType,ch.legacyCityId||null,ch.masterEntryId||null,i+1,
         ch.metadata?JSON.stringify(ch.metadata):null
       ]);
       choiceRows.push({id:Number(inserted.insertId),...ch});
@@ -411,7 +435,7 @@ router.get('/:id/choices',async(req,res,next)=>{
     const competitionId=Number(req.params.id);
     if(!Number.isInteger(competitionId)||competitionId<1)return res.status(400).json({error:'invalid_competition'});
     const [rows]=await pool.query(`
-      SELECT cc.id,cc.name,cc.short_name,cc.code,cc.choice_type,cc.legacy_city_id,cc.status,cc.target,cc.sort_order,
+      SELECT cc.id,cc.name,cc.short_name,cc.code,cc.choice_type,cc.legacy_city_id,cc.master_entry_id,cc.status,cc.target,cc.sort_order,
         (SELECT COUNT(*) FROM competition_supporters cs WHERE cs.competition_id=cc.competition_id AND cs.choice_id=cc.id AND cs.status='ACTIVE') supporter_count
       FROM competition_choices cc
       WHERE cc.competition_id=?
