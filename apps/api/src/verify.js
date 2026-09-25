@@ -79,6 +79,17 @@ await check('master_directory_links_valid',async()=>{
   if(Number(r?.broken||0)!==0)throw new Error('broken master directory references: '+r.broken);
 });
 
+await check('top10_somalia_city_pack',async()=>{
+  const expected=['MOG','HAR','BOS','KIS','BDO','GLK','GAR','BER','BUR','BLW'];
+  const [rows]=await pool.query(
+    "SELECT code,image_url FROM cities WHERE code IN ("+expected.map(()=>'?').join(',')+")",
+    expected
+  );
+  if(rows.length!==10)throw new Error('expected 10 priority cities, found '+rows.length);
+  const missing=rows.filter(x=>!String(x.image_url||'').trim()).map(x=>x.code);
+  if(missing.length)throw new Error('priority city images missing: '+missing.join(','));
+});
+
 await check('master_city_directory_schema',async()=>{
   const [rows]=await pool.query(`
     SELECT column_name
